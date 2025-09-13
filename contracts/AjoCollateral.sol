@@ -1,0 +1,249 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "./AjoInterfaces.sol";
+
+contract AjoCollateral is IAjoCollateral {
+    
+    // ============ CONSTANTS ============
+    
+    uint256 public constant COLLATERAL_FACTOR = 55; // 55% collateral factor
+    uint256 public constant GUARANTOR_OFFSET_DIVISOR = 2; // Guarantor is participants/2 positions away
+    
+    // ============ STATE VARIABLES ============
+    
+    IERC20 public immutable USDC;
+    IERC20 public immutable HBAR;
+    address public ajoCore;
+    IAjoMembers public immutable membersContract;
+    
+    mapping(PaymentToken => mapping(address => uint256)) public tokenBalances;
+    
+    // ============ EVENTS ============
+    
+    event CollateralLocked(address indexed member, uint256 amount, PaymentToken token);
+    event CollateralUnlocked(address indexed member, uint256 amount, PaymentToken token);
+    
+    // ============ MODIFIERS ============
+    
+    modifier onlyAjoCore() {
+        require(msg.sender == ajoCore, "Only AjoCore");
+        _;
+    }
+    
+    // ============ CONSTRUCTOR ============
+    
+    constructor(address _usdc, address _hbar, address _ajoCore, address _membersContract) {
+        USDC = IERC20(_usdc);
+        HBAR = IERC20(_hbar);
+        ajoCore = _ajoCore;
+        membersContract = IAjoMembers(_membersContract);
+    }
+    
+    function setAjoCore(address _ajoCore) external {
+       ajoCore = _ajoCore;
+   }
+
+    // ============ COLLATERAL CALCULATION FUNCTIONS (IAjoCollateral) ============
+    
+    function calculateRequiredCollateral(
+        uint256 position,
+        uint256 monthlyPayment,
+        uint256 totalParticipants
+    ) public view override returns (uint256) {
+        // Last person has no debt after payout, no collateral needed
+        if (position >= totalParticipants) {
+            return 0;
+        }
+        
+        // Calculate potential debt: Payout - (position * monthlyPayment)
+        uint256 payout = totalParticipants * monthlyPayment;
+        uint256 potentialDebt = payout - (position * monthlyPayment);
+        
+        // Apply V2 collateral factor (55% due to seizure of past payments)
+        uint256 requiredCollateral = (potentialDebt * COLLATERAL_FACTOR) / 100;
+        
+        return requiredCollateral;
+    }
+    
+    function calculateGuarantorPosition(
+        uint256 memberPosition,
+        uint256 totalParticipants
+    ) public pure override returns (uint256) {
+        uint256 guarantorOffset = totalParticipants / GUARANTOR_OFFSET_DIVISOR;
+        uint256 guarantorPosition = ((memberPosition - 1 + guarantorOffset) % totalParticipants) + 1;
+        return guarantorPosition;
+    }
+    
+    function calculateSeizableAssets(address defaulterAddress) 
+        external 
+        view 
+        override
+        returns (
+            uint256 totalSeizable, 
+            uint256 collateralSeized, 
+            uint256 paymentsSeized
+        ) 
+    {
+        Member memory defaulter = membersContract.getMember(defaulterAddress);
+        address guarantorAddr = defaulter.guarantor;
+        
+        if (guarantorAddr == address(0)) {
+            return (0, 0, 0);
+        }
+        
+        Member memory guarantor = membersContract.getMember(guarantorAddr);
+        
+        // 1. Calculate collateral seizure
+        collateralSeized = tokenBalances[PaymentToken.USDC][defaulterAddress] + 
+                          tokenBalances[PaymentToken.HBAR][defaulterAddress] +
+                          tokenBalances[PaymentToken.USDC][guarantorAddr] + 
+                          tokenBalances[PaymentToken.HBAR][guarantorAddr];
+        
+        // 2. Calculate past payments seizure
+        paymentsSeized = 0;
+        
+        // Defaulter's past payments
+        for (uint256 i = 0; i < defaulter.pastPayments.length; i++) {
+            paymentsSeized += defaulter.pastPayments[i];
+        }
+        
+        // Guarantor's past payments
+        for (uint256 i = 0; i < guarantor.pastPayments.length; i++) {
+            paymentsSeized += guarantor.pastPayments[i];
+        }
+        
+        totalSeizable = collateralSeized + paymentsSeized;
+    }
+    
+    // ============ COLLATERAL MANAGEMENT FUNCTIONS ============
+    
+    function lockCollateral(address member, uint256 amount, PaymentToken token) external onlyAjoCore {
+        IERC20 tokenContract = token == PaymentToken.USDC ? USDC : HBAR;
+        
+        if (amount > 0) {
+            tokenContract.transferFrom(member, address(this), amount);
+            tokenBalances[token][member] += amount;
+        }
+        
+        emit CollateralLocked(member, amount, token);
+    }
+    
+    function unlockCollateral(address member, uint256 amount, PaymentToken token) external onlyAjoCore {
+        IERC20 tokenContract = token == PaymentToken.USDC ? USDC : HBAR;
+        
+        require(tokenBalances[token][member] >= amount, "Insufficient collateral balance");
+        
+        if (amount > 0) {
+            tokenBalances[token][member] -= amount;
+            tokenContract.transfer(member, amount);
+        }
+        
+        emit CollateralUnlocked(member, amount, token);
+    }
+    
+    function executeSeizure(address defaulter) external onlyAjoCore {
+        Member memory defaulterMember = membersContract.getMember(defaulter);
+        address guarantorAddr = defaulterMember.guarantor;
+        
+        if (guarantorAddr == address(0)) return; // No guarantor assigned yet
+        
+        Member memory guarantorMember = membersContract.getMember(guarantorAddr);
+        
+        // 1. Seize defaulter's collateral
+        uint256 defaulterCollateralUSDC = tokenBalances[PaymentToken.USDC][defaulter];
+        uint256 defaulterCollateralHBAR = tokenBalances[PaymentToken.HBAR][defaulter];
+        
+        tokenBalances[PaymentToken.USDC][defaulter] = 0;
+        tokenBalances[PaymentToken.HBAR][defaulter] = 0;
+        
+        // 2. Seize guarantor's collateral  
+        uint256 guarantorCollateralUSDC = tokenBalances[PaymentToken.USDC][guarantorAddr];
+        uint256 guarantorCollateralHBAR = tokenBalances[PaymentToken.HBAR][guarantorAddr];
+        
+        tokenBalances[PaymentToken.USDC][guarantorAddr] = 0;
+        tokenBalances[PaymentToken.HBAR][guarantorAddr] = 0;
+        
+        // 3. Calculate seized payments
+        uint256 defaulterPayments = 0;
+        uint256 guarantorPayments = 0;
+        
+        // Sum defaulter's past payments
+        for (uint256 i = 0; i < defaulterMember.pastPayments.length; i++) {
+            defaulterPayments += defaulterMember.pastPayments[i];
+        }
+        
+        // Sum guarantor's past payments  
+        for (uint256 i = 0; i < guarantorMember.pastPayments.length; i++) {
+            guarantorPayments += guarantorMember.pastPayments[i];
+        }
+        
+        // Platform keeps seized assets as compensation
+        if (defaulterCollateralUSDC > 0) {
+            emit CollateralLiquidated(defaulter, defaulterCollateralUSDC, PaymentToken.USDC);
+        }
+        if (defaulterCollateralHBAR > 0) {
+            emit CollateralLiquidated(defaulter, defaulterCollateralHBAR, PaymentToken.HBAR);
+        }
+        if (guarantorCollateralUSDC > 0) {
+            emit CollateralLiquidated(guarantorAddr, guarantorCollateralUSDC, PaymentToken.USDC);
+        }
+        if (guarantorCollateralHBAR > 0) {
+            emit CollateralLiquidated(guarantorAddr, guarantorCollateralHBAR, PaymentToken.HBAR);
+        }
+        
+        emit PaymentSeized(defaulter, defaulterPayments, "Defaulter past payments seized");
+        emit PaymentSeized(guarantorAddr, guarantorPayments, "Guarantor past payments seized");
+    }
+    
+    // ============ VIEW FUNCTIONS ============
+    
+    function getTokenBalance(address member, PaymentToken token) external view returns (uint256) {
+        return tokenBalances[token][member];
+    }
+    
+    function getTotalCollateral() external view returns (uint256 totalUSDC, uint256 totalHBAR) {
+        uint256 totalMembers = membersContract.getTotalActiveMembers();
+        
+        for (uint256 i = 0; i < totalMembers; i++) {
+            address member = membersContract.activeMembersList(i);
+            totalUSDC += tokenBalances[PaymentToken.USDC][member];
+            totalHBAR += tokenBalances[PaymentToken.HBAR][member];
+        }
+    }
+    
+    function getCollateralDemo(uint256 participants, uint256 monthlyPayment) 
+        external 
+        view 
+        returns (uint256[] memory positions, uint256[] memory collaterals) 
+    {
+        positions = new uint256[](participants);
+        collaterals = new uint256[](participants);
+        
+        for (uint256 i = 1; i <= participants; i++) {
+            positions[i-1] = i;
+            collaterals[i-1] = calculateRequiredCollateral(i, monthlyPayment, participants);
+        }
+    }
+    
+    function calculateInitialReputation(uint256 collateral, uint256 monthlyPayment) 
+        external 
+        pure 
+        returns (uint256) 
+    {
+        if (collateral == 0) return 800; // High reputation for last position (no collateral needed)
+        
+        // Base reputation of 600, up to 1000 based on collateral vs monthly payment ratio
+        uint256 ratio = (collateral * 100) / monthlyPayment; // How many months of payments is collateral worth
+        uint256 bonus = ratio > 400 ? 400 : ratio; // Cap bonus at 400 points
+        return 600 + bonus;
+    }
+    
+    // ============ EMERGENCY FUNCTIONS ============
+    
+    function emergencyWithdraw(PaymentToken token, address to, uint256 amount) external onlyAjoCore {
+        IERC20 tokenContract = token == PaymentToken.USDC ? USDC : HBAR;
+        tokenContract.transfer(to, amount);
+    }
+}

@@ -1,0 +1,14 @@
+{
+  "network": "testnet",
+  "chainId": 296,
+  "timestamp": "2025-09-13T14:39:33.005Z",
+  "deployer": "0x7172C803Bc2EB1438bddB550dDCBe6dc1e1CAA69",
+  "error": "HH110: Invalid JSON-RPC response received: error code: 502",
+  "stack": "HardhatError: HH110: Invalid JSON-RPC response received: error code: 502\n    at parseJsonResponse (/Users/ola/Documents/Github/duck-protego/node_modules/hardhat/src/internal/util/jsonrpc.ts:47:11)\n    at HttpProvider._fetchJsonRpcResponse (/Users/ola/Documents/Github/duck-protego/node_modules/hardhat/src/internal/core/providers/http.ts:246:31)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at HttpProvider.request (/Users/ola/Documents/Github/duck-protego/node_modules/hardhat/src/internal/core/providers/http.ts:104:29)\n    at EthersProviderWrapper.send (/Users/ola/Documents/Github/duck-protego/node_modules/@nomiclabs/hardhat-ethers/src/internal/ethers-provider-wrapper.ts:13:20)",
+  "partiallyDeployedContracts": {
+    "MockUSDC": {
+      "address": "0xAb92a8eeEF01BB97ecEa1B5ce980cD8809f44cB7",
+      "deploymentHash": "0xdaf72af2b4aa7e5d10368e6ff35b6acbcc5f1c78f4ef889d0b2a2fe1d74e3654"
+    }
+  }
+}

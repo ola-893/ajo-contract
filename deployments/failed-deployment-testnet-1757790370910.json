@@ -1,0 +1,30 @@
+{
+  "network": "testnet",
+  "chainId": 296,
+  "timestamp": "2025-09-13T19:06:10.910Z",
+  "deployer": "0x7172C803Bc2EB1438bddB550dDCBe6dc1e1CAA69",
+  "error": {
+    "message": "invalid address or ENS name (argument=\"name\", value={\"gasLimit\":2500000}, code=INVALID_ARGUMENT, version=contracts/5.8.0)",
+    "code": "INVALID_ARGUMENT",
+    "reason": "invalid address or ENS name"
+  },
+  "partiallyDeployedContracts": {
+    "MockUSDC": {
+      "address": "0x41102f22d90850441b603E781dE619d9730511F6",
+      "deploymentHash": "0x950ff6575c7be72ac3f91de7c259839b539eb7f49f8e2ce021ceb91ea2d8a555"
+    },
+    "MockWHBAR": {
+      "address": "0xEf212F8b6Ad1940a60d4e84A0d89e67d3851cbE3",
+      "deploymentHash": "0x3b76b832d344322af1cca23afa440f56020a457da458d2a59f406e44f837ff99"
+    },
+    "AjoMembers": {
+      "address": "0xccC79C35d123d7E463781A69FD079a550498284b",
+      "deploymentHash": "0xbbabb9a8634161d901c78bc28dd5ffa15632dab78f240348654b95c5dcfcf2ba"
+    }
+  },
+  "troubleshooting": [
+    "Fixed ENS error by deploying mock tokens",
+    "Uses zero address for AjoCore initially",
+    "Increased gas limits for all deployments"
+  ]
+}

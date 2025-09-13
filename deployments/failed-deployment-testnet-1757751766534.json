@@ -1,0 +1,8 @@
+{
+  "network": "testnet",
+  "chainId": 296,
+  "timestamp": "2025-09-13T08:22:46.534Z",
+  "deployer": "0x7172C803Bc2EB1438bddB550dDCBe6dc1e1CAA69",
+  "error": "invalid address (argument=\"address\", value=\"0x0000000000000000000000000000000001\", code=INVALID_ARGUMENT, version=address/5.8.0)",
+  "partiallyDeployedContracts": {}
+}

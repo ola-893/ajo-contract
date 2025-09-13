@@ -1,0 +1,17 @@
+{
+  "network": "testnet",
+  "chainId": 296,
+  "timestamp": "2025-09-13T17:23:46.972Z",
+  "deployer": "0x7172C803Bc2EB1438bddB550dDCBe6dc1e1CAA69",
+  "error": {
+    "message": "network does not support ENS (operation=\"getResolver\", network=\"unknown\", code=UNSUPPORTED_OPERATION, version=providers/5.8.0)",
+    "code": "UNSUPPORTED_OPERATION",
+    "stack": "Error: network does not support ENS (operation=\"getResolver\", network=\"unknown\", code=UNSUPPORTED_OPERATION, version=providers/5.8.0)\n    at Logger.makeError (/Users/ola/Documents/Github/duck-protego/node_modules/@ethersproject/logger/src.ts/index.ts:269:28)\n    at Logger.throwError (/Users/ola/Documents/Github/duck-protego/node_modules/@ethersproject/logger/src.ts/index.ts:281:20)\n    at EthersProviderWrapper.<anonymous> (/Users/ola/Documents/Github/duck-protego/node_modules/@ethersproject/providers/src.ts/base-provider.ts:1989:20)\n    at step (/Users/ola/Documents/Github/duck-protego/node_modules/@ethersproject/providers/lib/base-provider.js:48:23)\n    at Object.next (/Users/ola/Documents/Github/duck-protego/node_modules/@ethersproject/providers/lib/base-provider.js:29:53)\n    at fulfilled (/Users/ola/Documents/Github/duck-protego/node_modules/@ethersproject/providers/lib/base-provider.js:20:58)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+  },
+  "partiallyDeployedContracts": {
+    "AjoMembers": {
+      "address": "0xE06e4425FaAE537d538e9B167a17d4792cdf8452",
+      "deploymentHash": "0x4f36a193d36293b2d77b484a78af752cbdf95b0a3873c947a7d5855cff0b0076"
+    }
+  }
+}
