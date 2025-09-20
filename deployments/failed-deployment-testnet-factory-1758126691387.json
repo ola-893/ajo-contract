@@ -1,0 +1,31 @@
+{
+  "network": "testnet",
+  "chainId": 296,
+  "timestamp": "2025-09-17T16:31:31.387Z",
+  "deployer": "0x7172C803Bc2EB1438bddB550dDCBe6dc1e1CAA69",
+  "error": {
+    "message": "getaddrinfo ENOTFOUND testnet.hashio.io",
+    "code": "ENOTFOUND"
+  },
+  "partiallyDeployedContracts": {
+    "MockUSDC": {
+      "address": "0xD6Ef4864744632617EC314E7C2206426c232F218",
+      "deploymentHash": "0x0772b8710148519fed3058179b9e8f0cea4ad21854722bd591504ba394dc2209"
+    },
+    "MockWHBAR": {
+      "address": "0xb4050a44351aBa17fE657D3B9BE9500f0B45a579",
+      "deploymentHash": "0x4c17866e0e4eed6ece6d0c9d690960df8ef2a91718a3cc33f1a3f1b3b36c53a7"
+    },
+    "AjoMembers": {
+      "address": "0x276fBb11D34e0B1114c98F50a379bb3a02844BB5",
+      "deploymentHash": "0x4c07fd4079d3cb28863e34e015680aaa56f624c29a4617f8ea84fe7bcc10c753"
+    }
+  },
+  "troubleshooting": [
+    "Fixed ENS error by deploying mock tokens",
+    "Uses zero address for AjoCore initially",
+    "Increased gas limits for all deployments",
+    "Added Factory contract deployment",
+    "Enhanced error handling and reporting"
+  ]
+}

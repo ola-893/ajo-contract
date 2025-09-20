@@ -4,8 +4,9 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
 import "./AjoInterfaces.sol";
+import "./LockableContract.sol";
 
-contract AjoGovernance is IAjoGovernance, ERC20, ERC20Votes {
+contract AjoGovernance is IAjoGovernance, ERC20, ERC20Votes, LockableContract {
     
     // ============ CONSTANTS ============
     
@@ -14,8 +15,8 @@ contract AjoGovernance is IAjoGovernance, ERC20, ERC20Votes {
     uint256 public constant DEFAULT_PENALTY_RATE = 500; // 5% (500 basis points)
     
     // ============ STATE VARIABLES ============
-    
     address public ajoCore;
+    event AjoCoreUpdated(address indexed oldCore, address indexed newCore);
     IAjoMembers public immutable membersContract;
     
     uint256 public proposalCount;
@@ -52,9 +53,29 @@ contract AjoGovernance is IAjoGovernance, ERC20, ERC20Votes {
         membersContract = IAjoMembers(_membersContract);
     }
     
-    function setAjoCore(address _ajoCore) external {
-       ajoCore = _ajoCore;
-   }
+   /**
+     * @dev Set AjoCore address - only works during setup phase
+     * @param _ajoCore Address of the AjoCore contract
+     */
+    function setAjoCore(address _ajoCore) external onlyOwner onlyDuringSetup {
+        require(_ajoCore != address(0), "Cannot set zero address");
+        require(_ajoCore != ajoCore, "Already set to this address");
+        
+        address oldCore = ajoCore;
+        ajoCore = _ajoCore;
+        
+        emit AjoCoreUpdated(oldCore, _ajoCore);
+    }
+    
+    /**
+     * @dev Verify setup for AjoMembers
+     */
+    function verifySetup() external view override returns (bool isValid, string memory reason) {
+        if (ajoCore == address(0)) {
+            return (false, "AjoCore not set");
+        }
+        return (true, "Setup is valid");
+    }
 
     // ============ CORE GOVERNANCE FUNCTIONS (IAjoGovernance) ============
     

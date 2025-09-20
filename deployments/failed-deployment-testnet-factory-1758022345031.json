@@ -1,0 +1,27 @@
+{
+  "network": "testnet",
+  "chainId": 296,
+  "timestamp": "2025-09-16T11:32:25.031Z",
+  "deployer": "0x7172C803Bc2EB1438bddB550dDCBe6dc1e1CAA69",
+  "error": {
+    "message": "other side closed",
+    "code": "UND_ERR_SOCKET"
+  },
+  "partiallyDeployedContracts": {
+    "MockUSDC": {
+      "address": "0xD1e24427Cd66B470C097F315Ea8297aE6D88B1c7",
+      "deploymentHash": "0x17cb8c909edd2ef2fed44cc43476d0efe1aaa4bc5ccc745d35ec86f455b0e230"
+    },
+    "MockWHBAR": {
+      "address": "0xb331F6E6F905442C9755D76Ab1cb463a97b90592",
+      "deploymentHash": "0xbc2eec83b08059d68718d1d362246a599aed8eea9f2eff14be88dd2d000475e0"
+    }
+  },
+  "troubleshooting": [
+    "Fixed ENS error by deploying mock tokens",
+    "Uses zero address for AjoCore initially",
+    "Increased gas limits for all deployments",
+    "Added Factory contract deployment",
+    "Enhanced error handling and reporting"
+  ]
+}

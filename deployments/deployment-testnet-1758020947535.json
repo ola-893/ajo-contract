@@ -1,0 +1,53 @@
+{
+  "network": "testnet",
+  "chainId": 296,
+  "timestamp": "2025-09-16T11:09:07.533Z",
+  "deploymentDuration": 182.187,
+  "deployer": "0x7172C803Bc2EB1438bddB550dDCBe6dc1e1CAA69",
+  "deployerBalance": "1065.34180506",
+  "tokenAddresses": {
+    "USDC": "0x09EBAe17dAf8CB1E863044bac230Bd378A69f3A5",
+    "WHBAR": "0x682C8Ee91eefD6F4de7003566b1f5440a7043da9"
+  },
+  "contracts": {
+    "MockUSDC": {
+      "address": "0x09EBAe17dAf8CB1E863044bac230Bd378A69f3A5",
+      "deploymentHash": "0x12fd46462cb035b8eab95123b3bb366b2a8734d9ef0bfc5b8fb8db2a50af2eab"
+    },
+    "MockWHBAR": {
+      "address": "0x682C8Ee91eefD6F4de7003566b1f5440a7043da9",
+      "deploymentHash": "0xed4d0764945a2c0c84291861863f0e8e452af6e7f47dd7d64cd2a28dab4d461c"
+    },
+    "AjoMembers": {
+      "address": "0xF2cf1dF0023b8F03B055E129d411c2f20bed14d4",
+      "deploymentHash": "0xd86250aa8b91ccaf51299d5a8a8393f7b2a236bcd887be5bb74107fdfaa9c971"
+    },
+    "AjoGovernance": {
+      "address": "0x63eAe6330dE9e599F71CE2bF84782e6054A0EF58",
+      "deploymentHash": "0x645893a664d9cd85a67e322c363ba0b24b415fe53de0eb9c23a39326f6515af1"
+    },
+    "AjoCollateral": {
+      "address": "0x510215d59cEB62582a1Ffb2230Fa00f3fBd83a98",
+      "deploymentHash": "0x105645de443113bd74ad7c1c824b0ab2871d73677e90adb4a6c5be37488aa6be"
+    },
+    "AjoPayments": {
+      "address": "0x737e772Be033cb751C1948f93c19C2138ce09BA8",
+      "deploymentHash": "0xb2b36cbd7db10bbec50bd9d6e310424011e73c8483505bf8b1dcc8aaa6331f84"
+    },
+    "AjoCore": {
+      "address": "0x3db4c2495f637d986d52B8Da68d1373dcFc823eD",
+      "deploymentHash": "0x76f1eef72611ec3b774361504e2e0559bc993ba51e7aaaf468a98b9d2cb1c602"
+    }
+  },
+  "mainContract": "0x3db4c2495f637d986d52B8Da68d1373dcFc823eD",
+  "gasEstimate": {
+    "totalGasUsed": "~17,500,000",
+    "estimatedCost": "~0.35 HBAR"
+  },
+  "notes": [
+    "All contracts deployed successfully",
+    "Mock tokens deployed for testing",
+    "Some contracts may have zero address for AjoCore initially",
+    "Ready for frontend integration"
+  ]
+}
