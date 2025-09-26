@@ -44,7 +44,15 @@ module.exports = {
     hedera_testnet: {
       url: process.env.TESTNET_ENDPOINT || "https://testnet.hashio.io/api",
       chainId: 296,
-      accounts: process.env.TESTNET_OPERATOR_PRIVATE_KEY ? [process.env.TESTNET_OPERATOR_PRIVATE_KEY] : [],
+       accounts: [
+        process.env.TESTNET_OPERATOR_PRIVATE_KEY,
+        process.env.PRIVATE_KEY_1,
+        process.env.PRIVATE_KEY_2, 
+        process.env.PRIVATE_KEY_3,
+        process.env.PRIVATE_KEY_4,
+        process.env.PRIVATE_KEY_5,
+        process.env.PRIVATE_KEY_6,
+      ].filter(key => key), // Remove undefined keys
       gas: "auto",
       gasPrice: "auto",
       timeout: 120000,

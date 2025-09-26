@@ -1,0 +1,14 @@
+{
+  "network": "unknown",
+  "chainId": 296,
+  "deployedAt": "2025-09-24T17:06:09.678Z",
+  "contracts": {
+    "AjoCore": "0x12A7A00C9e47F876bD04a29782B57FE203499708",
+    "USDC": "0x94Ade3A6C1972A8021f91776B87c06DbA1C8dc8A",
+    "WHBAR": "0x2a98aa3366a06f0a1f1b50B6b3C1f24D05Cc56E4",
+    "AjoMembers": "0xe814E63EE7a6d799567a2C68B5BE405B887B185d",
+    "AjoCollateral": "0x9CE3e6c8034c5F78bf63Accd6de341a531D890F2",
+    "AjoPayments": "0x1B54Bd84E8b94050B38D391D4f05de129099Bd92",
+    "AjoGovernance": "0x639CE923b72fcA8f2380C1e4f239d36b0Af9c54e"
+  }
+}

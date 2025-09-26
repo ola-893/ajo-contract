@@ -3,10 +3,15 @@ pragma solidity ^0.8.0;
 
 import "./AjoInterfaces.sol";
 import "./LockableContract.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-contract AjoMembers is IAjoMembers,LockableContract {
+contract AjoMembers is IAjoMembers, LockableContract {
     
     // ============ STATE VARIABLES ============
+    
+    // Add token references for real balance checking
+    IERC20 public immutable USDC;
+    IERC20 public immutable HBAR;
     
     mapping(address => Member) private members;
     mapping(uint256 => address) public ajoQueuePositions;
@@ -15,6 +20,9 @@ contract AjoMembers is IAjoMembers,LockableContract {
     address[] private activeAjoMembersList;
     
     address public ajoCore;
+    address public ajoCollateral;
+    address public ajoPayments;
+    
     // Events specific to this contract
     event AjoCoreUpdated(address indexed oldCore, address indexed newCore);
     
@@ -27,8 +35,10 @@ contract AjoMembers is IAjoMembers,LockableContract {
     
     // ============ CONSTRUCTOR ============
     
-    constructor(address _ajoCore) {
+    constructor(address _ajoCore, address _usdc, address _hbar) {
         ajoCore = _ajoCore;
+        USDC = IERC20(_usdc);
+        HBAR = IERC20(_hbar);
     }
     
     /**
@@ -46,11 +56,25 @@ contract AjoMembers is IAjoMembers,LockableContract {
     }
     
     /**
+     * @dev Set contract addresses for balance checking
+     */
+    function setContractAddresses(address _ajoCollateral, address _ajoPayments) external onlyOwner onlyDuringSetup {
+        ajoCollateral = _ajoCollateral;
+        ajoPayments = _ajoPayments;
+    }
+    
+    /**
      * @dev Verify setup for AjoMembers
      */
     function verifySetup() external view override returns (bool isValid, string memory reason) {
         if (ajoCore == address(0)) {
             return (false, "AjoCore not set");
+        }
+        if (ajoCollateral == address(0)) {
+            return (false, "AjoCollateral not set");
+        }
+        if (ajoPayments == address(0)) {
+            return (false, "AjoPayments not set");
         }
         return (true, "Setup is valid");
     }
@@ -113,6 +137,9 @@ contract AjoMembers is IAjoMembers,LockableContract {
         estimatedCyclesWait = 0; // Placeholder - should be calculated by AjoCore
     }
     
+    /**
+     * @dev FIXED: getContractStats() now returns real values instead of placeholders
+     */
     function getContractStats() 
         external 
         view 
@@ -128,16 +155,63 @@ contract AjoMembers is IAjoMembers,LockableContract {
             PaymentToken activeToken
         ) 
     {
+        // Real member counts
         activeMembers = activeAjoMembersList.length;
         totalMembers = activeMembers; // For simplicity, could track total including inactive
         
-        // Other values would need to be calculated by querying other contracts
-        totalCollateralUSDC = 0; // Placeholder
-        totalCollateralHBAR = 0; // Placeholder
-        contractBalanceUSDC = 0; // Placeholder
-        contractBalanceHBAR = 0; // Placeholder
-        currentQueuePosition = 0; // Placeholder
-        activeToken = PaymentToken.USDC; // Placeholder
+        // FIXED: Calculate real collateral balances by checking individual member balances
+        totalCollateralUSDC = 0;
+        totalCollateralHBAR = 0;
+        
+        for (uint256 i = 0; i < activeMembers; i++) {
+            address memberAddr = activeAjoMembersList[i];
+            Member memory member = members[memberAddr];
+            
+            if (member.preferredToken == PaymentToken.USDC) {
+                totalCollateralUSDC += member.lockedCollateral;
+            } else {
+                totalCollateralHBAR += member.lockedCollateral;
+            }
+        }
+        
+        // FIXED: Get real contract balances using the token contracts
+        if (address(USDC) != address(0)) {
+            if (ajoCollateral != address(0)) {
+                contractBalanceUSDC += USDC.balanceOf(ajoCollateral);
+            }
+            if (ajoPayments != address(0)) {
+                contractBalanceUSDC += USDC.balanceOf(ajoPayments);
+            }
+            if (ajoCore != address(0)) {
+                contractBalanceUSDC += USDC.balanceOf(ajoCore);
+            }
+        }
+        
+        if (address(HBAR) != address(0)) {
+            if (ajoCollateral != address(0)) {
+                contractBalanceHBAR += HBAR.balanceOf(ajoCollateral);
+            }
+            if (ajoPayments != address(0)) {
+                contractBalanceHBAR += HBAR.balanceOf(ajoPayments);
+            }
+            if (ajoCore != address(0)) {
+                contractBalanceHBAR += HBAR.balanceOf(ajoCore);
+            }
+        }
+        
+        // FIXED: Calculate real current queue position
+        // Find the highest queue number among active members
+        currentQueuePosition = 0;
+        for (uint256 i = 0; i < activeMembers; i++) {
+            address memberAddr = activeAjoMembersList[i];
+            Member memory member = members[memberAddr];
+            if (member.queueNumber > currentQueuePosition) {
+                currentQueuePosition = member.queueNumber;
+            }
+        }
+        
+        // Default to USDC - could be made dynamic based on most common token
+        activeToken = PaymentToken.USDC;
     }
     
     // ============ MEMBER MANAGEMENT FUNCTIONS ============
@@ -216,7 +290,7 @@ contract AjoMembers is IAjoMembers,LockableContract {
         return activeAjoMembersList[index];
     }
     
-    // For interface compatibility - maps to getactiveAjoMembersList()[index]
+    // For interface compatibility - maps to getActiveMembersList()[index]
     function activeMembersList(uint256 index) external view returns (address) {
         require(index < activeAjoMembersList.length, "Index out of bounds");
         return activeAjoMembersList[index];
@@ -272,8 +346,5 @@ contract AjoMembers is IAjoMembers,LockableContract {
     
     // ============ EVENTS ============
     
-    //event MemberJoined(address indexed member, uint256 queueNumber, uint256 collateral, PaymentToken token);
-    event MemberRemoved(address indexed member);
-    event MemberUpdated(address indexed member);
-    event GuarantorAssigned(address indexed member, address indexed guarantor, uint256 memberPosition, uint256 guarantorPosition);
+    // Events are defined in the interface
 }

@@ -1,0 +1,109 @@
+{
+  "network": "testnet",
+  "chainId": 296,
+  "timestamp": "2025-09-20T19:19:09.289Z",
+  "deploymentDuration": 177.381,
+  "deployer": "0x7172C803Bc2EB1438bddB550dDCBe6dc1e1CAA69",
+  "deployerBalance": "1005.80146813",
+  "tokenAddresses": {
+    "USDC": "0x915288C3AA9238d2DA3542180699B37CA0eF5d80",
+    "WHBAR": "0xf186477790A0bB21d4F38DDE50eC5782500FEeEa"
+  },
+  "factory": {
+    "address": "0x219A3F30b68828F189610a2bf9234312d2Cc9d6B",
+    "deploymentHash": "0x09e64ed626601dd8f29067c804eb1a1bc99fd7d84643d28abdff0629d2f2511a",
+    "type": "SimpleAjoFactory"
+  },
+  "templates": {
+    "AjoCore": {
+      "address": "0x2CB2e9C26439a3792CA468f40a13Bd97bA87a029",
+      "deploymentHash": "0x8e1661a491ae7f0787b69353d32beda8547558ae5089d120aae3de3249130cdd"
+    },
+    "AjoMembers": {
+      "address": "0x209D54f8764E9172d973ce27BCeee503735b3431",
+      "deploymentHash": "0x7c147bcceafd1968f0547238416b7537cd09e6d20d341bc770cf7e9138d58eb1"
+    },
+    "AjoGovernance": {
+      "address": "0xbcd8D5dc9D439A051454Ff2c00042732C4D50944",
+      "deploymentHash": "0x0df9d5e79494b08761a2f92c8573bc0c1bd882c04a3b95a1b62c175f208dc9c6"
+    },
+    "AjoCollateral": {
+      "address": "0xc80BDc9BE86188ED54f5f2071AdC8b2aC4dB2bA2",
+      "deploymentHash": "0x1bc23a29a8608667519e98b35df69746d35781e975215f9e866e74cc6c7eeab2"
+    },
+    "AjoPayments": {
+      "address": "0x2624E12B42107eCE98CB5D1D470FF5FE9880A985",
+      "deploymentHash": "0xdf35cb348c46b66e4c3194149323dac9a799ddaab5be4625ebf6b08442bf615b"
+    }
+  },
+  "contracts": {
+    "MockUSDC": {
+      "address": "0x915288C3AA9238d2DA3542180699B37CA0eF5d80",
+      "deploymentHash": "0xb7fe3a431c90305a7dd2e6f8cc9bd3ccbc53d7a865412af6a97359e9d1f7ee45"
+    },
+    "MockWHBAR": {
+      "address": "0xf186477790A0bB21d4F38DDE50eC5782500FEeEa",
+      "deploymentHash": "0x25416fbbc210bc7846a941731edb97635b570b5c60166d481851742b7ae52453"
+    },
+    "AjoMembersTemplate": {
+      "address": "0x209D54f8764E9172d973ce27BCeee503735b3431",
+      "deploymentHash": "0x7c147bcceafd1968f0547238416b7537cd09e6d20d341bc770cf7e9138d58eb1"
+    },
+    "AjoGovernanceTemplate": {
+      "address": "0xbcd8D5dc9D439A051454Ff2c00042732C4D50944",
+      "deploymentHash": "0x0df9d5e79494b08761a2f92c8573bc0c1bd882c04a3b95a1b62c175f208dc9c6"
+    },
+    "AjoCollateralTemplate": {
+      "address": "0xc80BDc9BE86188ED54f5f2071AdC8b2aC4dB2bA2",
+      "deploymentHash": "0x1bc23a29a8608667519e98b35df69746d35781e975215f9e866e74cc6c7eeab2"
+    },
+    "AjoPaymentsTemplate": {
+      "address": "0x2624E12B42107eCE98CB5D1D470FF5FE9880A985",
+      "deploymentHash": "0xdf35cb348c46b66e4c3194149323dac9a799ddaab5be4625ebf6b08442bf615b"
+    },
+    "AjoCoreTemplate": {
+      "address": "0x2CB2e9C26439a3792CA468f40a13Bd97bA87a029",
+      "deploymentHash": "0x8e1661a491ae7f0787b69353d32beda8547558ae5089d120aae3de3249130cdd"
+    },
+    "SimpleAjoFactory": {
+      "address": "0x219A3F30b68828F189610a2bf9234312d2Cc9d6B",
+      "deploymentHash": "0x09e64ed626601dd8f29067c804eb1a1bc99fd7d84643d28abdff0629d2f2511a"
+    }
+  },
+  "mainAddresses": {
+    "factory": "0x219A3F30b68828F189610a2bf9234312d2Cc9d6B",
+    "usdc": "0x915288C3AA9238d2DA3542180699B37CA0eF5d80",
+    "whbar": "0xf186477790A0bB21d4F38DDE50eC5782500FEeEa",
+    "templates": {
+      "ajoCore": "0x2CB2e9C26439a3792CA468f40a13Bd97bA87a029",
+      "ajoMembers": "0x209D54f8764E9172d973ce27BCeee503735b3431",
+      "ajoGovernance": "0xbcd8D5dc9D439A051454Ff2c00042732C4D50944",
+      "ajoCollateral": "0xc80BDc9BE86188ED54f5f2071AdC8b2aC4dB2bA2",
+      "ajoPayments": "0x2624E12B42107eCE98CB5D1D470FF5FE9880A985"
+    }
+  },
+  "envVariables": {
+    "VITE_SIMPLE_AJO_FACTORY_ADDRESS": "0x219A3F30b68828F189610a2bf9234312d2Cc9d6B",
+    "VITE_USDC_TOKEN_ADDRESS": "0x915288C3AA9238d2DA3542180699B37CA0eF5d80",
+    "VITE_WHBAR_TOKEN_ADDRESS": "0xf186477790A0bB21d4F38DDE50eC5782500FEeEa",
+    "VITE_AJO_CORE_TEMPLATE": "0x2CB2e9C26439a3792CA468f40a13Bd97bA87a029",
+    "VITE_AJO_MEMBERS_TEMPLATE": "0x209D54f8764E9172d973ce27BCeee503735b3431",
+    "VITE_AJO_GOVERNANCE_TEMPLATE": "0xbcd8D5dc9D439A051454Ff2c00042732C4D50944",
+    "VITE_AJO_COLLATERAL_TEMPLATE": "0xc80BDc9BE86188ED54f5f2071AdC8b2aC4dB2bA2",
+    "VITE_AJO_PAYMENTS_TEMPLATE": "0x2624E12B42107eCE98CB5D1D470FF5FE9880A985"
+  },
+  "gasEstimate": {
+    "totalGasUsed": "~15,000,000",
+    "estimatedCost": "~0.3 HBAR"
+  },
+  "notes": [
+    "SimpleAjoFactory deployed - separates deployment from initialization",
+    "Templates deployed with fallback constructor logic",
+    "Factory creates contracts without complex initialization",
+    "Mock tokens deployed for testing",
+    "Initialization must be done separately using initializeAjo()",
+    "Creation requires 1 HBAR creation fee",
+    "Debug-friendly with detailed error reporting",
+    "Ready for testing and debugging"
+  ]
+}

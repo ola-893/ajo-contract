@@ -178,23 +178,20 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, LockableContract {
     
     // ============ CALCULATION FUNCTIONS ============
     
+    // ============ CALCULATION FUNCTIONS ============
+
     function calculatePayout() public view returns (uint256) {
+        // Get the active token configuration
         TokenConfig memory config = tokenConfigs[activePaymentToken];
-        IERC20 tokenContract = activePaymentToken == PaymentToken.USDC ? USDC : HBAR;
         
-        uint256 totalBalance = tokenContract.balanceOf(address(this));
-        (uint256 totalCollateralUSDC, uint256 totalCollateralHBAR) = collateralContract.getTotalCollateral();
-        
-        uint256 totalCollateral = activePaymentToken == PaymentToken.USDC ? 
-            totalCollateralUSDC : totalCollateralHBAR;
-            
-        uint256 availableForPayout = totalBalance > totalCollateral ? totalBalance - totalCollateral : 0;
-        
-        // Ensure minimum payout of monthly payment amount
+        // Get total number of active members
         uint256 totalMembers = membersContract.getTotalActiveMembers();
-        uint256 basePayout = config.monthlyPayment * totalMembers;
         
-        return availableForPayout >= basePayout ? basePayout : availableForPayout;
+        // Payout = total members × monthly contribution
+        // This is the core ROSCA principle - fixed payout regardless of available funds
+        uint256 payout = config.monthlyPayment * totalMembers;
+        
+        return payout;
     }
     
     function getNextRecipient() public view returns (address) {

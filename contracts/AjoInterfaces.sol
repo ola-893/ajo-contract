@@ -39,7 +39,7 @@ struct PayoutRecord {
 interface IPatientAjo {
     // Core Ajo Functions
     function joinAjo(PaymentToken tokenChoice) external;
-    function makePayment() external;
+    function processPayment() external;
     function distributePayout() external;
     function handleDefault(address defaulter) external;
     function exitAjo() external;
@@ -185,6 +185,7 @@ interface IAjoCollateral {
 interface IAjoPayments {
     // Core Payment Functions
     function makePayment() external;
+    function processPayment(address member, uint256 amount, PaymentToken token) external;
     function distributePayout() external;
     function handleDefault(address defaulter) external;
     function batchHandleDefaults(address[] calldata defaulters) external;
@@ -197,12 +198,22 @@ interface IAjoPayments {
     function switchPaymentToken(PaymentToken newToken) external;
     function emergencyWithdraw(PaymentToken token) external;
     function updatePenaltyRate(uint256 newPenaltyRate) external;
+    function updateNextPayoutPosition(uint256 position) external;
     
     // View Functions
     function needsToPayThisCycle(address member) external view returns (bool);
     function getTokenConfig(PaymentToken token) external view returns (TokenConfig memory);
     function getCurrentCycle() external view returns (uint256);
+    function getNextPayoutPosition() external view returns (uint256);
+    function getActivePaymentToken() external view returns (PaymentToken);
     function getPendingPenalty(address member) external view returns (uint256);
+    function getPenaltyRate() external view returns (uint256);
+    function getContractBalance(PaymentToken token) external view returns (uint256);
+    function getTotalPayouts() external view returns (uint256);
+    function isPayoutReady() external view returns (bool);
+    function getPayout(uint256 cycle) external view returns (PayoutRecord memory);
+    function calculatePayout() external view returns (uint256);
+    function getNextRecipient() external view returns (address);
     
     // Events
     event PaymentMade(address indexed member, uint256 amount, uint256 cycle, PaymentToken token);
@@ -210,6 +221,8 @@ interface IAjoPayments {
     event MemberDefaulted(address indexed member, uint256 cycle, uint256 penalty);
     event CycleAdvanced(uint256 newCycle, uint256 timestamp);
     event TokenSwitched(PaymentToken oldToken, PaymentToken newToken);
+    event PaymentPulled(address indexed member, uint256 amount, uint256 cycle, PaymentToken token);
+    event PaymentProcessed(address indexed member, uint256 baseAmount, uint256 penalty, uint256 total);
 }
 
 // ============ MEMBER MANAGEMENT INTERFACE ============
@@ -219,6 +232,19 @@ interface IAjoMembers {
     function joinAjo(PaymentToken tokenChoice) external;
     function exitAjo() external;
     function updateReputation(address member, uint256 newReputation) external;
+    
+    // NEW: Member Management Functions (added based on AjoMembers contract)
+    function addMember(address member, Member memory memberData) external;
+    function removeMember(address member) external;
+    function updateMember(address member, Member memory memberData) external;
+    
+    // NEW: Additional Member Management Functions
+    function updateCollateral(address member, uint256 newAmount) external;
+    function addPastPayment(address member, uint256 payment) external;
+    function updateLastPaymentCycle(address member, uint256 cycle) external;
+    function incrementDefaultCount(address member) external;
+    function updateTotalPaid(address member, uint256 amount) external;
+    function markPayoutReceived(address member) external;
     
     // View Functions
     function getMember(address member) external view returns (Member memory);
@@ -250,8 +276,19 @@ interface IAjoMembers {
     
     function activeMembersList(uint256 index) external view returns (address);
     
+    // NEW: Additional View Functions (based on AjoMembers contract)
+    function isMember(address member) external view returns (bool);
+    function getActiveMembersList() external view returns (address[] memory);
+    function getQueuePosition(uint256 queueNumber) external view returns (address);
+    function getGuarantorForPosition(uint256 position) external view returns (address);
+    function getLockedCollateral(address member) external view returns (uint256);
+    function getMemberAtIndex(uint256 index) external view returns (address);
+    
     // Events
     event MemberJoined(address indexed member, uint256 queueNumber, uint256 collateral, PaymentToken token);
+    event MemberRemoved(address indexed member);
+    event MemberUpdated(address indexed member);
+    event GuarantorAssigned(address indexed member, address indexed guarantor, uint256 memberPosition, uint256 guarantorPosition);
 }
 
 // ============ ERC20 VOTES INTERFACE (Inherited) ============
@@ -293,65 +330,3 @@ interface IOwnable {
 interface IReentrancyGuard {
     // No external functions, just internal protection
 }
-
-// ============ COMPLETE PATIENT AJO INTERFACE ============
-
-// interface IPatientAjoComplete is 
-//     IPatientAjo, 
-//     IAjoGovernance, 
-//     IAjoCollateral, 
-//     IAjoPayments, 
-//     IAjoMembers, 
-//     IERC20Votes, 
-//     IOwnable 
-// {
-//     // Additional constants and state variables as view functions
-//     function USDC() external view returns (address);
-//     function HBAR() external view returns (address);
-//     function activePaymentToken() external view returns (PaymentToken);
-//     function COLLATERAL_FACTOR() external view returns (uint256);
-//     function GUARANTOR_OFFSET_DIVISOR() external view returns (uint256);
-//     function CYCLE_DURATION() external view returns (uint256);
-//     function DEFAULT_PENALTY_RATE() external view returns (uint256);
-//     function PROPOSAL_THRESHOLD() external view returns (uint256);
-//     function VOTING_PERIOD() external view returns (uint256);
-    
-//     // State variable getters
-//     function penaltyRate() external view returns (uint256);
-//     function currentCycle() external view returns (uint256);
-//     function nextQueueNumber() external view returns (uint256);
-//     function nextPayoutPosition() external view returns (uint256);
-//     function lastCycleTimestamp() external view returns (uint256);
-//     function proposalCount() external view returns (uint256);
-    
-//     // Mappings as getter functions
-//     function members(address) external view returns (
-//         uint256 queueNumber,
-//         uint256 joinedCycle,
-//         uint256 totalPaid,
-//         uint256 requiredCollateral,
-//         uint256 lockedCollateral,
-//         uint256 lastPaymentCycle,
-//         uint256 defaultCount,
-//         bool hasReceivedPayout,
-//         bool isActive,
-//         address guarantor,
-//         PaymentToken preferredToken,
-//         uint256 reputationScore,
-//         uint256 guaranteePosition
-//     );
-    
-//     function queuePositions(uint256) external view returns (address);
-//     function payouts(uint256) external view returns (
-//         address recipient,
-//         uint256 amount,
-//         uint256 cycle,
-//         uint256 timestamp
-//     );
-//     function pendingPenalties(address) external view returns (uint256);
-//     function tokenBalances(PaymentToken, address) external view returns (uint256);
-//     function lockedCollateralBalances(address) external view returns (uint256);
-//     function guarantorAssignments(uint256) external view returns (address);
-//     function activeMembersList(uint256) external view returns (address);
-//     function tokenConfigs(PaymentToken) external view returns (uint256 monthlyPayment, bool isActive);
-// }

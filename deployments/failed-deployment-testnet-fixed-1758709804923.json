@@ -1,0 +1,45 @@
+{
+  "network": "testnet",
+  "chainId": 296,
+  "timestamp": "2025-09-24T10:30:04.923Z",
+  "deployer": "0x7172C803Bc2EB1438bddB550dDCBe6dc1e1CAA69",
+  "error": {
+    "message": "HH700: Artifact for contract \"PatientAjoFactory\" not found. "
+  },
+  "partiallyDeployedContracts": {
+    "MockUSDC": {
+      "address": "0x15FAD386DcdD0dCB4feCcf59842D721a6F733938",
+      "deploymentHash": "0x68650127cfb74fa3c73126c30b69f8eeb8c1bfa8b764e1d009c21ccad16f684f"
+    },
+    "MockWHBAR": {
+      "address": "0xa31323a026bAb08A47D254767D6912e65382F337",
+      "deploymentHash": "0xe2571d649ee7778037f435ece6893c31b02662828221f895569df75893ea275f"
+    },
+    "AjoMembers": {
+      "address": "0x639df56A24533e7571f35B2ab2eDD188A443A8E0",
+      "deploymentHash": "0xeaaf1922e106fd378f8e6eba59f2ccd3b8548e9cb756549d3d97791aae8f23eb"
+    },
+    "AjoGovernance": {
+      "address": "0x510613a396ccbd1a91540769F7a2Ab105Ea9f77E",
+      "deploymentHash": "0x98fcf62462e6791cac296548869a87d0ccb98758ce5f4f92283380062fb9a646"
+    },
+    "AjoCollateral": {
+      "address": "0xb4eA2e2C6c7B61F9495AD4381691953be7F7b8c7",
+      "deploymentHash": "0x6e69e40fe950980aec71495f7daeb632dd4711b7b697433c90be346f4ac1103b"
+    },
+    "AjoPayments": {
+      "address": "0xF4408Ce764F1A19e39D65D0aF1d7FBB31aE594d6",
+      "deploymentHash": "0xaed35b64c1dc1f58f0b5d72e2f2db6ddce073de8d5ba183d1c6a5cd9ecc16a03"
+    },
+    "AjoCore": {
+      "address": "0x74276935D33205C4E6657F2BA2760a261A15DefD",
+      "deploymentHash": "0xcc3e9c2cc559bccf883d9bc1a38c2441de5d455cc5c1c3d89bb9d2ed54339676"
+    }
+  },
+  "appliedFixes": [
+    "Eliminated all zero address usage",
+    "Used proper contract addresses in constructors",
+    "Enhanced contract reference updates",
+    "Added comprehensive verification"
+  ]
+}

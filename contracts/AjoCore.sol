@@ -21,14 +21,24 @@ contract AjoCore is IPatientAjo, ReentrancyGuard, Ownable {
     IAjoGovernance public immutable governanceContract;
     
     uint256 public constant CYCLE_DURATION = 30 days;
+    uint256 public constant FIXED_TOTAL_PARTICIPANTS = 10;
     
     uint256 public nextQueueNumber = 1;
     uint256 public lastCycleTimestamp;
+    
+    // New mappings needed for joinAjo functionality
+    mapping(uint256 => address) public queuePositions;
+    mapping(uint256 => address) public guarantorAssignments;
+    address[] public activeMembersList;
     
     // ============ EVENTS ============
     
     event CycleAdvanced(uint256 newCycle, uint256 timestamp);
     event ContractsInitialized(address members, address collateral, address payments, address governance);
+    event MemberJoined(address indexed member, uint256 queueNumber, uint256 collateral, PaymentToken token);
+    event GuarantorAssigned(address indexed member, address indexed guarantor, uint256 memberPosition, uint256 guarantorPosition);
+    event AjoFull(address indexed ajoContract, uint256 timestamp);
+    event CollateralTransferRequired(address indexed member, uint256 amount, PaymentToken token, address collateralContract);
     
     // ============ ERRORS ============
     
@@ -41,14 +51,12 @@ contract AjoCore is IPatientAjo, ReentrancyGuard, Ownable {
     error PayoutNotReady();
     error TokenNotSupported();
     error Unauthorized();
-    
-    // ============ MODIFIERS ============
-    
-    modifier onlyActiveMember() {
-        Member memory member = membersContract.getMember(msg.sender);
-        if (!member.isActive) revert MemberNotFound();
-        _;
-    }
+    error AjoCapacityReached();
+    error InvalidTokenConfiguration();
+    error InsufficientCollateralBalance();
+    error InsufficientAllowance();
+    error CollateralTransferFailed();
+    error CollateralNotTransferred();
     
     // ============ CONSTRUCTOR ============
     
@@ -73,39 +81,79 @@ contract AjoCore is IPatientAjo, ReentrancyGuard, Ownable {
         emit ContractsInitialized(_membersContract, _collateralContract, _paymentsContract, _governanceContract);
     }
     
-    // ============ CORE AJO FUNCTIONS (IPatientAjo) ============
-    
     function joinAjo(PaymentToken tokenChoice) external override nonReentrant {
+        // Check if member already exists
         Member memory existingMember = membersContract.getMember(msg.sender);
         if (existingMember.isActive) revert MemberAlreadyExists();
         
+        // Check Ajo capacity (max 10 members)
+        if (nextQueueNumber > FIXED_TOTAL_PARTICIPANTS) revert AjoCapacityReached();
+        
+        // Step 1: Check token configuration exists (monthly payment amount set)
         TokenConfig memory config = paymentsContract.getTokenConfig(tokenChoice);
         if (!config.isActive) revert TokenNotSupported();
+        if (config.monthlyPayment == 0) revert InvalidTokenConfiguration();
         
-        // Calculate required collateral based on V2 formula
-        uint256 currentParticipants = membersContract.getTotalActiveMembers() + 1; // Including this new member
+        // Step 2: Calculate collateral for current position (based on join order with fixed 10 participants)
         uint256 requiredCollateral = collateralContract.calculateRequiredCollateral(
             nextQueueNumber,
             config.monthlyPayment,
-            currentParticipants
+            FIXED_TOTAL_PARTICIPANTS
         );
         
-        // Calculate guarantor position
-        uint256 guarantorPos = collateralContract.calculateGuarantorPosition(nextQueueNumber, currentParticipants);
-        address guarantorAddr = address(0);
+        // Calculate guarantor position (Position N pairs with Position N+5)
+        uint256 guarantorPos = collateralContract.calculateGuarantorPosition(
+            nextQueueNumber, 
+            FIXED_TOTAL_PARTICIPANTS
+        );
         
-        // Find guarantor if they exist
-        if (guarantorPos < nextQueueNumber) {
-            guarantorAddr = membersContract.queuePositions(guarantorPos);
+        // Find guarantor address if they exist (for positions 1-5, guarantor is positions 6-10)
+        address guarantorAddr = address(0);
+        if (guarantorPos <= FIXED_TOTAL_PARTICIPANTS && guarantorPos != nextQueueNumber) {
+            // Check if guarantor position is already filled using AjoMembers contract
+            address potentialGuarantor = membersContract.getQueuePosition(guarantorPos);
+            if (potentialGuarantor != address(0)) {
+                guarantorAddr = potentialGuarantor;
+            }
         }
         
-        // Lock collateral
-        collateralContract.lockCollateral(msg.sender, requiredCollateral, tokenChoice);
+        // Step 3 & 4: Handle collateral transfer (NEW FLOW - Option 2)
+        if (requiredCollateral > 0) {
+            // Get the appropriate token contract
+            IERC20 paymentToken = (tokenChoice == PaymentToken.USDC) ? USDC : HBAR;
+            
+            // Check user has sufficient balance
+            if (paymentToken.balanceOf(msg.sender) < requiredCollateral) {
+                revert InsufficientCollateralBalance();
+            }
+            
+            // NEW FLOW: Check if user has already transferred collateral to CollateralContract
+            // This assumes the user called transferFrom themselves BEFORE calling joinAjo
+            uint256 collateralContractBalance = paymentToken.balanceOf(address(collateralContract));
+            
+            // Alternative approach: Require user to approve CollateralContract and we pull from them
+            if (paymentToken.allowance(msg.sender, address(collateralContract)) >= requiredCollateral) {
+                // User approved CollateralContract directly, let CollateralContract pull the funds
+                collateralContract.lockCollateral(msg.sender, requiredCollateral, tokenChoice);
+            } else {
+                // Fallback: User must transfer manually first
+                emit CollateralTransferRequired(msg.sender, requiredCollateral, tokenChoice, address(collateralContract));
+                revert CollateralNotTransferred();
+            }
+        }
         
-        // Calculate initial reputation and voting power
+        // Calculate initial reputation based on collateral contribution
         uint256 initialReputation = _calculateInitialReputation(requiredCollateral, config.monthlyPayment);
         
-        // Create member record
+        // Calculate guaranteePosition for the NEW member only
+        uint256 newMemberGuaranteePosition = 0;
+        if (nextQueueNumber <= 5) {
+            // Positions 1-5 will guarantee positions 6-10 when they join
+            newMemberGuaranteePosition = nextQueueNumber + 5;
+        }
+        // Positions 6-10 don't guarantee anyone (stays 0)
+        
+        // Step 5: Create member record with all required data
         Member memory newMember = Member({
             queueNumber: nextQueueNumber,
             joinedCycle: paymentsContract.getCurrentCycle(),
@@ -120,33 +168,69 @@ contract AjoCore is IPatientAjo, ReentrancyGuard, Ownable {
             preferredToken: tokenChoice,
             reputationScore: initialReputation,
             pastPayments: new uint256[](0),
-            guaranteePosition: 0 // Will be set when someone chooses this member as guarantor
+            guaranteePosition: newMemberGuaranteePosition // FIXED: Only set for new member
         });
         
-        // Add member to members contract
-        membersContract.joinAjo(tokenChoice);
+        // Add member to members contract using the existing addMember function
+        membersContract.addMember(msg.sender, newMember);
         
+        // Update local mappings in AjoCore for quick access
+        queuePositions[nextQueueNumber] = msg.sender;
+        activeMembersList.push(msg.sender);
+        
+        // FIXED: Simplified guarantor tracking - NO retroactive member updates
+        if (guarantorAddr != address(0)) {
+            // Set up the guarantor assignment
+            guarantorAssignments[nextQueueNumber] = guarantorAddr;
+            
+            // Emit guarantor assignment event
+            emit GuarantorAssigned(msg.sender, guarantorAddr, nextQueueNumber, guarantorPos);
+        }
+        
+        // Increment queue number for next member
         nextQueueNumber++;
+        
+        // Emit member joined event
+        emit MemberJoined(msg.sender, newMember.queueNumber, requiredCollateral, tokenChoice);
+        
+        // If this is the 10th member, mark Ajo as full and ready to start
+        if (nextQueueNumber > FIXED_TOTAL_PARTICIPANTS) {
+            emit AjoFull(address(this), block.timestamp);
+            
+            // Initialize first cycle if needed
+            if (paymentsContract.getCurrentCycle() == 0) {
+                paymentsContract.advanceCycle(); // Start cycle 1
+            }
+        }
     }
     
-    function makePayment() external override onlyActiveMember nonReentrant {
-        Member memory member = membersContract.getMember(msg.sender);
+    // NEW HELPER FUNCTION: For users to check required collateral before joining
+    function getRequiredCollateralForJoin(PaymentToken tokenChoice) external view returns (uint256) {
+        TokenConfig memory config = paymentsContract.getTokenConfig(tokenChoice);
+        return collateralContract.calculateRequiredCollateral(
+            nextQueueNumber,
+            config.monthlyPayment,
+            FIXED_TOTAL_PARTICIPANTS
+        );
+    }
+    
+    // Replace the existing makePayment() function in AjoCore with this new processPayment() function
+    function processPayment() external override nonReentrant {
         uint256 currentCycle = paymentsContract.getCurrentCycle();
         
-        if (member.lastPaymentCycle >= currentCycle) revert PaymentAlreadyMade();
-        
         // Process payment through payments contract
-        paymentsContract.makePayment();
+        paymentsContract.processPayment(msg.sender, 100e6, PaymentToken.USDC);
         
-        // Update reputation and voting power for consistent payments
-        governanceContract.updateReputationAndVotingPower(msg.sender, true);
+        // Update member's last payment cycle
+        membersContract.updateLastPaymentCycle(msg.sender, currentCycle);
     }
+
     
     function distributePayout() external override nonReentrant {
-        // Check if cycle should advance
-        if (block.timestamp >= lastCycleTimestamp + CYCLE_DURATION) {
-            _advanceCycle();
-        }
+        // // Check if cycle should advance
+        // if (block.timestamp >= lastCycleTimestamp + CYCLE_DURATION) {
+        //     _advanceCycle();
+        // }
         
         // Distribute payout through payments contract
         paymentsContract.distributePayout();
@@ -178,7 +262,7 @@ contract AjoCore is IPatientAjo, ReentrancyGuard, Ownable {
         }
     }
     
-    function exitAjo() external override onlyActiveMember nonReentrant {
+    function exitAjo() external override nonReentrant {
         Member memory member = membersContract.getMember(msg.sender);
         
         if (member.hasReceivedPayout) {
@@ -384,11 +468,12 @@ contract AjoCore is IPatientAjo, ReentrancyGuard, Ownable {
         pure 
         returns (uint256) 
     {
-        if (collateral == 0) return 800; // High reputation for last position (no collateral needed)
+        if (monthlyPayment == 0) return 100; // Default reputation
         
-        // Base reputation of 600, up to 1000 based on collateral vs monthly payment ratio
-        uint256 ratio = (collateral * 100) / monthlyPayment; // How many months of payments is collateral worth
-        uint256 bonus = ratio > 400 ? 400 : ratio; // Cap bonus at 400 points
-        return 600 + bonus;
+        // Higher collateral = higher initial reputation (they're taking more risk)
+        // Scale: 100 + (collateral/monthlyPayment * 50)
+        // Position 1 with $247.5 collateral and $50 monthly gets: 100 + (247.5/50 * 50) = ~347
+        // Position 10 with $0 collateral gets: 100 + 0 = 100
+        return 100 + ((collateral * 50) / monthlyPayment);
     }
 }

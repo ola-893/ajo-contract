@@ -4,8 +4,8 @@ async function main() {
   console.log("🚀 Mock token minting script");
 
   // Contract addresses from your deployment
-  const MOCK_USDC_ADDRESS = "0xDC9d58F7155D5D717620e038f2e641718254a8f9";
-  const MOCK_WHBAR_ADDRESS = "0x1dF4a15e2969648D4F54b0a53303cAD4Cf38aF28";
+  const MOCK_USDC_ADDRESS = "0x508617Bb186943E112487606FFFf7DBD8a3D6271";
+  const MOCK_WHBAR_ADDRESS = "0x7288b21eb87b8D3d82a8aF842D25aaC1dc7Bd9Ae";
 
   // Get deployer (must be contract owner)
   const [deployer] = await ethers.getSigners();
@@ -68,7 +68,7 @@ async function main() {
   // Test addresses to mint tokens to
   const testAddresses = [
     deployer.address,  
-    "0x4Cb10B9Fea7AE756a626E6513fD648BcD946C470"
+    "0x506e724d7FDdbF91B6607d5Af0700d385D952f8a"
   ];
 
   console.log("\n📝 Minting tokens to test addresses...");
