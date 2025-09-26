@@ -4,21 +4,20 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
+import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import "./AjoInterfaces.sol";
 
-contract AjoCore is IPatientAjo, ReentrancyGuard, Ownable {
+contract AjoCore is IAjoCore, ReentrancyGuard, Ownable, Initializable {
     
     // ============ STATE VARIABLES ============
     
-    IERC20 public immutable USDC;
-    IERC20 public immutable HBAR;
+    IERC20 public USDC;
+    IERC20 public HBAR;
     
-    IAjoMembers public immutable membersContract;
-    IAjoCollateral public immutable collateralContract;
-    IAjoPayments public immutable paymentsContract;
-    IAjoGovernance public immutable governanceContract;
+    IAjoMembers public membersContract;
+    IAjoCollateral public collateralContract;
+    IAjoPayments public paymentsContract;
+    IAjoGovernance public governanceContract;
     
     uint256 public constant CYCLE_DURATION = 30 days;
     uint256 public constant FIXED_TOTAL_PARTICIPANTS = 10;
@@ -58,28 +57,54 @@ contract AjoCore is IPatientAjo, ReentrancyGuard, Ownable {
     error CollateralTransferFailed();
     error CollateralNotTransferred();
     
-    // ============ CONSTRUCTOR ============
+    // ============ CONSTRUCTOR (for master copy) ============
     
-    constructor(
-        address _usdc, 
-        address _hbar,
-        address _membersContract,
-        address _collateralContract,
-        address _paymentsContract,
-        address _governanceContract
-    ) {
+    constructor() {
+        // Disable initializers on the master copy
+        _disableInitializers();
+        
+        // Transfer ownership to address(1) to prevent master copy usage
+        _transferOwnership(address(1));
+    }
+    
+    // ============ INITIALIZER (for proxy instances) ============
+    
+    function initialize(
+        address _usdc,
+        address _whbar,
+        address _ajoMembers,
+        address _ajoCollateral,
+        address _ajoPayments,
+        address _ajoGovernance
+    ) external override initializer {
+        require(_usdc != address(0), "Invalid USDC address");
+        require(_whbar != address(0), "Invalid HBAR address");
+        require(_ajoMembers != address(0), "Invalid members contract");
+        require(_ajoCollateral != address(0), "Invalid collateral contract");
+        require(_ajoPayments != address(0), "Invalid payments contract");
+        require(_ajoGovernance != address(0), "Invalid governance contract");
+        
+        // Initialize ownership for the proxy instance
+        _transferOwnership(msg.sender);
+        
+        // Set token contracts
         USDC = IERC20(_usdc);
-        HBAR = IERC20(_hbar);
+        HBAR = IERC20(_whbar);
         
-        membersContract = IAjoMembers(_membersContract);
-        collateralContract = IAjoCollateral(_collateralContract);
-        paymentsContract = IAjoPayments(_paymentsContract);
-        governanceContract = IAjoGovernance(_governanceContract);
+        // Set sub-contracts
+        membersContract = IAjoMembers(_ajoMembers);
+        collateralContract = IAjoCollateral(_ajoCollateral);
+        paymentsContract = IAjoPayments(_ajoPayments);
+        governanceContract = IAjoGovernance(_ajoGovernance);
         
+        // Initialize state variables
+        nextQueueNumber = 1;
         lastCycleTimestamp = block.timestamp;
         
-        emit ContractsInitialized(_membersContract, _collateralContract, _paymentsContract, _governanceContract);
+        emit ContractsInitialized(_ajoMembers, _ajoCollateral, _ajoPayments, _ajoGovernance);
     }
+    
+    // ============ CORE AJO FUNCTIONS ============
     
     function joinAjo(PaymentToken tokenChoice) external override nonReentrant {
         // Check if member already exists
@@ -117,7 +142,7 @@ contract AjoCore is IPatientAjo, ReentrancyGuard, Ownable {
             }
         }
         
-        // Step 3 & 4: Handle collateral transfer (NEW FLOW - Option 2)
+        // Step 3 & 4: Handle collateral transfer
         if (requiredCollateral > 0) {
             // Get the appropriate token contract
             IERC20 paymentToken = (tokenChoice == PaymentToken.USDC) ? USDC : HBAR;
@@ -127,11 +152,7 @@ contract AjoCore is IPatientAjo, ReentrancyGuard, Ownable {
                 revert InsufficientCollateralBalance();
             }
             
-            // NEW FLOW: Check if user has already transferred collateral to CollateralContract
-            // This assumes the user called transferFrom themselves BEFORE calling joinAjo
-            uint256 collateralContractBalance = paymentToken.balanceOf(address(collateralContract));
-            
-            // Alternative approach: Require user to approve CollateralContract and we pull from them
+            // Check if user has approved CollateralContract and we pull from them
             if (paymentToken.allowance(msg.sender, address(collateralContract)) >= requiredCollateral) {
                 // User approved CollateralContract directly, let CollateralContract pull the funds
                 collateralContract.lockCollateral(msg.sender, requiredCollateral, tokenChoice);
@@ -168,7 +189,7 @@ contract AjoCore is IPatientAjo, ReentrancyGuard, Ownable {
             preferredToken: tokenChoice,
             reputationScore: initialReputation,
             pastPayments: new uint256[](0),
-            guaranteePosition: newMemberGuaranteePosition // FIXED: Only set for new member
+            guaranteePosition: newMemberGuaranteePosition
         });
         
         // Add member to members contract using the existing addMember function
@@ -178,7 +199,7 @@ contract AjoCore is IPatientAjo, ReentrancyGuard, Ownable {
         queuePositions[nextQueueNumber] = msg.sender;
         activeMembersList.push(msg.sender);
         
-        // FIXED: Simplified guarantor tracking - NO retroactive member updates
+        // Set up guarantor relationship
         if (guarantorAddr != address(0)) {
             // Set up the guarantor assignment
             guarantorAssignments[nextQueueNumber] = guarantorAddr;
@@ -204,17 +225,6 @@ contract AjoCore is IPatientAjo, ReentrancyGuard, Ownable {
         }
     }
     
-    // NEW HELPER FUNCTION: For users to check required collateral before joining
-    function getRequiredCollateralForJoin(PaymentToken tokenChoice) external view returns (uint256) {
-        TokenConfig memory config = paymentsContract.getTokenConfig(tokenChoice);
-        return collateralContract.calculateRequiredCollateral(
-            nextQueueNumber,
-            config.monthlyPayment,
-            FIXED_TOTAL_PARTICIPANTS
-        );
-    }
-    
-    // Replace the existing makePayment() function in AjoCore with this new processPayment() function
     function processPayment() external override nonReentrant {
         uint256 currentCycle = paymentsContract.getCurrentCycle();
         
@@ -224,14 +234,8 @@ contract AjoCore is IPatientAjo, ReentrancyGuard, Ownable {
         // Update member's last payment cycle
         membersContract.updateLastPaymentCycle(msg.sender, currentCycle);
     }
-
     
     function distributePayout() external override nonReentrant {
-        // // Check if cycle should advance
-        // if (block.timestamp >= lastCycleTimestamp + CYCLE_DURATION) {
-        //     _advanceCycle();
-        // }
-        
         // Distribute payout through payments contract
         paymentsContract.distributePayout();
     }
@@ -256,9 +260,6 @@ contract AjoCore is IPatientAjo, ReentrancyGuard, Ownable {
             
             // Remove defaulter and their guarantor from active members
             membersContract.exitAjo(); // This should be called by the defaulter's address context
-            if (member.guarantor != address(0)) {
-                // Remove guarantor as well - this might need special handling
-            }
         }
     }
     
@@ -286,7 +287,9 @@ contract AjoCore is IPatientAjo, ReentrancyGuard, Ownable {
         }
     }
     
-    // ============ VIEW FUNCTIONS - MEMBER INFORMATION (IPatientAjo) ============
+    // ============ VIEW FUNCTIONS - MEMBER INFORMATION ============
+    
+     // ============ VIEW FUNCTIONS - MEMBER INFORMATION (IAjoCore) ============
     
     function getMemberInfo(address member) 
         external 
@@ -317,7 +320,7 @@ contract AjoCore is IPatientAjo, ReentrancyGuard, Ownable {
         return paymentsContract.needsToPayThisCycle(member);
     }
     
-    // ============ VIEW FUNCTIONS - CONTRACT STATISTICS (IPatientAjo) ============
+    // ============ VIEW FUNCTIONS - CONTRACT STATISTICS ============
     
     function getContractStats() 
         external 
@@ -337,13 +340,13 @@ contract AjoCore is IPatientAjo, ReentrancyGuard, Ownable {
         return membersContract.getContractStats();
     }
     
-    // ============ VIEW FUNCTIONS - TOKEN CONFIGURATION (IPatientAjo) ============
+    // ============ VIEW FUNCTIONS - TOKEN CONFIGURATION ============
     
     function getTokenConfig(PaymentToken token) external view override returns (TokenConfig memory) {
         return paymentsContract.getTokenConfig(token);
     }
     
-    // ============ VIEW FUNCTIONS - V2 COLLATERAL DEMO (IPatientAjo) ============
+    // ============ VIEW FUNCTIONS - V2 COLLATERAL DEMO ============
     
     function getCollateralDemo(uint256 participants, uint256 monthlyPayment) 
         external 
@@ -363,7 +366,7 @@ contract AjoCore is IPatientAjo, ReentrancyGuard, Ownable {
         }
     }
     
-    // ============ VIEW FUNCTIONS - SECURITY MODEL (IPatientAjo) ============
+    // ============ VIEW FUNCTIONS - SECURITY MODEL ============
     
     function calculateSeizableAssets(address defaulterAddress) 
         external 
@@ -378,7 +381,7 @@ contract AjoCore is IPatientAjo, ReentrancyGuard, Ownable {
         return collateralContract.calculateSeizableAssets(defaulterAddress);
     }
     
-    // ============ ADMIN FUNCTIONS (IPatientAjo) ============
+    // ============ ADMIN FUNCTIONS ============
     
     function emergencyWithdraw(PaymentToken token) external override onlyOwner {
         // Withdraw from collateral contract
@@ -416,7 +419,6 @@ contract AjoCore is IPatientAjo, ReentrancyGuard, Ownable {
                 uint256 cyclesMissed = currentCycle - member.lastPaymentCycle;
                 if (cyclesMissed >= 3) {
                     collateralContract.executeSeizure(defaulter);
-                    // Remove member logic would go here
                 }
             }
         }
@@ -430,38 +432,18 @@ contract AjoCore is IPatientAjo, ReentrancyGuard, Ownable {
         paymentsContract.updateTokenConfig(token, monthlyPayment, isActive);
     }
     
-    // ============ GOVERNANCE INTEGRATION ============
+    // ============ HELPER FUNCTIONS ============
     
-    function createProposal(string memory description, bytes memory proposalData) external returns (uint256) {
-        return governanceContract.createProposal(description, proposalData);
-    }
-    
-    function vote(uint256 proposalId, uint8 support) external {
-        governanceContract.vote(proposalId, support);
-    }
-    
-    function executeProposal(uint256 proposalId) external {
-        governanceContract.executeProposal(proposalId);
-    }
-    
-    // Governance-controlled functions
-    function updatePenaltyRate(uint256 newPenaltyRate) external {
-        require(msg.sender == address(governanceContract), "Only governance");
-        paymentsContract.updatePenaltyRate(newPenaltyRate);
-    }
-    
-    function switchPaymentToken(PaymentToken newToken) external {
-        require(msg.sender == address(governanceContract), "Only governance");
-        paymentsContract.switchPaymentToken(newToken);
+    function getRequiredCollateralForJoin(PaymentToken tokenChoice) external view returns (uint256) {
+        TokenConfig memory config = paymentsContract.getTokenConfig(tokenChoice);
+        return collateralContract.calculateRequiredCollateral(
+            nextQueueNumber,
+            config.monthlyPayment,
+            FIXED_TOTAL_PARTICIPANTS
+        );
     }
     
     // ============ INTERNAL FUNCTIONS ============
-    
-    function _advanceCycle() internal {
-        paymentsContract.advanceCycle();
-        lastCycleTimestamp = block.timestamp;
-        emit CycleAdvanced(paymentsContract.getCurrentCycle(), block.timestamp);
-    }
     
     function _calculateInitialReputation(uint256 collateral, uint256 monthlyPayment) 
         internal 

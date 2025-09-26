@@ -3,10 +3,12 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import "./AjoInterfaces.sol";
-import "./LockableContract.sol";
 
-contract AjoGovernance is IAjoGovernance, ERC20, ERC20Votes, LockableContract {
+contract AjoGovernance is Initializable, IAjoGovernance, ERC20, ERC20Votes, Ownable {
     
     // ============ CONSTANTS ============
     
@@ -15,9 +17,9 @@ contract AjoGovernance is IAjoGovernance, ERC20, ERC20Votes, LockableContract {
     uint256 public constant DEFAULT_PENALTY_RATE = 500; // 5% (500 basis points)
     
     // ============ STATE VARIABLES ============
+    
     address public ajoCore;
-    event AjoCoreUpdated(address indexed oldCore, address indexed newCore);
-    IAjoMembers public immutable membersContract;
+    IAjoMembers public membersContract;
     
     uint256 public proposalCount;
     uint256 public penaltyRate = DEFAULT_PENALTY_RATE;
@@ -36,6 +38,10 @@ contract AjoGovernance is IAjoGovernance, ERC20, ERC20Votes, LockableContract {
     
     mapping(uint256 => GovernanceProposal) public proposals;
     
+    // ============ EVENTS ============
+    
+    event AjoCoreUpdated(address indexed oldCore, address indexed newCore);
+    
     // ============ MODIFIERS ============
     
     modifier onlyAjoCore() {
@@ -43,41 +49,43 @@ contract AjoGovernance is IAjoGovernance, ERC20, ERC20Votes, LockableContract {
         _;
     }
     
-    // ============ CONSTRUCTOR ============
+    // ============ CONSTRUCTOR (for master copy) ============
     
-    constructor(address _ajoCore, address _membersContract) 
-        ERC20("AjoGovernanceToken", "AGT")
-        ERC20Permit("AjoGovernanceToken")
-    {
+    constructor() ERC20("AjoGovernanceToken", "AGT") ERC20Permit("AjoGovernanceToken") {
+        // Disable initializers on the master copy
+        _disableInitializers();
+        
+        // Transfer ownership to address(1) to prevent master copy from being used
+        _transferOwnership(address(1));
+    }
+    
+    // ============ INITIALIZER (for proxy instances) ============
+    
+    function initialize(
+        address _ajoCore, 
+        address /* _governanceToken - unused but kept for interface compatibility */
+    ) external override initializer {
+        require(_ajoCore != address(0), "Invalid AjoCore address");
+        
+        // Initialize ownership for the proxy instance
+        _transferOwnership(msg.sender);
+        
+        // Set contract addresses
         ajoCore = _ajoCore;
+        
+        // Initialize state variables
+        proposalCount = 0;
+        penaltyRate = DEFAULT_PENALTY_RATE;
+    }
+    
+    // ============ CONTRACT SETUP ============
+    
+    function setMembersContract(address _membersContract) external onlyOwner {
+        require(_membersContract != address(0), "Invalid members contract");
         membersContract = IAjoMembers(_membersContract);
     }
     
-   /**
-     * @dev Set AjoCore address - only works during setup phase
-     * @param _ajoCore Address of the AjoCore contract
-     */
-    function setAjoCore(address _ajoCore) external onlyOwner onlyDuringSetup {
-        require(_ajoCore != address(0), "Cannot set zero address");
-        require(_ajoCore != ajoCore, "Already set to this address");
-        
-        address oldCore = ajoCore;
-        ajoCore = _ajoCore;
-        
-        emit AjoCoreUpdated(oldCore, _ajoCore);
-    }
-    
-    /**
-     * @dev Verify setup for AjoMembers
-     */
-    function verifySetup() external view override returns (bool isValid, string memory reason) {
-        if (ajoCore == address(0)) {
-            return (false, "AjoCore not set");
-        }
-        return (true, "Setup is valid");
-    }
-
-    // ============ CORE GOVERNANCE FUNCTIONS (IAjoGovernance) ============
+    // ============ CORE GOVERNANCE FUNCTIONS ============
     
     function createProposal(
         string memory description,
@@ -139,7 +147,7 @@ contract AjoGovernance is IAjoGovernance, ERC20, ERC20Votes, LockableContract {
         emit ProposalExecuted(proposalId);
     }
     
-    // ============ GOVERNANCE-ONLY FUNCTIONS (IAjoGovernance) ============
+    // ============ GOVERNANCE-ONLY FUNCTIONS ============
     
     function updatePenaltyRate(uint256 newPenaltyRate) external override {
         require(msg.sender == address(this), "Only governance");
@@ -153,7 +161,47 @@ contract AjoGovernance is IAjoGovernance, ERC20, ERC20Votes, LockableContract {
         // Implementation depends on how AjoCore handles token switching
     }
     
-    // ============ VIEW FUNCTIONS (IAjoGovernance) ============
+    function updateReputationAndVotingPower(address member, bool positive) external override onlyAjoCore {
+        if (address(membersContract) == address(0)) return;
+        
+        Member memory memberInfo = membersContract.getMember(member);
+        uint256 newReputation = memberInfo.reputationScore;
+        
+        if (positive && newReputation < 1000) {
+            newReputation += 10;
+            if (newReputation > 1000) newReputation = 1000;
+        } else if (!positive && newReputation > 100) {
+            newReputation = newReputation >= 50 ? newReputation - 50 : 100;
+        }
+        
+        // Update reputation in members contract
+        membersContract.updateReputation(member, newReputation);
+        
+        // Update voting power based on new reputation
+        uint256 newVotingPower = memberInfo.lockedCollateral > 0 ? 
+            (memberInfo.lockedCollateral * newReputation) / 1000 : 
+            newReputation; // Base voting power for zero collateral users
+        
+        updateVotingPower(member, newVotingPower);
+        
+        emit ReputationUpdated(member, newReputation);
+    }
+    
+     // ============ VOTING POWER MANAGEMENT ============
+    
+    function updateVotingPower(address member, uint256 newPower) public onlyAjoCore {
+        uint256 currentBalance = balanceOf(member);
+        
+        if (newPower > currentBalance) {
+            _mint(member, newPower - currentBalance);
+        } else if (newPower < currentBalance) {
+            _burn(member, currentBalance - newPower);
+        }
+        
+        emit VotingPowerUpdated(member, newPower);
+    }
+    
+    // ============ VIEW FUNCTIONS ============
     
     function getProposal(uint256 proposalId)
         external
@@ -204,21 +252,11 @@ contract AjoGovernance is IAjoGovernance, ERC20, ERC20Votes, LockableContract {
         );
     }
     
-    // ============ VOTING POWER MANAGEMENT ============
-    
-    function updateVotingPower(address member, uint256 newPower) public onlyAjoCore {
-        uint256 currentBalance = balanceOf(member);
-        
-        if (newPower > currentBalance) {
-            _mint(member, newPower - currentBalance);
-        } else if (newPower < currentBalance) {
-            _burn(member, currentBalance - newPower);
-        }
-        
-        emit VotingPowerUpdated(member, newPower);
-    }
+    // ============ ADDITIONAL VIEW FUNCTIONS ============
     
     function calculateVotingPower(address member) external view returns (uint256) {
+        if (address(membersContract) == address(0)) return 0;
+        
         Member memory memberInfo = membersContract.getMember(member);
         
         if (!memberInfo.isActive) return 0;
@@ -230,32 +268,6 @@ contract AjoGovernance is IAjoGovernance, ERC20, ERC20Votes, LockableContract {
             
         return votingPower;
     }
-    
-    function updateReputationAndVotingPower(address member, bool positive) external onlyAjoCore {
-        Member memory memberInfo = membersContract.getMember(member);
-        uint256 newReputation = memberInfo.reputationScore;
-        
-        if (positive && newReputation < 1000) {
-            newReputation += 10;
-            if (newReputation > 1000) newReputation = 1000;
-        } else if (!positive && newReputation > 100) {
-            newReputation = newReputation >= 50 ? newReputation - 50 : 100;
-        }
-        
-        // Update reputation in members contract
-        membersContract.updateReputation(member, newReputation);
-        
-        // Update voting power based on new reputation
-        uint256 newVotingPower = memberInfo.lockedCollateral > 0 ? 
-            (memberInfo.lockedCollateral * newReputation) / 1000 : 
-            newReputation; // Base voting power for zero collateral users
-        
-        updateVotingPower(member, newVotingPower);
-        
-        emit ReputationUpdated(member, newReputation);
-    }
-    
-    // ============ ADDITIONAL VIEW FUNCTIONS ============
     
     function getVote(uint256 proposalId, address voter) external view returns (uint8) {
         return proposals[proposalId].votes[voter];

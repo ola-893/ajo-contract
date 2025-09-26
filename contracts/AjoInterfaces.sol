@@ -36,7 +36,17 @@ struct PayoutRecord {
 
 // ============ MAIN AJO INTERFACE ============
 
-interface IPatientAjo {
+interface IAjoCore {
+    // Initialize Function
+    function initialize(
+        address _usdc,
+        address _whbar,
+        address _ajoMembers,
+        address _ajoCollateral,
+        address _ajoPayments,
+        address _ajoGovernance
+    ) external;
+    
     // Core Ajo Functions
     function joinAjo(PaymentToken tokenChoice) external;
     function processPayment() external;
@@ -98,6 +108,12 @@ interface IPatientAjo {
 
 // ============ GOVERNANCE INTERFACE ============
 interface IAjoGovernance {
+    // Initialize Function
+    function initialize(
+        address _ajoCore,
+        address _governanceToken
+    ) external;
+    
     // Core Governance Functions
     function createProposal(
         string memory description,
@@ -144,6 +160,14 @@ interface IAjoGovernance {
 // ============ COLLATERAL INTERFACE ============
 
 interface IAjoCollateral {
+    // Initialize Function
+    function initialize(
+        address _usdc,
+        address _whbar,
+        address _ajoCore,
+        address _ajoMembers
+    ) external;
+    
     // Pure Calculation Functions
     function calculateRequiredCollateral(
         uint256 position,
@@ -183,6 +207,15 @@ interface IAjoCollateral {
 // ============ PAYMENT INTERFACE ============
 
 interface IAjoPayments {
+    // Initialize Function
+    function initialize(
+        address _usdc,
+        address _whbar,
+        address _ajoCore,
+        address _ajoMembers,
+        address _ajoCollateral
+    ) external;
+    
     // Core Payment Functions
     function makePayment() external;
     function processPayment(address member, uint256 amount, PaymentToken token) external;
@@ -228,17 +261,30 @@ interface IAjoPayments {
 // ============ MEMBER MANAGEMENT INTERFACE ============
 
 interface IAjoMembers {
+    // Initialize Function
+    function initialize(
+        address _ajoCore,
+        address _usdc,
+        address _whbar
+    ) external;
+    
+    // Contract Address Management
+    function setContractAddresses(
+        address _ajoCollateral,
+        address _ajoPayments
+    ) external;
+    
     // Core Member Functions
     function joinAjo(PaymentToken tokenChoice) external;
     function exitAjo() external;
     function updateReputation(address member, uint256 newReputation) external;
     
-    // NEW: Member Management Functions (added based on AjoMembers contract)
+    // Member Management Functions
     function addMember(address member, Member memory memberData) external;
     function removeMember(address member) external;
     function updateMember(address member, Member memory memberData) external;
     
-    // NEW: Additional Member Management Functions
+    // Additional Member Management Functions
     function updateCollateral(address member, uint256 newAmount) external;
     function addPastPayment(address member, uint256 payment) external;
     function updateLastPaymentCycle(address member, uint256 cycle) external;
@@ -276,7 +322,7 @@ interface IAjoMembers {
     
     function activeMembersList(uint256 index) external view returns (address);
     
-    // NEW: Additional View Functions (based on AjoMembers contract)
+    // Additional View Functions
     function isMember(address member) external view returns (bool);
     function getActiveMembersList() external view returns (address[] memory);
     function getQueuePosition(uint256 queueNumber) external view returns (address);
@@ -289,6 +335,47 @@ interface IAjoMembers {
     event MemberRemoved(address indexed member);
     event MemberUpdated(address indexed member);
     event GuarantorAssigned(address indexed member, address indexed guarantor, uint256 memberPosition, uint256 guarantorPosition);
+}
+
+// ============ FACTORY INTERFACE ============
+
+interface IAjoFactory {
+    struct AjoInfo {
+        address ajoCore;
+        address ajoMembers;
+        address ajoCollateral;
+        address ajoPayments;
+        address ajoGovernance;
+        address creator;
+        uint256 createdAt;
+        string name;
+        bool isActive;
+    }
+
+    // Core Factory Functions
+    function createAjo(string memory _name) external returns (uint256 ajoId);
+    
+    // View Functions
+    function getAjo(uint256 ajoId) external view returns (AjoInfo memory info);
+    function getAllAjos(uint256 offset, uint256 limit) external view returns (AjoInfo[] memory ajoInfos, bool hasMore);
+    function getAjosByCreator(address creator) external view returns (uint256[] memory ajoIds);
+    function getAjoCore(uint256 ajoId) external view returns (address ajoCore);
+    function ajoStatus(uint256 ajoId) external view returns (bool exists, bool isActive);
+    function getFactoryStats() external view returns (uint256 totalCreated, uint256 activeCount);
+    function getImplementations() external view returns (
+        address ajoCore,
+        address ajoMembers,
+        address ajoCollateral,
+        address ajoPayments,
+        address ajoGovernance
+    );
+    
+    // Admin Functions
+    function deactivateAjo(uint256 ajoId) external;
+    
+    // Events
+    event AjoCreated(uint256 indexed ajoId, address indexed creator, address ajoCore, string name);
+    event MasterImplementationsSet(address ajoCore, address ajoMembers, address ajoCollateral, address ajoPayments, address ajoGovernance);
 }
 
 // ============ ERC20 VOTES INTERFACE (Inherited) ============
@@ -329,4 +416,13 @@ interface IOwnable {
 
 interface IReentrancyGuard {
     // No external functions, just internal protection
+}
+
+// ============ INITIALIZABLE INTERFACE (Inherited) ============
+
+interface IInitializable {
+    // Events
+    event Initialized(uint8 version);
+    
+    // Note: initialize functions are contract-specific and defined in each interface above
 }
