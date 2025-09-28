@@ -1,0 +1,25 @@
+{
+  "network": "unknown",
+  "chainId": 296,
+  "deployedAt": "2025-09-27T11:40:04.377Z",
+  "deploymentType": "EIP-1167 Proxy Factory",
+  "contracts": {
+    "AjoFactory": "0x1f55CecE3369a17998513Acee0494BFFB2B9fB84",
+    "USDC": "0x775EdFB7343f3B5B74C058c1B14D98285C4980C5",
+    "WHBAR": "0x2299155b4a7944b3e62111672Fa0d82bF1456b3E"
+  },
+  "masterCopies": {
+    "AjoCore": "0xF6FB3093Bb59DE2B316f9f46c54286605f08aF29",
+    "AjoMembers": "0xd93eAB34d8AD217B4073eaB9CbaEee362CC4F9a2",
+    "AjoCollateral": "0x39BB90893970619935734bb89730772Df9649d3A",
+    "AjoPayments": "0x7A647c43E4B759d63EDb75bB410be829EE13321D",
+    "AjoGovernance": "0xdbe9cCC9CF0948F5792C7eFA29504Bd12B39bB89"
+  },
+  "firstAjo": {
+    "id": 1,
+    "name": "My First Proxy Ajo",
+    "ajoCore": "0x0C4452902fe4dBfD5c89b53DCB8849319dAAE26a",
+    "creator": "0x7172C803Bc2EB1438bddB550dDCBe6dc1e1CAA69"
+  },
+  "totalAjosCreated": 5
+}

@@ -5,8 +5,10 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./AjoInterfaces.sol";
+import "./LockableContract.sol";
 
-contract AjoCollateral is IAjoCollateral, Ownable, Initializable {
+
+contract AjoCollateral is IAjoCollateral, Ownable, Initializable, LockableContract {
     
     // ============ CONSTANTS ============
     
@@ -64,15 +66,38 @@ contract AjoCollateral is IAjoCollateral, Ownable, Initializable {
     ajoCore = _ajoCore;
     membersContract = IAjoMembers(_ajoMembers);
 }
-
     
-    // ============ COLLATERAL CALCULATION FUNCTIONS ============
+    /**
+     * @dev Set AjoCore address - only works during setup phase
+     * @param _ajoCore Address of the AjoCore contract
+     */
+    function setAjoCore(address _ajoCore) external onlyOwner onlyDuringSetup {
+        require(_ajoCore != address(0), "Cannot set zero address");
+        require(_ajoCore != ajoCore, "Already set to this address");
+        
+        address oldCore = ajoCore;
+        ajoCore = _ajoCore;
+        
+        emit AjoCoreUpdated(oldCore, _ajoCore);
+    }
+    
+    /**
+     * @dev Verify setup for AjoMembers
+     */
+    function verifySetup() external view override returns (bool isValid, string memory reason) {
+        if (ajoCore == address(0)) {
+            return (false, "AjoCore not set");
+        }
+        return (true, "Setup is valid");
+    }
+
+    // ============ COLLATERAL CALCULATION FUNCTIONS (IAjoCollateral) ============
     
     function calculateRequiredCollateral(
         uint256 position,
         uint256 monthlyPayment,
         uint256 totalParticipants
-    ) external pure override returns (uint256) {
+    ) public view override returns (uint256) {
         // Last person has no debt after payout, no collateral needed
         if (position >= totalParticipants) {
             return 0;
@@ -91,7 +116,7 @@ contract AjoCollateral is IAjoCollateral, Ownable, Initializable {
     function calculateGuarantorPosition(
         uint256 memberPosition,
         uint256 totalParticipants
-    ) external pure override returns (uint256) {
+    ) public pure override returns (uint256) {
         uint256 guarantorOffset = totalParticipants / GUARANTOR_OFFSET_DIVISOR;
         uint256 guarantorPosition = ((memberPosition - 1 + guarantorOffset) % totalParticipants) + 1;
         return guarantorPosition;
@@ -140,7 +165,7 @@ contract AjoCollateral is IAjoCollateral, Ownable, Initializable {
     
     // ============ COLLATERAL MANAGEMENT FUNCTIONS ============
     
-    function lockCollateral(address member, uint256 amount, PaymentToken token) external override onlyAjoCore {
+    function lockCollateral(address member, uint256 amount, PaymentToken token) external onlyAjoCore {
         IERC20 tokenContract = token == PaymentToken.USDC ? USDC : HBAR;
         
         if (amount > 0) {
@@ -151,7 +176,7 @@ contract AjoCollateral is IAjoCollateral, Ownable, Initializable {
         emit CollateralLocked(member, amount, token);
     }
     
-    function unlockCollateral(address member, uint256 amount, PaymentToken token) external override onlyAjoCore {
+    function unlockCollateral(address member, uint256 amount, PaymentToken token) external onlyAjoCore {
         IERC20 tokenContract = token == PaymentToken.USDC ? USDC : HBAR;
         
         require(tokenBalances[token][member] >= amount, "Insufficient collateral balance");
@@ -164,7 +189,7 @@ contract AjoCollateral is IAjoCollateral, Ownable, Initializable {
         emit CollateralUnlocked(member, amount, token);
     }
     
-    function executeSeizure(address defaulter) external override onlyAjoCore {
+    function executeSeizure(address defaulter) external onlyAjoCore {
         Member memory defaulterMember = membersContract.getMember(defaulter);
         address guarantorAddr = defaulterMember.guarantor;
         
@@ -224,7 +249,7 @@ contract AjoCollateral is IAjoCollateral, Ownable, Initializable {
         return tokenBalances[token][member];
     }
     
-    function getTotalCollateral() external view override returns (uint256 totalUSDC, uint256 totalHBAR) {
+    function getTotalCollateral() external view returns (uint256 totalUSDC, uint256 totalHBAR) {
         uint256 totalMembers = membersContract.getTotalActiveMembers();
         
         for (uint256 i = 0; i < totalMembers; i++) {
@@ -234,9 +259,36 @@ contract AjoCollateral is IAjoCollateral, Ownable, Initializable {
         }
     }
     
+    function getCollateralDemo(uint256 participants, uint256 monthlyPayment) 
+        external 
+        view 
+        returns (uint256[] memory positions, uint256[] memory collaterals) 
+    {
+        positions = new uint256[](participants);
+        collaterals = new uint256[](participants);
+        
+        for (uint256 i = 1; i <= participants; i++) {
+            positions[i-1] = i;
+            collaterals[i-1] = calculateRequiredCollateral(i, monthlyPayment, participants);
+        }
+    }
+    
+    function calculateInitialReputation(uint256 collateral, uint256 monthlyPayment) 
+        external 
+        pure 
+        returns (uint256) 
+    {
+        if (collateral == 0) return 800; // High reputation for last position (no collateral needed)
+        
+        // Base reputation of 600, up to 1000 based on collateral vs monthly payment ratio
+        uint256 ratio = (collateral * 100) / monthlyPayment; // How many months of payments is collateral worth
+        uint256 bonus = ratio > 400 ? 400 : ratio; // Cap bonus at 400 points
+        return 600 + bonus;
+    }
+    
     // ============ EMERGENCY FUNCTIONS ============
     
-    function emergencyWithdraw(PaymentToken token, address to, uint256 amount) external override onlyAjoCore {
+    function emergencyWithdraw(PaymentToken token, address to, uint256 amount) external onlyAjoCore {
         IERC20 tokenContract = token == PaymentToken.USDC ? USDC : HBAR;
         tokenContract.transfer(to, amount);
     }

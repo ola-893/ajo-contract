@@ -1,0 +1,26 @@
+{
+  "network": "unknown",
+  "chainId": 296,
+  "deployedAt": "2025-09-27T17:43:16.207Z",
+  "deploymentType": "4-Phase EIP-1167 Proxy Factory",
+  "contracts": {
+    "AjoFactory": "0x656aB34AD860b8871eD10CA1d515Db120cfEB26d",
+    "USDC": "0xebDCAB56FB573750F9D2500cF9f3C4b6Fb1419EA",
+    "WHBAR": "0x545A3eacD06D9c062747dEC0906F26878C41db82"
+  },
+  "masterCopies": {
+    "AjoCore": "0x3670209a686f960d0E12b0761e705c43bcB63109",
+    "AjoMembers": "0xCFc86a3CB63eDbEb34D6a15232fc07F55D8f6841",
+    "AjoCollateral": "0x9598BBEdd65055E77e28C96b0767A325E1c69084",
+    "AjoPayments": "0x0B3dBc12d05e410170ae7F2217A67BBA4605b02c",
+    "AjoGovernance": "0x6942fA8684B99F50fB22a053BaA92895e6fCd2eC"
+  },
+  "firstAjo": {
+    "id": 1,
+    "name": "My First 4-Phase Ajo",
+    "ajoCore": "0x5aaD4059bcc014e2d8F7833e07B4a4a932e148BB",
+    "creator": "0x7172C803Bc2EB1438bddB550dDCBe6dc1e1CAA69",
+    "initializationPhase": 4
+  },
+  "totalAjosCreated": 6
+}

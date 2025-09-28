@@ -5,9 +5,10 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
+import "./LockableContract.sol";
 import "./AjoInterfaces.sol";
 
-contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable {
+contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, LockableContract {
     
     // ============ STATE VARIABLES ============
     
@@ -85,36 +86,37 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable {
         });
     }
     
-    // ============ CORE PAYMENT FUNCTIONS ============
+     /**
+     * @dev Set AjoCore address - only works during setup phase
+     * @param _ajoCore Address of the AjoCore contract
+     */
+    function setAjoCore(address _ajoCore) external onlyOwner onlyDuringSetup {
+        require(_ajoCore != address(0), "Cannot set zero address");
+        require(_ajoCore != ajoCore, "Already set to this address");
+        
+        address oldCore = ajoCore;
+        ajoCore = _ajoCore;
+        
+        emit AjoCoreUpdated(oldCore, _ajoCore);
+    }
+    
+    /**
+     * @dev Verify setup for AjoMembers
+     */
+    function verifySetup() external view override returns (bool isValid, string memory reason) {
+        if (ajoCore == address(0)) {
+            return (false, "AjoCore not set");
+        }
+        return (true, "Setup is valid");
+    }
+    
+    // ============ CORE PAYMENT FUNCTIONS (IAjoPayments) ============
     
     function makePayment() external override nonReentrant {
         require(msg.sender == ajoCore, "Only AjoCore");
+        
         // This function is called by AjoCore after validation
         // The actual payment processing is handled through processPayment
-    }
-    
-    function processPayment(address member, uint256 amount, PaymentToken token) external override onlyAjoCore nonReentrant {
-        IERC20 tokenContract = token == PaymentToken.USDC ? USDC : HBAR;
-        Member memory memberData = membersContract.getMember(member);
-        
-        require(memberData.isActive, "Member not active");
-        require(memberData.lastPaymentCycle < currentCycle, "Payment already made");
-        
-        // Calculate total payment (including any penalties)
-        uint256 totalPayment = amount + pendingPenalties[member];
-        
-        // Transfer payment
-        tokenContract.transferFrom(member, address(this), totalPayment);
-        
-        // Clear penalties
-        pendingPenalties[member] = 0;
-        
-        // Update member's total paid and add to past payments
-        membersContract.updateTotalPaid(member, totalPayment);
-        membersContract.addPastPayment(member, totalPayment);
-        
-        emit PaymentMade(member, totalPayment, currentCycle, token);
-        emit PaymentProcessed(member, amount, pendingPenalties[member], totalPayment);
     }
     
     function distributePayout() external override nonReentrant {
@@ -129,9 +131,6 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable {
         
         // Distribute payout
         _distributePayout(recipient, payoutAmount, recipientMember.preferredToken);
-        
-        // Mark recipient as having received payout
-        membersContract.markPayoutReceived(recipient);
         
         nextPayoutPosition++;
     }
@@ -149,67 +148,10 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable {
         // Add penalty
         pendingPenalties[defaulter] += penalty;
         
-        // Increment default count
-        membersContract.incrementDefaultCount(defaulter);
-        
         emit MemberDefaulted(defaulter, currentCycle, penalty);
     }
     
-    function batchHandleDefaults(address[] calldata defaulters) external override onlyAjoCore {
-        for (uint256 i = 0; i < defaulters.length; i++) {
-            address defaulter = defaulters[i];
-            Member memory member = membersContract.getMember(defaulter);
-            
-            if (member.isActive && member.lastPaymentCycle < currentCycle) {
-                uint256 cyclesMissed = currentCycle - member.lastPaymentCycle;
-                TokenConfig memory config = tokenConfigs[member.preferredToken];
-                uint256 penalty = (config.monthlyPayment * penaltyRate * cyclesMissed) / 10000;
-                
-                pendingPenalties[defaulter] += penalty;
-                membersContract.incrementDefaultCount(defaulter);
-                
-                emit MemberDefaulted(defaulter, currentCycle, penalty);
-            }
-        }
-    }
-    
-    function updateTokenConfig(
-        PaymentToken token,
-        uint256 monthlyPayment,
-        bool isActive
-    ) external override onlyAjoCore {
-        tokenConfigs[token].monthlyPayment = monthlyPayment;
-        tokenConfigs[token].isActive = isActive;
-    }
-    
-    function advanceCycle() external override onlyAjoCore {
-        currentCycle++;
-        emit CycleAdvanced(currentCycle, block.timestamp);
-    }
-    
-    function switchPaymentToken(PaymentToken newToken) external override onlyAjoCore {
-        PaymentToken oldToken = activePaymentToken;
-        activePaymentToken = newToken;
-        
-        emit TokenSwitched(oldToken, activePaymentToken);
-    }
-    
-    function emergencyWithdraw(PaymentToken token) external override onlyAjoCore {
-        IERC20 tokenContract = token == PaymentToken.USDC ? USDC : HBAR;
-        uint256 balance = tokenContract.balanceOf(address(this));
-        tokenContract.transfer(ajoCore, balance);
-    }
-    
-    function updatePenaltyRate(uint256 newPenaltyRate) external override onlyAjoCore {
-        require(newPenaltyRate <= 2000, "Penalty rate too high"); // Max 20%
-        penaltyRate = newPenaltyRate;
-    }
-    
-    function updateNextPayoutPosition(uint256 position) external override onlyAjoCore {
-        nextPayoutPosition = position;
-    }
-    
-    // ============ VIEW FUNCTIONS ============
+    // ============ VIEW FUNCTIONS (IAjoPayments) ============
     
     function needsToPayThisCycle(address member) external view override returns (bool) {
         Member memory memberInfo = membersContract.getMember(member);
@@ -220,45 +162,48 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable {
         return tokenConfigs[token];
     }
     
-    function getCurrentCycle() external view override returns (uint256) {
-        return currentCycle;
-    }
+    // ============ PAYMENT PROCESSING FUNCTIONS ============
     
-    function getNextPayoutPosition() external view override returns (uint256) {
-        return nextPayoutPosition;
-    }
-    
-    function getActivePaymentToken() external view override returns (PaymentToken) {
-        return activePaymentToken;
-    }
-    
-    function getPendingPenalty(address member) external view override returns (uint256) {
-        return pendingPenalties[member];
-    }
-    
-    function getPenaltyRate() external view override returns (uint256) {
-        return penaltyRate;
-    }
-    
-    function getContractBalance(PaymentToken token) external view override returns (uint256) {
+    function processPayment(address member, uint256 amount, PaymentToken token) external onlyAjoCore nonReentrant {
         IERC20 tokenContract = token == PaymentToken.USDC ? USDC : HBAR;
-        return tokenContract.balanceOf(address(this));
+        Member memory memberData = membersContract.getMember(member);
+        
+        require(memberData.isActive, "Member not active");
+        require(memberData.lastPaymentCycle < currentCycle, "Payment already made");
+        
+        // Calculate total payment (including any penalties)
+        uint256 totalPayment = amount + pendingPenalties[member];
+        
+        // Transfer payment
+        tokenContract.transferFrom(member, address(this), totalPayment);
+        
+        // Clear penalties
+        pendingPenalties[member] = 0;
+        
+        emit PaymentMade(member, totalPayment, currentCycle, token);
     }
     
-    function getTotalPayouts() external view override returns (uint256) {
-        return currentCycle > 1 ? currentCycle - 1 : 0;
+    function _distributePayout(address recipient, uint256 amount, PaymentToken token) internal {
+        IERC20 tokenContract = token == PaymentToken.USDC ? USDC : HBAR;
+        
+        tokenContract.transfer(recipient, amount);
+        
+        // Update payout record
+        payouts[currentCycle] = PayoutRecord({
+            recipient: recipient,
+            amount: amount,
+            cycle: currentCycle,
+            timestamp: block.timestamp
+        });
+        
+        emit PayoutDistributed(recipient, amount, currentCycle, token);
     }
     
-    function isPayoutReady() external view override returns (bool) {
-        address nextRecipient = getNextRecipient();
-        return nextRecipient != address(0) && calculatePayout() > 0;
-    }
+    // ============ CALCULATION FUNCTIONS ============
     
-    function getPayout(uint256 cycle) external view override returns (PayoutRecord memory) {
-        return payouts[cycle];
-    }
-    
-    function calculatePayout() public view override returns (uint256) {
+    // ============ CALCULATION FUNCTIONS ============
+
+    function calculatePayout() public view returns (uint256) {
         // Get the active token configuration
         TokenConfig memory config = tokenConfigs[activePaymentToken];
         
@@ -266,12 +211,13 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable {
         uint256 totalMembers = membersContract.getTotalActiveMembers();
         
         // Payout = total members × monthly contribution
+        // This is the core ROSCA principle - fixed payout regardless of available funds
         uint256 payout = config.monthlyPayment * totalMembers;
         
         return payout;
     }
     
-    function getNextRecipient() public view override returns (address) {
+    function getNextRecipient() public view returns (address) {
         uint256 totalMembers = membersContract.getTotalActiveMembers();
         
         if (nextPayoutPosition > totalMembers) return address(0);
@@ -302,21 +248,118 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable {
         return candidate;
     }
     
+    // ============ ADMIN FUNCTIONS ============
+    
+    function updatePenaltyRate(uint256 newPenaltyRate) external onlyAjoCore {
+        require(newPenaltyRate <= 2000, "Penalty rate too high"); // Max 20%
+        penaltyRate = newPenaltyRate;
+    }
+    
+    function switchPaymentToken(PaymentToken newToken) external onlyAjoCore {
+        PaymentToken oldToken = activePaymentToken;
+        activePaymentToken = newToken;
+        
+        emit TokenSwitched(oldToken, activePaymentToken);
+    }
+    
+    function updateTokenConfig(
+        PaymentToken token,
+        uint256 monthlyPayment,
+        bool isActive
+    ) external onlyAjoCore {
+        tokenConfigs[token].monthlyPayment = monthlyPayment;
+        tokenConfigs[token].isActive = isActive;
+    }
+    
+    function advanceCycle() external onlyAjoCore {
+        currentCycle++;
+        emit CycleAdvanced(currentCycle, block.timestamp);
+    }
+    
+    function updateNextPayoutPosition(uint256 position) external onlyAjoCore {
+        nextPayoutPosition = position;
+    }
+    
+    // ============ BATCH PROCESSING ============
+    
+    function batchHandleDefaults(address[] calldata defaulters) external onlyAjoCore {
+        for (uint256 i = 0; i < defaulters.length; i++) {
+            address defaulter = defaulters[i];
+            Member memory member = membersContract.getMember(defaulter);
+            
+            if (member.isActive && member.lastPaymentCycle < currentCycle) {
+                uint256 cyclesMissed = currentCycle - member.lastPaymentCycle;
+                TokenConfig memory config = tokenConfigs[member.preferredToken];
+                uint256 penalty = (config.monthlyPayment * penaltyRate * cyclesMissed) / 10000;
+                
+                pendingPenalties[defaulter] += penalty;
+                
+                emit MemberDefaulted(defaulter, currentCycle, penalty);
+            }
+        }
+    }
+    
+    // ============ VIEW FUNCTIONS ============
+    
+    function getCurrentCycle() external view returns (uint256) {
+        return currentCycle;
+    }
+    
+    function getNextPayoutPosition() external view returns (uint256) {
+        return nextPayoutPosition;
+    }
+    
+    function getActivePaymentToken() external view returns (PaymentToken) {
+        return activePaymentToken;
+    }
+    
+    function getPayout(uint256 cycle) external view returns (PayoutRecord memory) {
+        return payouts[cycle];
+    }
+    
+    function getPendingPenalty(address member) external view returns (uint256) {
+        return pendingPenalties[member];
+    }
+    
+    function getPenaltyRate() external view returns (uint256) {
+        return penaltyRate;
+    }
+    
+    function getContractBalance(PaymentToken token) external view returns (uint256) {
+        IERC20 tokenContract = token == PaymentToken.USDC ? USDC : HBAR;
+        return tokenContract.balanceOf(address(this));
+    }
+    
+    function getTotalPayouts() external view returns (uint256) {
+        return currentCycle > 1 ? currentCycle - 1 : 0;
+    }
+    
+    function isPayoutReady() external view returns (bool) {
+        address nextRecipient = getNextRecipient();
+        return nextRecipient != address(0) && calculatePayout() > 0;
+    }
+    
     // ============ INTERNAL FUNCTIONS ============
     
-    function _distributePayout(address recipient, uint256 amount, PaymentToken token) internal {
+    function _getHBARToUSDCRate() internal pure returns (uint256) {
+        // Placeholder - in production, use Chainlink or similar oracle
+        return 5e16; // Assuming 1 HBAR = 0.05 USDC (5 cents)
+    }
+    
+    // ============ EMERGENCY FUNCTIONS ============
+    
+    function emergencyWithdraw(PaymentToken token) external onlyAjoCore {
         IERC20 tokenContract = token == PaymentToken.USDC ? USDC : HBAR;
-        
-        tokenContract.transfer(recipient, amount);
-        
-        // Update payout record
-        payouts[currentCycle] = PayoutRecord({
-            recipient: recipient,
-            amount: amount,
-            cycle: currentCycle,
-            timestamp: block.timestamp
-        });
-        
-        emit PayoutDistributed(recipient, amount, currentCycle, token);
+        uint256 balance = tokenContract.balanceOf(address(this));
+        tokenContract.transfer(ajoCore, balance);
+    }
+    
+    function pausePayments() external onlyAjoCore {
+        // Implementation for pausing payments during emergencies
+        // This could set a state variable that prevents new payments
+    }
+    
+    function resumePayments() external onlyAjoCore {
+        // Implementation for resuming payments after emergency
     }
 }

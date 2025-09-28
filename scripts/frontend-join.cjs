@@ -26,13 +26,13 @@ const DEMO_CONFIG = {
 // EXISTING CONTRACT ADDRESSES - UPDATE THESE WITH YOUR DEPLOYED CONTRACTS
 const CONTRACT_ADDRESSES = {
   // Update these addresses with your actual deployed contract addresses
-  AjoCore: "0x2038bAdc3672984B82BFfE39F9e4461A9058a065", // Replace with actual AjoCore address
-  USDC: "0x936CE68036Eb1c60080EC4d0F3197a77D18b52b7", // Replace with actual Mock USDC address
-  WHBAR: "0xe70e9E22ee8299D405f2546E7660c329cC2a6BC4", // Replace with actual Mock WHBAR address
-  AjoMembers: "0xB71B7449b7CB65594682b7b77B9937b2cC72c79C", // Replace with actual AjoMembers address
-  AjoCollateral: "0x5985b0DC8165CC6915F8c5B5B4dA3853A9368143", // Replace with actual AjoCollateral address
-  AjoPayments: "0xC832159aD19e3D17d5A1613949295d671d3B0A75", // Replace with actual AjoPayments address
-  AjoGovernance: "0x4Db540F2Bbf6fdB394F41A245cc752C2e737a56e" // Replace with actual AjoGovernance address
+  AjoCore: "0x4ef4Ae7A28384D08399747b1410021551371a350", // Replace with actual AjoCore address
+  USDC: "0x655831C77fd2cc978BA15CAe8cbF727d5B86290a", // Replace with actual Mock USDC address
+  WHBAR: "0x6AB565496b694bD7803425733B8E0f83a331d4aC", // Replace with actual Mock WHBAR address
+  AjoMembers: "0x60092EfCD238c6D230ccDD0d0097Cb57b49d1249", // Replace with actual AjoMembers address
+  AjoCollateral: "0x2b5E9cCC4F4bEFfc6aF0e427B2bfa1412CA85385", // Replace with actual AjoCollateral address
+  AjoPayments: "0xf26fA9bF4EAC7d653D56Ce2dd0c55622247c12DC", // Replace with actual AjoPayments address
+  AjoGovernance: "0x6F157612F66911941C1cF2f0593936032f4d0F64" // Replace with actual AjoGovernance address
 };
 
 // Contract ABIs - You can get these from your artifacts folder or hardhat compilation

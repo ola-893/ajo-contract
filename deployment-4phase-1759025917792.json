@@ -1,0 +1,21 @@
+{
+  "network": "unknown",
+  "chainId": 296,
+  "deployedAt": "2025-09-28T02:18:37.792Z",
+  "contracts": {
+    "AjoFactory": "0x222d9E8012D90ee70f0eD2A8a3ffa2B2490d20aa",
+    "USDC": "0xe7a79c27e2130B7dEbF0619575A68da81B1240C3",
+    "WHBAR": "0x514Fe5636429F5144d0F4C2A6cC6Ad5eB3506690"
+  },
+  "masterCopies": {
+    "AjoCore": "0x1c7D1145C1f431CEc9c3e40f48755c2db5Eca719",
+    "AjoMembers": "0x41ab62852995BBF8276Df2E85d95A2a005183A16",
+    "AjoCollateral": "0x2b53DaF6B0E53f74c765a59921caEE91feb80A28",
+    "AjoPayments": "0xB931Aad88b76Ee11Cde0c5E896F54b793631D3B1",
+    "AjoGovernance": "0xa7E344D72AaD1115Bb83eADB55C3D34356bfE20e"
+  },
+  "testAjo": {
+    "id": 1,
+    "phase": 4
+  }
+}
