@@ -12,7 +12,7 @@ contract AjoCollateral is IAjoCollateral, Ownable, Initializable, LockableContra
     
     // ============ CONSTANTS ============
     
-    uint256 public constant COLLATERAL_FACTOR = 55; // 55% collateral factor
+    uint256 public constant COLLATERAL_FACTOR = 60; // 60% collateral factor
     uint256 public constant GUARANTOR_OFFSET_DIVISOR = 2; // Guarantor is participants/2 positions away
     
     // ============ STATE VARIABLES ============
@@ -114,13 +114,27 @@ contract AjoCollateral is IAjoCollateral, Ownable, Initializable, LockableContra
     }
     
     function calculateGuarantorPosition(
-        uint256 memberPosition,
-        uint256 totalParticipants
-    ) public pure override returns (uint256) {
-        uint256 guarantorOffset = totalParticipants / GUARANTOR_OFFSET_DIVISOR;
-        uint256 guarantorPosition = ((memberPosition - 1 + guarantorOffset) % totalParticipants) + 1;
-        return guarantorPosition;
-    }
+            uint256 memberPosition,
+            uint256 totalParticipants
+        ) public pure override returns (uint256) {
+            uint256 guarantorOffset = totalParticipants / GUARANTOR_OFFSET_DIVISOR;
+            uint256 guarantorPosition = ((memberPosition - 1 + guarantorOffset) % totalParticipants) + 1;
+            
+            // For odd numbers, the last person has no guarantor relationship
+            // They don't guarantee anyone, and no one guarantees them
+            if (totalParticipants % 2 == 1) {
+                // If calculating for the last position, return 0 (no guarantor)
+                if (memberPosition == totalParticipants) {
+                    return 0;
+                }
+                // If the calculated guarantor would be the last position, return 0 instead
+                if (guarantorPosition == totalParticipants) {
+                    return 0;
+                }
+            }
+            
+            return guarantorPosition;
+        }
     
     function calculateSeizableAssets(address defaulterAddress) 
         external 

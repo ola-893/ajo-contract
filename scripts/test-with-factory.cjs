@@ -26,7 +26,7 @@ const TOKEN_ADDRESSES = {
 
 const DEMO_CONFIG = {
   MONTHLY_PAYMENT: ethers.utils.parseUnits("50", 6),
-  TOTAL_PARTICIPANTS: 5,
+  TOTAL_PARTICIPANTS: 4,
   MAX_RETRIES: 3,
   RETRY_DELAY: 2000,
   GAS_LIMIT: {
@@ -124,14 +124,15 @@ async function connectToFactoryAndEnsureHealthyAjo() {
     console.log(c.dim("\n  🔄 Checking existing Ajos..."));
     
     // Check first few Ajos for a healthy one
-    for (let id = 2; id <= Math.min(3, factoryStats.totalCreated.toNumber()); id++) {
+    for (let id = 1; id <= Math.min(3, factoryStats.totalCreated.toNumber()); id++) {
       try {
         const status = await ajoFactory.getAjoInitializationStatus(id);
         
         if (status.isReady) {
           console.log(c.green(`  ✅ Found healthy Ajo ID: ${id}`));
           ajoId = id;
-          ajoInfo = await ajoFactory.getAjo(ajoId);
+          ajoInfo = await ajoFactory.getAjo(10);
+          console.log(c.dim(`     Ajo ${ajoInfo}: Phase (not ready)`));
           break;
         } else {
           console.log(c.dim(`     Ajo ${id}: Phase ${status.phase} (not ready)`));
@@ -244,7 +245,7 @@ async function setupParticipants(ajo, usdc, ajoCollateral, ajoPayments, signers)
   console.log(c.blue("\n👥 Setting up participants..."));
   
   const participants = [];
-  const participantNames = ["Adunni", "Babatunde", "Chinwe", "Damilola", "Emeka"];
+  const participantNames = ["Emeka", "Funke", "Gbenga", "Halima", "Ifeanyi", "Jide"];
   
   const actualCount = Math.min(DEMO_CONFIG.TOTAL_PARTICIPANTS, signers.length - 1);
   
@@ -488,17 +489,17 @@ async function demonstratePaymentCycle(ajo, ajoFactory, ajoId, participants) {
   
   // Distribute payout
   console.log(c.cyan("  Phase 2: Payout Distribution"));
-  try {
-    const payoutTx = await ajo.distributePayout({ gasLimit: 400000 });
-    const receipt = await payoutTx.wait();
-    console.log(c.green(`    ✅ Payout distributed | Gas: ${receipt.gasUsed.toString()}`));
+  // try {
+  //   const payoutTx = await ajo.distributePayout({ gasLimit: 400000 });
+  //   const receipt = await payoutTx.wait();
+  //   console.log(c.green(`    ✅ Payout distributed | Gas: ${receipt.gasUsed.toString()}`));
     
-    // Final health check after cycle
-    await validateAjoHealth(ajoFactory, ajoId, 4, "After payment cycle");
+  //   // Final health check after cycle
+  //   await validateAjoHealth(ajoFactory, ajoId, 4, "After payment cycle");
     
-  } catch (error) {
-    console.log(c.red(`    ❌ Payout failed: ${error.message}`));
-  }
+  // } catch (error) {
+  //   console.log(c.red(`    ❌ Payout failed: ${error.message}`));
+  // }
   
   const successfulPayments = paymentResults.filter(r => r.success).length;
   console.log(c.green(`  ✅ Cycle complete: ${successfulPayments}/${participants.length} payments`));

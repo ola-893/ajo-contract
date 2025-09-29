@@ -499,7 +499,7 @@ contract AjoFactory is IAjoFactory {
      */
     function forceCompleteAbandonedAjo(uint256 ajoId) external validAjoId(ajoId) {
         require(ajoInitializationPhase[ajoId] < 4, "Already functional");
-        require(block.timestamp > ajos[ajoId].createdAt + 1 hours, "Not abandoned yet");
+        require(block.timestamp > ajos[ajoId].createdAt + 24 hours, "Not abandoned yet");
         
         uint8 currentPhase = ajoInitializationPhase[ajoId];
         

@@ -173,12 +173,6 @@ contract AjoGovernance is Initializable, IAjoGovernance, ERC20, ERC20Votes, Owna
         penaltyRate = newPenaltyRate;
     }
     
-    function switchPaymentToken(PaymentToken newToken) external override {
-        require(msg.sender == address(this), "Only governance");
-        // This would typically call the core contract to switch tokens
-        // Implementation depends on how AjoCore handles token switching
-    }
-    
     // ============ VIEW FUNCTIONS (IAjoGovernance) ============
     
     function getProposal(uint256 proposalId)

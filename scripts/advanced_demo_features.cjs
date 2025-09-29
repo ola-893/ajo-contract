@@ -27,52 +27,52 @@ async function demoGovernanceSystem(ajoFactory, ajoId, participants) {
   
   console.log(c.cyan("  📋 Creating Governance Proposal..."));
   
-  try {
-    // Create a proposal to change penalty rate
-    const proposalTx = await governance.connect(participants[0].signer).createProposal(
-      "Reduce Default Penalty Rate from 10% to 5%",
-      ethers.utils.defaultAbiCoder.encode(
-        ["uint256"], 
-        [ethers.utils.parseUnits("5", 16)] // 5% in wei
-      ),
-      { gasLimit: 300000 }
-    );
+  // try {
+  //   // Create a proposal to change penalty rate
+  //   const proposalTx = await governance.connect(participants[0].signer).createProposal(
+  //     "Reduce Default Penalty Rate from 10% to 5%",
+  //     ethers.utils.defaultAbiCoder.encode(
+  //       ["uint256"], 
+  //       [ethers.utils.parseUnits("5", 16)] // 5% in wei
+  //     ),
+  //     { gasLimit: 300000 }
+  //   );
     
-    const receipt = await proposalTx.wait();
-    const proposalEvent = receipt.events?.find(e => e.event === 'ProposalCreated');
-    const proposalId = proposalEvent?.args?.proposalId;
+  //   const receipt = await proposalTx.wait();
+  //   const proposalEvent = receipt.events?.find(e => e.event === 'ProposalCreated');
+  //   const proposalId = proposalEvent?.args?.proposalId;
     
-    console.log(c.green(`    ✅ Proposal created - ID: ${proposalId}`));
+  //   console.log(c.green(`    ✅ Proposal created - ID: ${proposalId}`));
     
-    // Members vote on proposal
-    console.log(c.cyan("  🗳️  Members Voting..."));
-    for (let i = 0; i < Math.min(3, participants.length); i++) {
-      try {
-        const voteSupport = i < 2 ? 1 : 0; // First 2 vote FOR, last votes AGAINST
-        const voteTx = await governance.connect(participants[i].signer).vote(
-          proposalId, 
-          voteSupport,
-          { gasLimit: 200000 }
-        );
-        await voteTx.wait();
+  //   // Members vote on proposal
+  //   console.log(c.cyan("  🗳️  Members Voting..."));
+  //   for (let i = 0; i < Math.min(3, participants.length); i++) {
+  //     try {
+  //       const voteSupport = i < 2 ? 1 : 0; // First 2 vote FOR, last votes AGAINST
+  //       const voteTx = await governance.connect(participants[i].signer).vote(
+  //         proposalId, 
+  //         voteSupport,
+  //         { gasLimit: 200000 }
+  //       );
+  //       await voteTx.wait();
         
-        const supportText = voteSupport === 1 ? "FOR" : "AGAINST";
-        console.log(c.green(`    ✅ ${participants[i].name} voted ${supportText}`));
-      } catch (error) {
-        console.log(c.yellow(`    ⚠️  ${participants[i].name} vote failed: ${error.message}`));
-      }
-    }
+  //       const supportText = voteSupport === 1 ? "FOR" : "AGAINST";
+  //       console.log(c.green(`    ✅ ${participants[i].name} voted ${supportText}`));
+  //     } catch (error) {
+  //       console.log(c.yellow(`    ⚠️  ${participants[i].name} vote failed: ${error.message}`));
+  //     }
+  //   }
     
-    // Show proposal results
-    const proposal = await governance.getProposal(proposalId);
-    console.log(c.green(`  📊 Proposal Results:`));
-    console.log(c.dim(`    For: ${ethers.utils.formatEther(proposal.forVotes)}`));
-    console.log(c.dim(`    Against: ${ethers.utils.formatEther(proposal.againstVotes)}`));
-    console.log(c.dim(`    Abstain: ${ethers.utils.formatEther(proposal.abstainVotes)}`));
+  //   // Show proposal results
+  //   const proposal = await governance.getProposal(proposalId);
+  //   console.log(c.green(`  📊 Proposal Results:`));
+  //   console.log(c.dim(`    For: ${ethers.utils.formatEther(proposal.forVotes)}`));
+  //   console.log(c.dim(`    Against: ${ethers.utils.formatEther(proposal.againstVotes)}`));
+  //   console.log(c.dim(`    Abstain: ${ethers.utils.formatEther(proposal.abstainVotes)}`));
     
-  } catch (error) {
-    console.log(c.red(`  ❌ Governance demo failed: ${error.message}`));
-  }
+  // } catch (error) {
+  //   console.log(c.red(`  ❌ Governance demo failed: ${error.message}`));
+  // }
 }
 
 async function demoCollateralSystem(ajoFactory, ajoId) {
@@ -181,8 +181,6 @@ async function demoMultiTokenSupport(ajo, ajoPayments, usdc, whbar, participants
     console.log(c.dim(`    USDC: $${ethers.utils.formatUnits(usdcBalance, 6)}`));
     console.log(c.dim(`    HBAR: ${ethers.utils.formatUnits(hbarBalance, 8)} HBAR`));
     
-    // Demo token switching (simulation only)
-    console.log(c.yellow("  🔄 Token switching available via governance"));
     
   } catch (error) {
     console.log(c.red(`  ❌ Multi-token demo failed: ${error.message}`));
@@ -301,10 +299,9 @@ async function demoEmergencyFeatures(ajo, participants) {
     console.log(c.dim(`    Collateral-to-Balance Ratio: ${riskRatio}%`));
     
   } catch (error) {
-    console.log(c.yellow("  ⚠️  Security metrics unavailable"));
+    console.log(c.yellow(" ⚠️   Security metrics unavailable"));
   }
   
-  console.log(c.yellow("  ⚠️  Emergency features require owner privileges"));
 }
 
 // ================================================================

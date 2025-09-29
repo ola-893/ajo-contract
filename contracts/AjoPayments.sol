@@ -255,13 +255,6 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         penaltyRate = newPenaltyRate;
     }
     
-    function switchPaymentToken(PaymentToken newToken) external onlyAjoCore {
-        PaymentToken oldToken = activePaymentToken;
-        activePaymentToken = newToken;
-        
-        emit TokenSwitched(oldToken, activePaymentToken);
-    }
-    
     function updateTokenConfig(
         PaymentToken token,
         uint256 monthlyPayment,

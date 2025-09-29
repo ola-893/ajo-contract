@@ -125,7 +125,6 @@ interface IAjoGovernance {
     
     // Governance-Only Functions
     function updatePenaltyRate(uint256 newPenaltyRate) external;
-    function switchPaymentToken(PaymentToken newToken) external;
     function updateReputationAndVotingPower(address member, bool positive) external;
     function updateVotingPower(address member, uint256 newPower) external;
     
@@ -228,7 +227,6 @@ interface IAjoPayments {
         bool isActive
     ) external;
     function advanceCycle() external;
-    function switchPaymentToken(PaymentToken newToken) external;
     function emergencyWithdraw(PaymentToken token) external;
     function updatePenaltyRate(uint256 newPenaltyRate) external;
     function updateNextPayoutPosition(uint256 position) external;

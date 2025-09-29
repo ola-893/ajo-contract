@@ -26,12 +26,11 @@ const c = {
   bright: (text) => `\x1b[1m${text}\x1b[0m`
 };
 
-// Demo configuration for testnet
 const DEMO_CONFIG = {
   MAX_RETRIES: 3,
   RETRY_DELAY: 2000,
   MONTHLY_PAYMENT: ethers.utils.parseUnits("50", 6),
-  TOTAL_PARTICIPANTS: 5,
+  TOTAL_PARTICIPANTS: 10,
   GAS_LIMIT: {
     DEPLOY_TOKEN: 3000000,
     DEPLOY_MASTER: 5000000,
@@ -383,7 +382,7 @@ async function setupParticipants(usdc, ajoCollateral, ajoPayments, signers) {
   console.log(c.blue("\n👥 Setting up participants..."));
   
   const participants = [];
-  const participantNames = ["Adunni", "Babatunde", "Chinwe", "Damilola", "Emeka"];
+  const participantNames = ["Adunni", "Babatunde", "Chinwe", "Damilola", "Emeka", "deon", "Funke", "Gbenga", "Halima", "Ifeanyi"];
   
   const actualCount = Math.min(DEMO_CONFIG.TOTAL_PARTICIPANTS, signers.length - 1);
   

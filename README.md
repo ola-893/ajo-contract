@@ -1,525 +1,665 @@
-# 🦆 Protego.ai on DuckChain
+# Ajo.save
 
-**Revolutionary Invoice Financing Platform Powered by DuckChain's AI-Driven TON Blockchain**
+**Decentralized Rotating Savings and Credit Association (ROSCA) Protocol on Hedera**
 
-[![DuckChain](https://img.shields.io/badge/DuckChain-Network-orange)](https://duckchain.io)
-[![Solidity](https://img.shields.io/badge/Solidity-0.8.19-blue)](https://soliditylang.org/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Hedera](https://img.shields.io/badge/Hedera-Testnet-purple.svg)](https://hedera.com)
+[![Solidity](https://img.shields.io/badge/Solidity-0.8.20-blue.svg)](https://soliditylang.org/)
 
----
+> Bringing traditional African savings circles (Ajo/Esusu) to the blockchain with enhanced security, transparency, and efficiency.
 
-## 🚀 Overview
+## Table of Contents
 
-Protego.ai transforms traditional invoice financing by leveraging DuckChain's AI-powered blockchain infrastructure and seamless Telegram integration. Our platform enables businesses to tokenize invoices as NFTs and allows investors to earn yield by funding working capital needs, all within the familiar Telegram ecosystem.
+- [Overview](#overview)
+- [Key Features](#key-features)
+- [Technical Architecture](#technical-architecture)
+- [Getting Started](#getting-started)
+- [Smart Contract Components](#smart-contract-components)
+- [Usage Examples](#usage-examples)
+- [Advanced Features](#advanced-features)
+- [Gas Optimization](#gas-optimization)
+- [Security](#security)
+- [Testing](#testing)
+- [Deployment](#deployment)
+- [Contributing](#contributing)
+- [License](#license)
 
-### 🦆 Why DuckChain?
+## Overview
 
-- **Telegram Native**: Seamlessly integrated with Telegram's 950M users
-- **AI-Powered Governance**: AI agents for intelligent decision-making
-- **TON-Based Infrastructure**: Built on The Open Network for scalability
-- **EVM Compatibility**: Full Ethereum compatibility with enhanced features
-- **Unified Gas Model**: Simplified fee structure for better UX
-- **Cross-Chain Connectivity**: Bridge to Ethereum, Bitcoin, and other ecosystems
+Ajo.save is a decentralized protocol that modernizes traditional rotating savings and credit associations (ROSCAs), known as "Ajo" in Nigeria and "Esusu" across West Africa. The protocol enables groups of people to pool funds together, with each member receiving the collective pot in rotation.
 
----
+### The Problem We Solve
 
-## 🏗️ Architecture
+Traditional ROSCAs face several challenges:
+- **Trust Issues**: Reliance on personal relationships and informal agreements
+- **Default Risk**: No collateral or enforcement mechanisms
+- **Capital Inefficiency**: Typically require 100%+ collateral per participant
+- **Limited Transparency**: No clear audit trail or dispute resolution
+- **Scalability**: Difficult to manage across geographical boundaries
 
-### Token Standards Implementation
+### Our Solution
 
-| Standard | Usage | Contract |
-|----------|-------|----------|
-| **ERC-721** | Unique Invoice NFTs | `ProtegoInvoiceNFT` |
-| **ERC-4626** | Yield-Bearing Vaults | `ProtegoYieldVault` |
-| **ERC-1155** | Multi-Invoice Notes | `ProtegoMultiInvoiceNotes` |
-| **ERC-20** | USDC/DUCK Tokens | `MockERC20` (testnet) |
+Ajo.save introduces a revolutionary **60% Collateral Model (V3)** with:
+- **Dynamic Collateral System**: Reduces capital requirements by 46% compared to traditional models
+- **Guarantor Network**: Distributed risk across all participants
+- **Smart Recovery**: Automatic asset seizure from past payments for default recovery
+- **Mathematical Security**: 108.9% coverage ratio with 40 USDC safety buffer
+- **Decentralized Governance**: Member-driven decision making
+- **Multi-Token Support**: Flexibility with USDC, HBAR, and other tokens
+- **Factory Pattern**: Unlimited scalability for group creation
 
-### Core Components
+## Key Features
+
+### Core Functionality
+
+- **4-Phase Initialization**: Secure, gas-optimized contract deployment
+- **Dynamic Collateral (V3)**: 60% collateral factor with mathematical security proof
+- **Guarantor System**: Risk distribution across all members with 108.9% coverage
+- **Payment Cycles**: Automated monthly contributions and payouts
+- **Default Handling**: Collateral + past payment seizure with $40 safety buffer
+- **Reputation System**: Track member reliability and voting power
+
+### Advanced Features
+
+- **Governance Module**: On-chain voting for parameter changes
+- **Multi-Token Support**: USDC and WHBAR (extensible to more)
+- **Emergency Controls**: Pause mechanisms and fund recovery
+- **Payment Analytics**: Comprehensive cycle insights and reporting
+- **Factory Scaling**: Minimal-proxy pattern for unlimited group creation
+- **Health Diagnostics**: Real-time contract monitoring and status checks
+
+### Economic Innovation
+
+Our V3 Collateral Model achieves 60% collateral efficiency with enhanced security:
+1. **Position-Based Collateral**: Earlier positions require more collateral
+2. **Guarantor Network**: Each member backs others proportionally
+3. **Past Payment Seizure**: Failed members lose accumulated benefits
+4. **Risk Distribution**: No single point of failure
+5. **Enhanced Safety Buffer**: 60% collateral factor provides robust protection
+
+**Example** (10 members, 50 USDC monthly):
+- Traditional Model: 100%+ × 50 USDC = 50+ USDC per member
+- Ajo.save V3: 60% collateral factor with mathematical proof
+- **Position 1 (Highest Risk)**: 270 USDC collateral for 500 USDC payout
+- **Position 6 (Guarantor)**: 120 USDC collateral
+- **Safety Buffer**: 40 USDC excess coverage over worst-case loss
+
+#### Collateral Formula
 
 ```
-📦 Protego.ai on DuckChain Ecosystem
-├── 🏦 ProtegoMasterVault (Coordination Hub)
-├── 🎫 ProtegoInvoiceNFT (ERC-721 Invoice Tokens)
-├── 💰 ProtegoYieldVault (ERC-4626 Investment Vaults)
-├── 🎭 ProtegoMultiInvoiceNotes (ERC-1155 Fractionalized Notes)
-├── 🤖 DuckChain AI Integration (Automated Decision Making)
-├── 📈 ProtegoYieldStrategy (AI-Enhanced Yield Generation)
-└── 🔧 Telegram Integration Layer
+Debt(n) = Payout - (n × monthlyContribution)
+Collateral(n) = Debt(n) × 0.60
 ```
 
----
+**Worst-Case Scenario Protection:**
+- If Position 1 defaults after receiving 500 USDC payout
+- Net Loss: 450 USDC (500 - 50 already paid)
+- Recoverable Assets: 490 USDC
+  - P1 Collateral: 270 USDC
+  - P6 Guarantor Collateral: 120 USDC  
+  - Past Payments: 100 USDC (50 + 50)
+- **Result**: 40 USDC safety buffer (109% coverage)
 
-## 🛠️ Quick Start
+## Technical Architecture
+
+### Smart Contract Structure
+
+```
+AjoFactory (Main Entry Point)
+├── Master Copies (Implementation Contracts)
+│   ├── AjoCore (Main logic & coordination)
+│   ├── AjoMembers (Membership management)
+│   ├── AjoCollateral (Collateral tracking)
+│   ├── AjoPayments (Payment processing)
+│   └── AjoGovernance (Voting & proposals)
+│
+└── Minimal Proxies (Per Group Instance)
+    ├── Proxy → AjoCore
+    ├── Proxy → AjoMembers
+    ├── Proxy → AjoCollateral
+    ├── Proxy → AjoPayments
+    └── Proxy → AjoGovernance
+```
+
+### 4-Phase Initialization
+
+1. **Phase 1**: Deploy minimal proxies for all contracts
+2. **Phase 2**: Initialize AjoMembers and AjoGovernance
+3. **Phase 3**: Initialize AjoCollateral and AjoPayments
+4. **Phase 4**: Initialize AjoCore and activate system
+
+This phased approach prevents circular dependencies and optimizes gas usage.
+
+## Getting Started
 
 ### Prerequisites
 
-- **Node.js**: >= 16.0.0
-- **npm**: >= 8.0.0
-- **Git**: Latest version
-- **Telegram Account**: For DuckChain wallet creation
+- Node.js v16 or higher
+- npm or yarn
+- A Hedera testnet account ([Get one free](https://portal.hedera.com))
 
-### 1. Clone & Install
+### Installation
 
 ```bash
-git clone https://github.com/protego-ai/duckchain-contracts.git
-cd duckchain-contracts
-chmod +x build.sh
+# Clone the repository
+git clone https://github.com/ola-893/ajo-contract.git
+cd ajo-contract
+
+# Install dependencies
+npm install
 ```
 
-### 2. One-Command Demo
+### Environment Setup
 
 ```bash
-# Run complete demo on local network
-./build.sh localhost false true
-```
-
-### 3. Deploy to DuckChain Testnet
-
-```bash
-# Setup environment
+# Copy the example environment file
 cp .env.example .env
-# Edit .env with your private key
-
-# Deploy to DuckChain testnet
-./build.sh duckchainTestnet false true
 ```
 
----
-
-## 📋 Environment Setup
-
-### Create `.env` File
+Edit `.env` and configure:
 
 ```bash
-# DuckChain Network Configuration
-PRIVATE_KEY=your_private_key_here
-TREASURY_ADDRESS=your_treasury_address
+# Hedera Network Configuration
+HEDERA_NETWORK=testnet
+HEDERA_ACCOUNT_ID=0.0.YOUR_ACCOUNT_ID
 
-# API Keys (optional)
-DUCKCHAIN_API_KEY=your_duckchain_explorer_api_key
-COINMARKETCAP_API_KEY=your_cmc_api_key
+# Testnet Configuration
+TESTNET_OPERATOR_PRIVATE_KEY=0xYOUR_TESTNET_PRIVATE_KEY
+TESTNET_ENDPOINT=https://testnet.hashio.io/api
 
-# RPC URLs
-DUCKCHAIN_MAINNET_RPC=https://rpc.duckchain.io
-DUCKCHAIN_TESTNET_RPC=https://testnet-rpc.duckchain.io
-TON_RPC=https://toncenter.com/api/v2/jsonRPC
+# Optional: Additional test accounts
+PRIVATE_KEY_1=0xOPTIONAL_TEST_ACCOUNT_1
+PRIVATE_KEY_2=0xOPTIONAL_TEST_ACCOUNT_2
+# ... (up to PRIVATE_KEY_10)
 ```
 
-### Get Testnet DUCK Tokens
+**Get Your Credentials:**
+1. Visit [Hedera Portal](https://portal.hedera.com)
+2. Create a testnet account (free)
+3. Copy your Account ID and Private Key to `.env`
 
-1. Visit DuckChain Testnet through Telegram
-2. Create wallet with one-click setup
-3. Request testnet DUCK tokens from faucet
-4. No private key management required!
-
----
-
-## 🎯 Usage Examples
-
-### Deploy Contracts
+### Quick Start
 
 ```bash
-# Local development
-npm run deploy:local
+# Compile contracts
+npx hardhat compile
 
-# DuckChain Testnet
-npm run deploy:duckchain-testnet
+# Deploy to Hedera testnet
+npx hardhat run scripts/deploy-4-phase-factory.js --network hedera
 
-# DuckChain Mainnet (production)
-npm run deploy:duckchain-mainnet
+# Run comprehensive demo (deploy + test + advanced features)
+npx hardhat run scripts/hackathon-demo-complete.cjs --network hedera
+
+# Run core functionality test on existing deployment
+npx hardhat run scripts/test-core-functions.cjs --network hedera
 ```
 
-### Run Simulation
+## Smart Contract Components
 
-```bash
-# Complete simulation demo
-npm run demo
+### AjoFactory
 
-# DuckChain testnet simulation
-npm run simulate:duckchain-testnet
-```
+Main factory contract for creating and managing Ajo groups.
 
-### Custom Hardhat Tasks
-
-```bash
-# Check DuckChain network status
-npx hardhat duckchain-status --network duckchainTestnet
-
-# Estimate deployment costs
-npx hardhat estimate-costs
-
-# Fund test accounts via Telegram
-npx hardhat telegram-fund --amount 10
-```
-
----
-
-## 💼 Business Flow with AI Enhancement
-
-### 1. AI-Assisted Invoice Creation (ERC-721)
+**Key Functions:**
 ```solidity
-// Marina creates an invoice NFT with AI risk assessment
-function createInvoiceWithAI(
-    address debtor,        // Fashion Inc
-    uint256 faceValue,     // $500,000
-    uint256 discountRate,  // AI-suggested: 8% (800 basis points)
-    uint256 maturityDays,  // 90 days
-    bytes32 aiRiskScore    // AI-generated creditworthiness
-) external returns (uint256 invoiceTokenId, address vaultAddress)
+// Create new Ajo group
+function createAjo(string memory name) external returns (uint256 ajoId)
+
+// Initialize phases
+function initializeAjoPhase2(uint256 ajoId) external
+function initializeAjoPhase3(uint256 ajoId) external
+function initializeAjoPhase4(uint256 ajoId) external
+
+// Health monitoring
+function getAjoHealthReport(uint256 ajoId) external view returns (...)
+function getAjoOperationalStatus(uint256 ajoId) external view returns (...)
 ```
 
-### 2. Telegram-Native Investment (ERC-4626)
+### AjoCore
+
+Core coordination contract for each Ajo group.
+
+**Key Functions:**
 ```solidity
-// Investors deposit USDC/DUCK through Telegram
-function depositViaTelegram(
-    uint256 assets, 
-    address telegramUserId
-) external returns (uint256 shares)
+// Join group
+function joinAjo(uint256 tokenIndex) external
+
+// Process payment
+function processPayment() external
+
+// Distribute payout
+function distributePayout() external
+
+// Get member info
+function getMemberInfo(address member) external view returns (...)
 ```
 
-### 3. AI-Enhanced Yield Generation
+### AjoMembers
+
+Manages membership, positions, and reputation.
+
+**Key Functions:**
 ```solidity
-// AI agents optimize yield strategies in real-time
-function executeAIYieldStrategy() external onlyAuthorizedAI
+function addMember(address member, uint256 position) external
+function getMemberDetails(address member) external view returns (...)
+function updateReputation(address member, int256 change) external
 ```
 
-### 4. Automated Settlement
+### AjoCollateral
+
+Handles collateral deposits, tracking, and seizure.
+
+**Key Functions:**
 ```solidity
-// AI-triggered settlements based on market conditions
-function aiTriggeredRedeem(uint256 shares, bytes32 aiSignal) 
-    external returns (uint256 assets)
+function depositCollateral(address member, uint256 amount) external
+function seizeCollateral(address member) external
+function releaseCollateral(address member, uint256 amount) external
+function getCollateralDetails(address member) external view returns (...)
 ```
 
----
+### AjoPayments
 
-## 📊 Performance Metrics
+Processes payments and manages distribution.
 
-### DuckChain vs Traditional Blockchain
-
-| Metric | Traditional | DuckChain | Improvement |
-|--------|------------|-----------|-------------|
-| User Onboarding | Complex | One-click via Telegram | **Instant** |
-| Cross-chain Tx | Multiple steps | Native bridge | **Seamless** |
-| Gas Management | Manual | Unified payments | **Simplified** |
-| AI Integration | None | Native AI agents | **Revolutionary** |
-| Telegram Users | Not accessible | 950M potential | **Massive reach** |
-
-### Yield Performance with AI Optimization
-
-- **Base APY**: 24% (2% monthly)
-- **AI Optimization Bonus**: 2.0x (AI-driven strategy selection)
-- **DuckChain Multiplier**: 1.3x (network efficiency + DUCK rewards)
-- **Effective APY**: 62.4% 
-- **Rebalancing**: AI agents optimize every 4 hours
-
----
-
-## 🔧 Development
-
-### Project Structure
-
-```
-protego-duckchain/
-├── contracts/              # Smart contracts
-│   ├── ProtegoMasterVault.sol
-│   ├── ProtegoInvoiceNFT.sol
-│   ├── ProtegoYieldVault.sol
-│   ├── ProtegoMultiInvoiceNotes.sol
-│   └── DuckChainAIIntegration.sol
-├── scripts/                # Deployment scripts
-│   ├── deploy-duckchain.js
-│   ├── simulate-protego.js
-│   └── telegram-integration.js
-├── test/                   # Test files
-├── deployments/            # Deployment records
-├── ai-agents/              # AI agent configurations
-├── hardhat.config.js       # Hardhat configuration
-└── build.sh               # Build script
+**Key Functions:**
+```solidity
+function processPayment(address from, uint256 amount) external
+function distributePayout(address recipient, uint256 amount) external
+function getPaymentHistory(address member) external view returns (...)
 ```
 
-### Testing
+### AjoGovernance
+
+Decentralized governance for parameter updates.
+
+**Key Functions:**
+```solidity
+function createProposal(string memory description, ...) external
+function vote(uint256 proposalId, bool support) external
+function executeProposal(uint256 proposalId) external
+```
+
+## Usage Examples
+
+### Creating a New Ajo Group
+
+```javascript
+const { ethers } = require("hardhat");
+
+async function createAjoGroup() {
+  const [creator] = await ethers.getSigners();
+  const factory = await ethers.getContractAt("AjoFactory", FACTORY_ADDRESS);
+  
+  // Phase 1: Create
+  const tx1 = await factory.createAjo("My Ajo Group");
+  const receipt1 = await tx1.wait();
+  const ajoId = receipt1.events[0].args.ajoId;
+  
+  // Phase 2-4: Initialize
+  await factory.initializeAjoPhase2(ajoId);
+  await factory.initializeAjoPhase3(ajoId);
+  await factory.initializeAjoPhase4(ajoId);
+  
+  console.log(`Ajo group created with ID: ${ajoId}`);
+}
+```
+
+### Joining an Ajo Group
+
+```javascript
+async function joinAjo(ajoAddress, tokenIndex) {
+  const [member] = await ethers.getSigners();
+  const ajo = await ethers.getContractAt("AjoCore", ajoAddress);
+  const usdc = await ethers.getContractAt("MockERC20", USDC_ADDRESS);
+  
+  // Get required collateral
+  const requiredCollateral = await ajo.getRequiredCollateralForJoin(tokenIndex);
+  
+  // Approve tokens
+  await usdc.approve(collateralAddress, requiredCollateral);
+  await usdc.approve(paymentsAddress, monthlyPayment);
+  
+  // Join
+  await ajo.joinAjo(tokenIndex);
+  console.log("Successfully joined Ajo group!");
+}
+```
+
+### Making Monthly Payment
+
+```javascript
+async function makePayment(ajoAddress) {
+  const [member] = await ethers.getSigners();
+  const ajo = await ethers.getContractAt("AjoCore", ajoAddress);
+  
+  await ajo.processPayment();
+  console.log("Payment processed successfully!");
+}
+```
+
+## Advanced Features
+
+### Dynamic Collateral Calculation
+
+The V3 model calculates position-based collateral with a 60% collateral factor:
+
+```solidity
+// Debt calculation for each position
+Debt(n) = Payout - (n × monthlyContribution)
+
+// Collateral requirement (60% factor for enhanced security)
+Collateral(n) = Debt(n) × 0.60
+```
+
+**Example Breakdown** (10 members, $50 monthly):
+- **Position 1** (receives first): Debt = $450 → Collateral = $270
+- **Position 6** (guarantor for P1): Debt = $200 → Collateral = $120
+- **Position 10** (receives last): Debt = $0 → Collateral = $0
+
+**Mathematical Proof of Security:**
+
+The minimum collateral factor required for break-even is 0.5384 (53.84%). We use 60% for enhanced protection.
+
+When Position 1 defaults after receiving $500 payout:
+```
+Net Loss to Group = $500 - $50 (P1's contribution) = $450
+
+Recoverable Assets:
++ P1's Collateral: $270
++ P1's Past Payment: $50
++ P6's Collateral (Guarantor): $120
++ P6's Past Payment: $50
+= Total: $490
+
+Safety Buffer = $490 - $450 = $40 (8.9% excess coverage)
+Coverage Ratio = $490 / $450 = 108.9%
+```
+
+This design ensures:
+- **Capital Efficiency**: Position 1 locks $270 (54% of payout) vs 100%+ in traditional systems
+- **Robust Protection**: System can absorb defaults with 8.9% safety margin
+- **Fair Risk Distribution**: Collateral proportional to position risk
+
+### Governance Proposals
+
+```javascript
+async function createAndVoteProposal(ajoAddress) {
+  const ajo = await ethers.getContractAt("AjoCore", ajoAddress);
+  const governance = await ethers.getContractAt(
+    "AjoGovernance", 
+    await ajo.governanceContract()
+  );
+  
+  // Create proposal
+  const proposalId = await governance.createProposal(
+    "Increase monthly payment to 60 USDC",
+    [/* parameters */]
+  );
+  
+  // Vote (weighted by reputation)
+  await governance.vote(proposalId, true);
+  
+  // Execute if passed
+  await governance.executeProposal(proposalId);
+}
+```
+
+### Health Monitoring
+
+```javascript
+async function checkAjoHealth(ajoId) {
+  const factory = await ethers.getContractAt("AjoFactory", FACTORY_ADDRESS);
+  
+  const health = await factory.getAjoHealthReport(ajoId);
+  console.log("Phase:", health.initializationPhase);
+  console.log("Ready:", health.isReady);
+  console.log("Core Responsive:", health.ajoCore.isResponsive);
+  
+  const operational = await factory.getAjoOperationalStatus(ajoId);
+  console.log("Total Members:", operational.totalMembers);
+  console.log("Can Accept Members:", operational.canAcceptMembers);
+}
+```
+
+## Gas Optimization
+
+### Deployment Costs (Hedera Testnet)
+
+| Component | Gas Usage |
+|-----------|-----------|
+| Mock Tokens | ~300,000 each |
+| Master Contracts | ~3-6M total |
+| AjoFactory | ~6M |
+| 4-Phase Ajo Creation | ~6.6M total |
+
+### User Interaction Costs
+
+| Action | Avg Gas |
+|--------|---------|
+| Join Ajo | ~800,000 |
+| Process Payment | ~300,000 |
+| Distribute Payout | ~400,000 |
+
+### Optimization Techniques
+
+- **Minimal Proxy Pattern**: 99% gas savings on group creation
+- **Phased Initialization**: Prevents deployment failures
+- **Batch Operations**: Reduced transaction count
+- **Storage Optimization**: Packed structs and mappings
+
+## Security
+
+### Security Features
+
+- **Reentrancy Protection**: OpenZeppelin's ReentrancyGuard
+- **Access Control**: Role-based permissions
+- **Pause Mechanisms**: Emergency circuit breakers
+- **Input Validation**: Comprehensive checks
+- **Safe Math**: Solidity 0.8.20+ built-in overflow protection
+
+### Audit Status
+
+⚠️ **Not Yet Audited** - This is prototype code for hackathon demonstration. Do not use in production without professional security audit.
+
+### Best Practices
+
+```solidity
+// Always check-effects-interactions pattern
+function processPayment() external nonReentrant whenNotPaused {
+    // 1. Checks
+    require(isMember[msg.sender], "Not a member");
+    
+    // 2. Effects
+    paymentsMade[msg.sender]++;
+    
+    // 3. Interactions
+    token.transferFrom(msg.sender, address(this), amount);
+}
+```
+
+## Testing
+
+### Run Tests
 
 ```bash
 # Run all tests
-npm run test
+npx hardhat test
 
-# Test AI integration
-npm run test:ai
+# Run specific test file
+npx hardhat test test/AjoCore.test.js
 
-# Generate coverage report
-npm run coverage
+# Run with gas reporting
+REPORT_GAS=true npx hardhat test
 
-# Gas usage report (with DUCK token costs)
-npm run gas-report
+# Run with coverage
+npx hardhat coverage
 ```
 
----
+### Demo Scripts
 
-## 🌐 Network Configuration
+```bash
+# Complete deployment + testing + advanced features
+npx hardhat run scripts/hackathon-demo-complete.cjs --network hedera
 
-### DuckChain Mainnet (Production)
-- **Chain ID**: 5545
-- **Currency**: TON/DUCK
-- **RPC URL**: https://rpc.duckchain.io
-- **Explorer**: https://scan.duckchain.io
-- **Official Site**: https://duckchain.io
+# Deploy only
+npx hardhat run scripts/deploy-4-phase-factory.js --network hedera
 
-### DuckChain Testnet (Development)
-- **Chain ID**: 202105
-- **Currency**: TON (testnet)
-- **RPC URL**: https://testnet-rpc.duckchain.io
-- **Explorer**: https://testnet-scan.duckchain.io
-- **Telegram Faucet**: Available through @DuckChainBot
-
----
-
-## 🤖 AI-Powered Features
-
-### AI Governance Integration
-
-Leverage DuckChain's native AI agents for enhanced platform management:
-
-```solidity
-function submitProposalToAI(
-    string memory proposalType,     // "yield-strategy-update"
-    bytes memory proposalData,      // Strategy parameters
-    uint256 stakingThreshold       // Required DUCK stake
-) external returns (uint256 proposalId)
+# Test existing deployment
+npx hardhat run scripts/test-core-functions.cjs --network hedera
 ```
 
-### Quack AI Protocol Integration
+## Deployment
 
-DuckChain becomes the first blockchain to leverage AI agents for on-chain governance, revolutionizing decision-making processes through:
+### Hedera Testnet
 
-- **AI Risk Assessment**: Automated creditworthiness analysis
-- **Dynamic Yield Optimization**: Real-time strategy adjustments
-- **Fraud Detection**: AI-powered transaction monitoring
-- **Market Prediction**: AI-driven investment recommendations
+```bash
+# Configure .env first!
+# Then deploy
+npx hardhat run scripts/deploy-4-phase-factory.js --network hedera
+```
 
-### Telegram Super-App Features
-
-DuckChain transforms Telegram into a blockchain-powered super-app with:
-
-```javascript
-// Telegram Mini App Integration
-class ProtegoTelegramApp {
-  async createInvoice(telegramUserId, invoiceData) {
-    // One-click invoice creation in Telegram
-  }
-  
-  async investInInvoice(invoiceId, amount) {
-    // Direct investment through Telegram interface
-  }
-  
-  async checkYield(walletAddress) {
-    // Real-time yield tracking in chat
+Deployment creates a JSON file with all contract addresses:
+```json
+{
+  "network": "hedera-testnet",
+  "contracts": {
+    "AjoFactory": "0x...",
+    "USDC": "0x...",
+    "WHBAR": "0x..."
+  },
+  "masterCopies": {
+    "AjoCore": "0x...",
+    "AjoMembers": "0x...",
+    ...
   }
 }
 ```
 
----
+### Mainnet Deployment
 
-## 🌉 Cross-Chain Integration
+⚠️ **Not Recommended Yet** - Complete security audit required before mainnet deployment.
 
-### TON-Ethereum Bridge
+## Competitive Advantages
 
-DuckChain connects TON with Ethereum, Bitcoin, and other ecosystems, enabling:
+1. **Capital Efficiency**: 46% less collateral required (60% vs 100%+)
+2. **Mathematical Security**: 108.9% coverage ratio with proven safety buffer
+3. **Risk Distribution**: Guarantor network prevents single points of failure
+4. **Governance**: Member-driven, preventing centralization
+5. **Multi-Token**: Serve diverse markets globally
+6. **Scalability**: Factory pattern enables unlimited groups
+7. **Transparency**: On-chain audit trail and analytics
+8. **Collateral Paradox Solved**: Position 1 pays $270 to receive $500 (54% requirement)
 
-```solidity
-function bridgeFromEthereum(
-    address ethereumToken,
-    uint256 amount,
-    address duckchainRecipient
-) external payable
-```
+## Contributing
 
-### Multi-Chain Yield Sources
+Contributions are welcome! Please follow these steps:
 
-- **30%** TON Staking Rewards
-- **25%** DuckChain Native DeFi
-- **20%** Ethereum DeFi (via bridge)
-- **15%** DUCK Token Rewards
-- **10%** Reserve Buffer
-
----
-
-## 📱 Telegram Integration
-
-### One-Click Wallet Creation
-
-Users can create a DuckChain address with just one click, without the need for a private key or mnemonic phrase
-
-### Seamless DeFi Access
-
-All interactions, from staking and DeFi participation to NFT minting and trading, take place directly within Telegram
-
-### Bot Commands
-
-```
-/create_invoice [amount] [debtor] [days] - Create new invoice NFT
-/invest [invoice_id] [amount] - Invest in specific invoice
-/check_balance - View your portfolio and yields
-/ai_analysis [invoice_id] - Get AI risk assessment
-/withdraw [amount] - Withdraw earnings to TON wallet
-```
-
----
-
-## 🔒 Security Features
-
-### AI-Enhanced Security
-- **Real-time Fraud Detection** using DuckChain AI agents
-- **Predictive Risk Models** for invoice assessment
-- **Automated Compliance** monitoring through AI
-
-### Access Controls
-- **Role-based permissions** using OpenZeppelin's `Ownable`
-- **Multi-signature treasury** with AI validation
-- **Pausable contracts** with AI monitoring
-
-### Risk Management
-- **AI-diversified yield strategies** across multiple protocols
-- **Dynamic reserve adjustments** based on AI market analysis
-- **Intelligent liquidation** for defaulted invoices
-
----
-
-## 📈 Advanced Features
-
-### AI-Powered Multi-Invoice Portfolios (ERC-1155)
-
-Create AI-optimized investment products:
-
-```solidity
-function createAIOptimizedNoteType(
-    string memory name,           // "AI Q1 2025 Portfolio"
-    uint256[] memory invoiceIds,  // AI-selected invoices
-    uint256 riskScore,           // AI-calculated risk (0-100)
-    uint256 expectedYield        // AI-predicted yield %
-) external returns (uint256 noteTypeId)
-```
-
-### Telegram-Native Analytics
-
-Monitor platform performance directly in Telegram:
-
-```solidity
-function getTelegramStats(address telegramUser) external view returns (
-    uint256 totalInvestments,
-    uint256 currentYield,
-    uint256 duckRewards,
-    bytes32 aiRecommendations
-)
-```
-
----
-
-## 🎯 Roadmap
-
-### Phase 1: DuckChain Foundation ✅
-- [x] Core contract development
-- [x] DuckChain Network integration  
-- [x] Telegram wallet integration
-- [x] Basic AI yield strategies
-- [x] Testing suite
-
-### Phase 2: AI Enhancement (Q2 2025)
-- [ ] Advanced Quack AI integration
-- [ ] Telegram Mini App launch
-- [ ] AI governance implementation
-- [ ] Cross-chain yield optimization
-
-### Phase 3: Ecosystem Expansion (Q3 2025)
-- [ ] TON ecosystem partnerships
-- [ ] Institutional Telegram bots
-- [ ] AI-powered credit scoring
-- [ ] Global invoice marketplace
-
-### Phase 4: Mass Adoption (Q4 2025)
-- [ ] Full Telegram Super-App integration
-- [ ] Multi-language AI agents
-- [ ] Enterprise API suite
-- [ ] Real-world asset tokenization
-
----
-
-## 🤝 Contributing
-
-We welcome contributions to build the future of Telegram-native DeFi!
-
-1. **Fork** the repository
-2. **Create** a feature branch (`git checkout -b feature/duckchain-enhancement`)
-3. **Commit** your changes (`git commit -m 'Add DuckChain AI feature'`)
-4. **Push** to the branch (`git push origin feature/duckchain-enhancement`)
-5. **Open** a Pull Request
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ### Development Guidelines
 
 - Follow Solidity style guide
-- Write comprehensive tests including AI scenarios
+- Add tests for new features
 - Update documentation
-- Test Telegram integration thoroughly
-- Use conventional commit messages
+- Run `npm run lint` before committing
 
----
-
-## 📞 Support
-
-### Community
-- **Telegram**: [@DuckChainOfficial](https://t.me/duckchainofficial)
-- **Twitter**: [@DuckChain](https://twitter.com/DuckChain)
-- **Discord**: [Join our community](https://discord.gg/duckchain)
-
-### Technical Support
-- **GitHub Issues**: [Report bugs](https://github.com/protego-ai/duckchain-contracts/issues)
-- **DuckChain Docs**: [Technical documentation](https://docs.duckchain.io)
-- **Telegram Support**: @DuckChainSupport
-
-### AI Agent Support
-- **Quack AI Bot**: @QuackAIBot (Telegram)
-- **AI Governance**: [AI DAO Portal](https://ai.duckchain.io)
-
----
-
-## 🏆 DuckChain Advantages for Invoice Financing
-
-### Traditional Pain Points → DuckChain Solutions
-
-| Pain Point | Traditional Solution | DuckChain Solution |
-|------------|---------------------|-------------------|
-| Complex onboarding | Multiple wallet setups | One-click Telegram wallet |
-| High gas fees | Manual optimization | Unified gas model |
-| Poor UX | Desktop-only dApps | Native Telegram interface |
-| Manual decisions | Human analysis only | AI-powered insights |
-| Limited reach | Crypto-native users | 950M Telegram users |
-
-### Unique Value Propositions
-
-1. **Telegram-First Design**: DuckChain plays a key role in transforming Telegram into a blockchain-powered super-app
-
-2. **AI-Driven Intelligence**: Native AI agents provide real-time risk assessment and yield optimization
-
-3. **Seamless Cross-Chain**: Bridge traditional finance with crypto through familiar Telegram interface
-
-4. **Zero Friction Onboarding**: Users can create a DuckChain address with just one click, without the need for a private key or mnemonic phrase
-
----
-
-## 🔗 Important Links
-
-- **DuckChain Official**: https://duckchain.io
-- **Network Explorer**: https://scan.duckchain.io  
-- **Add to MetaMask**: Chain ID 5545
-- **Telegram Integration**: @DuckChainBot
-- **AI Governance**: https://ai.duckchain.io
-- **Cross-Chain Bridge**: https://bridge.duckchain.io
-
----
-
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+## Acknowledgments
+
+- Traditional Ajo/Esusu communities for inspiration
+- Hedera for blockchain infrastructure
+- OpenZeppelin for secure contract libraries
+- The Ethereum community for development tools
+
+## Contact & Support
+
+- **GitHub**: [ola-893/ajo-contract](https://github.com/ola-893/ajo-contract)
+- **Issues**: [Report a bug](https://github.com/ola-893/ajo-contract/issues)
+- **Discussions**: [Join the conversation](https://github.com/ola-893/ajo-contract/discussions)
+
+## Roadmap
+
+- [x] Core ROSCA functionality
+- [x] Dynamic collateral system (V3 - 60% factor)
+- [x] Mathematical security proof with safety buffer
+- [x] Factory pattern implementation
+- [x] Governance module
+- [x] Multi-token support
+- [ ] Security audit
+- [ ] Frontend interface
+- [ ] Mobile app
+- [ ] Mainnet deployment
+- [ ] Additional token integrations
+- [ ] Cross-chain bridges
+
 ---
 
-**Built with 🦆 on DuckChain - The Telegram AI Chain**
+**Built with ❤️ for the Hedera community**
+
+*Empowering traditional savings circles with blockchain technology*
+
+---
+
+## Technical Documentation: V3 Collateral System
+
+### Analysis of the Ajo Collateral and Guarantor System
+
+**Last Updated:** September 29, 2025
+
+#### 1. Core Principles & Goals
+
+- **Mitigate Default Risk**: Protect the Ajo group from losses if a member defaults after receiving payout
+- **Solve the Collateral Paradox**: Required collateral must be substantially less than the payout received
+- **Fairness and Risk Proportionality**: Collateral proportional to financial risk introduced
+- **Enhanced Security**: Significant buffer between seizable assets and maximum potential loss
+
+#### 2. The Worst-Case Scenario
+
+The moment of maximum financial risk occurs when Participant 1 receives their payout in Month 1 and immediately defaults.
+
+- **Net Loss to Group**: Payout - P1's Contribution = ($500 - $50) = $450
+- **Total Seizable Assets**:
+  - Participant 1's Locked Collateral: Collateral(1)
+  - Participant 1's Past Payments: 1 × $50
+  - Guarantor 6's Locked Collateral: Collateral(6)
+  - Guarantor 6's Past Payments: 1 × $50
+
+#### 3. The Collateral Calculation Logic
+
+```
+Debt for Participant n = Payout - (n × monthlyContribution)
+Collateral(n) = Debt(n) × collateralFactor
+```
+
+#### 4. Determining the collateralFactor
+
+- **Mathematical Minimum**: 0.5384 (53.84%) for break-even
+- **V3 collateralFactor**: 0.60 (60%) for enhanced security
+- **Result**: Significantly higher safety margin than V2 (0.55)
+
+#### 5. Verification Example (collateralFactor = 0.60)
+
+**Collateral Requirements:**
+- **Position 1**: ($500 - 1×$50) × 0.60 = $450 × 0.60 = **$270**
+- **Position 6 (Guarantor)**: ($500 - 6×$50) × 0.60 = $200 × 0.60 = **$120**
+
+**Default Recovery:**
+- Seized Collateral (P1): $270
+- Seized Collateral (P6): $120
+- Seized Past Payments: $50 + $50 = $100
+- **Total Recoverable**: $490
+
+**Security Analysis:**
+- Maximum Potential Loss: $450
+- Total Recoverable Assets: $490
+- **Safety Buffer**: $40 ($490 - $450)
+- **Coverage Ratio**: 108.9% ($490 / $450)
+
+**Conclusion:** The V3 model with 60% collateral factor provides robust security while maintaining capital efficiency. The highest-risk user (Position 1) locks only $270 to receive a $500 payout—well below the traditional 100%+ requirement.
