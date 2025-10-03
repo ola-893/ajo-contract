@@ -216,7 +216,6 @@ interface IAjoPayments {
     ) external;
     
     // Core Payment Functions
-    function makePayment() external;
     function processPayment(address member, uint256 amount, PaymentToken token) external;
     function distributePayout() external;
     function handleDefault(address defaulter) external;
@@ -273,8 +272,6 @@ interface IAjoMembers {
     ) external;
     
     // Core Member Functions
-    function joinAjo(PaymentToken tokenChoice) external;
-    function exitAjo() external;
     function updateReputation(address member, uint256 newReputation) external;
     
     // Member Management Functions

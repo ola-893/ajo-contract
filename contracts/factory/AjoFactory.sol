@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "./AjoInterfaces.sol";
+import "../interfaces/AjoInterfaces.sol";
+import "../core/LockableContract.sol";
+
 
 /**
  * @title AjoFactory
@@ -302,8 +304,8 @@ contract AjoFactory is IAjoFactory {
         }
     }
 
-    /**
-     * @dev Complete final linking and advanced configuration (separate from core initialization)
+   /**
+     * @dev Complete final linking, advanced configuration, and lock down all Ajo sub-contracts.
      * @param ajoId The ID of the Ajo to finalize
      */
     function finalizeAjoSetup(uint256 ajoId) external validAjoId(ajoId) onlyCreatorOrOwner(ajoId) {
@@ -311,23 +313,10 @@ contract AjoFactory is IAjoFactory {
         
         AjoInfo memory ajoInfo = ajos[ajoId];
         
-        // Additional contract linking (gas-intensive operations)
-        _safeLinkContract(ajoInfo.ajoMembers, "setAjoCore", abi.encode(ajoInfo.ajoCore));
-        IAjoMembers(ajoInfo.ajoMembers).setContractAddresses(
-            ajoInfo.ajoCollateral,
-            ajoInfo.ajoPayments
-        );
-
-        _safeLinkContract(ajoInfo.ajoGovernance, "setAjoCore", abi.encode(ajoInfo.ajoCore));
-        _safeLinkContract(ajoInfo.ajoCollateral, "setAjoCore", abi.encode(ajoInfo.ajoCore));
-        _safeLinkContract(ajoInfo.ajoPayments, "setAjoCore", abi.encode(ajoInfo.ajoCore));
-
-        // Additional token configuration
-        IAjoCore(ajoInfo.ajoCore).updateTokenConfig(
-            PaymentToken.HBAR,
-            1000 * 10**8,  // 1000 HBAR (8 decimals for wrapped HBAR)
-            true
-        );
+        LockableContract(ajoInfo.ajoMembers).completeSetup();
+        LockableContract(ajoInfo.ajoGovernance).completeSetup();
+        LockableContract(ajoInfo.ajoCollateral).completeSetup();
+        LockableContract(ajoInfo.ajoPayments).completeSetup();
         
         ajoInitializationPhase[ajoId] = 5; // Fully finalized
     }

@@ -6,8 +6,8 @@ import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
-import "./LockableContract.sol";
-import "./AjoInterfaces.sol";
+import "../core/LockableContract.sol";
+import "../interfaces/AjoInterfaces.sol";
 
 contract AjoGovernance is Initializable, IAjoGovernance, ERC20, ERC20Votes, Ownable, LockableContract {
     

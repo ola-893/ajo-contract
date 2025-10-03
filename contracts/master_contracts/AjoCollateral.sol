@@ -4,8 +4,8 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "./AjoInterfaces.sol";
-import "./LockableContract.sol";
+import "../interfaces/AjoInterfaces.sol";
+import "../core/LockableContract.sol";
 
 
 contract AjoCollateral is IAjoCollateral, Ownable, Initializable, LockableContract {
@@ -58,7 +58,6 @@ contract AjoCollateral is IAjoCollateral, Ownable, Initializable, LockableContra
     require(_ajoCore != address(0), "Invalid AjoCore address");
     require(_ajoMembers != address(0), "Invalid AjoMembers address");
     
-    // ADD THIS LINE:
     _transferOwnership(msg.sender);
     
     USDC = IERC20(_usdc);
@@ -107,7 +106,7 @@ contract AjoCollateral is IAjoCollateral, Ownable, Initializable, LockableContra
         uint256 payout = totalParticipants * monthlyPayment;
         uint256 potentialDebt = payout - (position * monthlyPayment);
         
-        // Apply V2 collateral factor (55% due to seizure of past payments)
+        // Apply collateral factor (60% due to seizure of past payments)
         uint256 requiredCollateral = (potentialDebt * COLLATERAL_FACTOR) / 100;
         
         return requiredCollateral;

@@ -219,8 +219,8 @@ async function verifyPhaseCompletion(ajoFactory, ajoId, expectedPhase) {
   }
 }
 
-async function test4PhaseAjoCreation(ajoFactory, deployer) {
-  console.log(c.blue(`\n🎯 Testing: 4-Phase Ajo Creation...`));
+async function test5PhaseAjoCreation(ajoFactory, deployer) {
+  console.log(c.blue(`\n🎯 Testing: 5-Phase Ajo Creation (with Final Lockdown)...`));
   
   let ajoId;
   
@@ -295,12 +295,32 @@ async function test4PhaseAjoCreation(ajoFactory, deployer) {
       gasLimit: DEMO_CONFIG.GAS_LIMIT.INIT_PHASE_4
     });
     const receipt = await initTx.wait();
-    console.log(c.green(`    ✅ Phase 4 complete - Ajo is ACTIVE! Gas used: ${receipt.gasUsed.toString()}`));
+    console.log(c.green(`    ✅ Phase 4 complete - Gas used: ${receipt.gasUsed.toString()}`));
     return receipt;
   }, "Initialize Ajo Phase 4");
   
   if (!await verifyPhaseCompletion(ajoFactory, ajoId, 4)) {
     throw new Error("Phase 4 verification failed");
+  }
+  await sleep(3000);
+
+  // ----------------------------------------------------------------
+  // NEW PHASE 5: Finalize Setup & Lock Contracts
+  // ----------------------------------------------------------------
+  console.log(c.cyan("\n  📋 PHASE 5: Finalize Setup & Lock Contracts..."));
+  await retryOperation(async () => {
+    console.log(c.dim(`    Finalizing setup and locking sub-contracts for ID ${ajoId}...`));
+    // This calls the smart contract function `finalizeAjoSetup(uint256 ajoId)`
+    const finalizeTx = await ajoFactory.connect(deployer).finalizeAjoSetup(ajoId, {
+      gasLimit: DEMO_CONFIG.GAS_LIMIT.FINALIZE_SETUP // Assuming you define this new gas limit
+    });
+    const receipt = await finalizeTx.wait();
+    console.log(c.green(`    ✅ Phase 5 complete - Ajo fully FINALIZED and LOCKED! Gas used: ${receipt.gasUsed.toString()}`));
+    return receipt;
+  }, "Finalize Ajo Phase 5");
+  
+  if (!await verifyPhaseCompletion(ajoFactory, ajoId, 5)) {
+    throw new Error("Phase 5 verification failed");
   }
   
   return { ajoId };
@@ -360,7 +380,7 @@ async function ensureHealthyAjo(ajoFactory, deployer) {
   // Create new Ajo if none found
   if (!ajoInfo) {
     console.log(c.dim("  Creating new healthy Ajo..."));
-    const { ajoId: newId } = await test4PhaseAjoCreation(ajoFactory, deployer);
+    const { ajoId: newId } = await test5PhaseAjoCreation(ajoFactory, deployer);
     ajoId = newId;
     ajoInfo = await ajoFactory.getAjo(ajoId);
   }
@@ -586,7 +606,7 @@ async function main() {
     // STEP 1-3: YOUR EXISTING DEMO CODE (unchanged)
     // ============================================================
     const { ajoFactory, usdc, whbar, deployer, masterContracts } = await deployFactory();
-    const { ajoId } = await test4PhaseAjoCreation(ajoFactory, deployer);
+    const { ajoId } = await test5PhaseAjoCreation(ajoFactory, deployer);
     
     // Save deployment info
     const deploymentInfo = {

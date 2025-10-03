@@ -5,7 +5,7 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
- * @title MockERC20 - Test Token for PatientAjo
+ * @title MockERC20
  * @dev Simple ERC20 token for testing purposes with mint functionality
  */
 contract MockERC20 is ERC20, Ownable {

@@ -4,8 +4,8 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
-import "./LockableContract.sol";
-import "./AjoInterfaces.sol";
+import "../core/LockableContract.sol";
+import "../interfaces/AjoInterfaces.sol";
 
 contract AjoMembers is IAjoMembers, Ownable, Initializable, LockableContract {
     
@@ -52,7 +52,6 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable, LockableContract {
         require(_usdc != address(0), "Invalid USDC address");
         require(_hbar != address(0), "Invalid HBAR address");
         
-        // ADD THIS LINE:
         _transferOwnership(msg.sender);
         
         ajoCore = _ajoCore;
@@ -98,20 +97,6 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable, LockableContract {
         }
         return (true, "Setup is valid");
     }
-
-    // ============ CORE MEMBER FUNCTIONS (IAjoMembers) ============
-    
-    function joinAjo(PaymentToken tokenChoice) external override {
-        require(msg.sender == ajoCore, "Only AjoCore can add members");
-        // This function is called by AjoCore after it has prepared the member data
-        // The actual member addition is handled through addMember function
-    }
-    
-    function exitAjo() external override {
-        require(msg.sender == ajoCore, "Only AjoCore can remove members");
-        // This function is called by AjoCore
-        // The actual member removal is handled through removeMember function
-    }
     
     // ============ VIEW FUNCTIONS - MEMBER INFORMATION (IAjoMembers) ============
     
@@ -152,14 +137,10 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable, LockableContract {
         Member memory memberInfo = members[member];
         position = memberInfo.queueNumber;
         
-        // Estimated cycles wait would depend on current payout position
-        // This calculation should involve the payments contract
-        estimatedCyclesWait = 0; // Placeholder - should be calculated by AjoCore
+    
+        estimatedCyclesWait = memberInfo.joinedCycle;
     }
     
-    /**
-     * @dev FIXED: getContractStats() now returns real values instead of placeholders
-     */
     function getContractStats() 
         external 
         view 
@@ -179,7 +160,6 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable, LockableContract {
         activeMembers = activeAjoMembersList.length;
         totalMembers = activeMembers; // For simplicity, could track total including inactive
         
-        // FIXED: Calculate real collateral balances by checking individual member balances
         totalCollateralUSDC = 0;
         totalCollateralHBAR = 0;
         
@@ -194,7 +174,6 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable, LockableContract {
             }
         }
         
-        // FIXED: Get real contract balances using the token contracts
         if (address(USDC) != address(0)) {
             if (ajoCollateral != address(0)) {
                 contractBalanceUSDC += USDC.balanceOf(ajoCollateral);
@@ -219,8 +198,7 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable, LockableContract {
             }
         }
         
-        // FIXED: Calculate real current queue position
-        // Find the highest queue number among active members
+    
         currentQueuePosition = 0;
         for (uint256 i = 0; i < activeMembers; i++) {
             address memberAddr = activeAjoMembersList[i];

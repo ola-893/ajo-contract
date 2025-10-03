@@ -5,7 +5,7 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
-import "./AjoInterfaces.sol";
+import "../interfaces/AjoInterfaces.sol";
 import "hardhat/console.sol";
 
 contract AjoCore is IAjoCore, ReentrancyGuard, Ownable, Initializable {
@@ -25,11 +25,14 @@ contract AjoCore is IAjoCore, ReentrancyGuard, Ownable, Initializable {
     
     uint256 public nextQueueNumber = 1;
     uint256 public lastCycleTimestamp;
+    bool public paused;
+    bool private isFirstCycleComplete;
     
     // New mappings needed for joinAjo functionality
     mapping(uint256 => address) public queuePositions;
     mapping(uint256 => address) public guarantorAssignments;
     address[] public activeMembersList;
+
     
     // ============ EVENTS ============
     
@@ -39,7 +42,9 @@ contract AjoCore is IAjoCore, ReentrancyGuard, Ownable, Initializable {
     event GuarantorAssigned(address indexed member, address indexed guarantor, uint256 memberPosition, uint256 guarantorPosition);
     event AjoFull(address indexed ajoContract, uint256 timestamp);
     event CollateralTransferRequired(address indexed member, uint256 amount, PaymentToken token, address collateralContract);
-    
+    event Paused(address account);
+    event Unpaused(address account);
+
     // ============ ERRORS ============
     
     error InsufficientCollateral();
@@ -243,12 +248,11 @@ contract AjoCore is IAjoCore, ReentrancyGuard, Ownable, Initializable {
         );
     }
     
-    // Replace the existing makePayment() function in AjoCore with this new processPayment() function
     function processPayment() external override nonReentrant {
         uint256 currentCycle = paymentsContract.getCurrentCycle();
         
         // Process payment through payments contract
-        paymentsContract.processPayment(msg.sender, 100e6, PaymentToken.USDC);
+        paymentsContract.processPayment(msg.sender, 50e6, PaymentToken.USDC);
         
         // Update member's last payment cycle
         membersContract.updateLastPaymentCycle(msg.sender, currentCycle);
@@ -256,37 +260,57 @@ contract AjoCore is IAjoCore, ReentrancyGuard, Ownable, Initializable {
 
     
     function distributePayout() external override nonReentrant {
-        // // Check if cycle should advance
-        // if (block.timestamp >= lastCycleTimestamp + CYCLE_DURATION) {
-        //     _advanceCycle();
-        // }
-        
-        // Distribute payout through payments contract
-        paymentsContract.distributePayout();
+        // For the first payout, advance the cycle immediately without a time check.
+        if (!isFirstCycleComplete) {
+            // Attempt to distribute the payout via the payments contract.
+            // This contract will have its own checks to ensure a payout is ready for the current cycle.
+            paymentsContract.distributePayout();
+            _advanceCycle();
+            isFirstCycleComplete = true; // Mark the first cycle as complete.
+        } else {
+            // For all subsequent payouts, check if the 30-day cycle duration has passed.
+            if (block.timestamp >= lastCycleTimestamp + CYCLE_DURATION) {
+                // Attempt to distribute the payout via the payments contract.
+                // This contract will have its own checks to ensure a payout is ready for the current cycle.
+                paymentsContract.distributePayout();
+                _advanceCycle();
+            }
+        }
     }
     
     function handleDefault(address defaulter) external override onlyOwner {
+        // Retrieve member data from the members contract
         Member memory member = membersContract.getMember(defaulter);
         
+        // Ensure the member is currently active in the Ajo circle
         if (!member.isActive) revert MemberNotFound();
         
-        // Handle default through payments contract
+        // 1. Mark the member as defaulted in the payments contract.
+        // This will typically apply penalties and update their default status.
         paymentsContract.handleDefault(defaulter);
         
-        // Update reputation negatively for defaults
+        // 2. Update the defaulter's reputation negatively.
+        // The 'false' boolean indicates a negative reputation event.
         governanceContract.updateReputationAndVotingPower(defaulter, false);
         
-        // Check for severe default (3+ cycles missed)
+        // 3. Check for a severe default condition (e.g., missing 3 or more cycles).
         uint256 currentCycle = paymentsContract.getCurrentCycle();
         uint256 cyclesMissed = currentCycle - member.lastPaymentCycle;
+        
         if (cyclesMissed >= 3) {
-            // Execute seizure mechanism
+            // --- Severe Default Protocol ---
+            
+            // 3a. Execute the seizure of the defaulter's locked collateral.
             collateralContract.executeSeizure(defaulter);
             
-            // Remove defaulter and their guarantor from active members
-            membersContract.exitAjo(); // This should be called by the defaulter's address context
+            // 3b. Forcibly remove the defaulter from the Ajo circle.
+            // We use `removeMember` as this is an administrative action.
+            membersContract.removeMember(defaulter);
+            
+            // 3c. If the defaulter had a guarantor, remove the guarantor as well.
+            // This is the core of the social guarantee mechanism.
             if (member.guarantor != address(0)) {
-                // Remove guarantor as well - this might need special handling
+                membersContract.removeMember(member.guarantor);
             }
         }
     }
@@ -304,7 +328,7 @@ contract AjoCore is IAjoCore, ReentrancyGuard, Ownable, Initializable {
         uint256 returnAmount = member.lockedCollateral > exitPenalty ? member.lockedCollateral - exitPenalty : 0;
         
         // Remove member through members contract
-        membersContract.exitAjo();
+        membersContract.removeMember(msg.sender);
         
         // Burn voting tokens
         governanceContract.updateVotingPower(msg.sender, 0);
@@ -330,7 +354,6 @@ contract AjoCore is IAjoCore, ReentrancyGuard, Ownable, Initializable {
         memberInfo = membersContract.getMember(member);
         pendingPenalty = paymentsContract.getPendingPenalty(member);
         effectiveVotingPower = 2;
-        //balanceOf(member);
     }
     
     function getQueueInfo(address member) 
@@ -407,7 +430,7 @@ contract AjoCore is IAjoCore, ReentrancyGuard, Ownable, Initializable {
         return collateralContract.calculateSeizableAssets(defaulterAddress);
     }
     
-    // ============ ADMIN FUNCTIONS (IPatientAjo) ============
+    // ============ ADMIN FUNCTIONS (Ajo) ============
     
     function emergencyWithdraw(PaymentToken token) external override onlyOwner {
         // Withdraw from collateral contract
@@ -418,34 +441,80 @@ contract AjoCore is IAjoCore, ReentrancyGuard, Ownable, Initializable {
     }
     
     function updateCycleDuration(uint256 newDuration) external override onlyOwner {
-        // This would need to be implemented to update cycle duration
-        // For now, CYCLE_DURATION is a constant
+        // For now, CYCLE_DURATION is a constant CYCLE_DURATION = 30 days;
+        // There a lots of checks that will be needed to change this in a live Ajo
+        // So we will leave this unimplemented for now.
+        // In future, we could make CYCLE_DURATION a state variable and allow updates here.
     }
     
+    /**
+    * @dev Pauses the contract in case of an emergency.
+    * Can only be called by the owner.
+    * Emits a {Paused} event.
+    */
     function emergencyPause() external override onlyOwner {
-        // Implementation for emergency pause functionality
-        // This would prevent new joins and payments during emergencies
+        // Ensure the contract is not already paused
+        require(!paused, "Contract is already paused");
+        
+        // Set the paused state to true
+        paused = true;
+        
+        // Emit an event to log the action on-chain
+        emit Paused(msg.sender);
+    }
+
+    /**
+    * @dev Unpauses the contract.
+    * Can only be called by the owner.
+    * Emits an {Unpaused} event.
+    */
+    function unpause() external onlyOwner {
+        // Ensure the contract is currently paused
+        require(paused, "Contract is not paused");
+        
+        // Set the paused state to false
+        paused = false;
+        
+        // Emit an event to log the action on-chain
+        emit Unpaused(msg.sender);
     }
     
     function batchHandleDefaults(address[] calldata defaulters) external override onlyOwner {
-        // Handle defaults through payments contract
+        // 1. Handle the financial aspects of the defaults in the payments contract.
+        // This is done as a batch call for gas efficiency.
         paymentsContract.batchHandleDefaults(defaulters);
         
-        // Update member records and check for seizures
+        // 2. Get the current cycle once to use throughout the loop.
         uint256 currentCycle = paymentsContract.getCurrentCycle();
         
+        // 3. Loop through each defaulter to handle governance and severe default actions.
         for (uint256 i = 0; i < defaulters.length; i++) {
             address defaulter = defaulters[i];
+            
+            // We must fetch the member's data in each loop iteration, as their state
+            // might have been changed if they were removed as a guarantor earlier in this batch.
             Member memory member = membersContract.getMember(defaulter);
             
-            if (member.isActive && member.lastPaymentCycle < currentCycle) {
+            // Proceed only if the member is still active.
+            if (member.isActive) {
+                // 3a. Update reputation negatively for the default.
                 governanceContract.updateReputationAndVotingPower(defaulter, false);
                 
-                // Check for severe default
+                // 3b. Check for severe default (3+ cycles missed).
                 uint256 cyclesMissed = currentCycle - member.lastPaymentCycle;
                 if (cyclesMissed >= 3) {
+                    // --- Severe Default Protocol ---
+                    
+                    // Seize the defaulter's collateral.
                     collateralContract.executeSeizure(defaulter);
-                    // Remove member logic would go here
+                    
+                    // Forcibly remove the defaulter from the Ajo circle.
+                    membersContract.removeMember(defaulter);
+                    
+                    // If a guarantor exists, remove them as well.
+                    if (member.guarantor != address(0)) {
+                        membersContract.removeMember(member.guarantor);
+                    }
                 }
             }
         }

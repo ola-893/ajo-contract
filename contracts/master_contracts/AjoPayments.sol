@@ -5,8 +5,8 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
-import "./LockableContract.sol";
-import "./AjoInterfaces.sol";
+import "../core/LockableContract.sol";
+import  "../interfaces/AjoInterfaces.sol";
 
 contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, LockableContract {
     
@@ -42,7 +42,7 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
     // ============ CONSTRUCTOR (for master copy) ============
     constructor() {
         _disableInitializers();
-        _transferOwnership(address(1)); // ADD THIS LINE
+        _transferOwnership(address(1));
     }
     
     // ============ INITIALIZER (for proxy instances) ============
@@ -59,7 +59,6 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         require(_membersContract != address(0), "Invalid members contract");
         require(_collateralContract != address(0), "Invalid collateral contract");
         
-        // ADD THIS LINE:
         _transferOwnership(msg.sender);
         
         USDC = IERC20(_usdc);
@@ -111,13 +110,6 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
     }
     
     // ============ CORE PAYMENT FUNCTIONS (IAjoPayments) ============
-    
-    function makePayment() external override nonReentrant {
-        require(msg.sender == ajoCore, "Only AjoCore");
-        
-        // This function is called by AjoCore after validation
-        // The actual payment processing is handled through processPayment
-    }
     
     function distributePayout() external override nonReentrant {
         require(msg.sender == ajoCore, "Only AjoCore");
@@ -198,8 +190,6 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         
         emit PayoutDistributed(recipient, amount, currentCycle, token);
     }
-    
-    // ============ CALCULATION FUNCTIONS ============
     
     // ============ CALCULATION FUNCTIONS ============
 
@@ -331,14 +321,7 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         address nextRecipient = getNextRecipient();
         return nextRecipient != address(0) && calculatePayout() > 0;
     }
-    
-    // ============ INTERNAL FUNCTIONS ============
-    
-    function _getHBARToUSDCRate() internal pure returns (uint256) {
-        // Placeholder - in production, use Chainlink or similar oracle
-        return 5e16; // Assuming 1 HBAR = 0.05 USDC (5 cents)
-    }
-    
+
     // ============ EMERGENCY FUNCTIONS ============
     
     function emergencyWithdraw(PaymentToken token) external onlyAjoCore {
@@ -348,8 +331,9 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
     }
     
     function pausePayments() external onlyAjoCore {
-        // Implementation for pausing payments during emergencies
-        // This could set a state variable that prevents new payments
+       //pausing payments is very sensitive, so implementation is omitted for brevity
+       //people that have made previous payments won't be able to get their payouts
+       //until payments are resumed
     }
     
     function resumePayments() external onlyAjoCore {
