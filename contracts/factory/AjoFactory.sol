@@ -1,3 +1,5 @@
+
+
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
@@ -9,6 +11,7 @@ import "../core/LockableContract.sol";
  * @dev Factory contract for creating Ajo instances using EIP-1167 minimal proxies
  * Uses four-phase initialization to minimize gas limit issues
  * Enhanced with comprehensive diagnostic capabilities and frontend aggregation
+ * Now deploys AjoGovernanceHCS instead of traditional governance
  */
 contract AjoFactory is IAjoFactory {
     // ============ STATE VARIABLES ============
@@ -18,7 +21,7 @@ contract AjoFactory is IAjoFactory {
     address public ajoMembersImplementation;
     address public ajoCollateralImplementation;
     address public ajoPaymentsImplementation;
-    address public ajoGovernanceImplementation;
+    address public ajoGovernanceImplementation; // Now points to AjoGovernanceHCS
     
     // Token addresses
     address public USDC;
@@ -122,7 +125,7 @@ contract AjoFactory is IAjoFactory {
         address _ajoMembersImpl,
         address _ajoCollateralImpl,
         address _ajoPaymentsImpl,
-        address _ajoGovernanceImpl
+        address _ajoGovernanceHCSImpl // Now expects AjoGovernanceHCS
     ) {
         require(_usdc != address(0), "Invalid USDC address");
         require(_whbar != address(0), "Invalid WHBAR address");
@@ -130,7 +133,7 @@ contract AjoFactory is IAjoFactory {
         require(_ajoMembersImpl != address(0), "Invalid AjoMembers implementation");
         require(_ajoCollateralImpl != address(0), "Invalid AjoCollateral implementation");
         require(_ajoPaymentsImpl != address(0), "Invalid AjoPayments implementation");
-        require(_ajoGovernanceImpl != address(0), "Invalid AjoGovernance implementation");
+        require(_ajoGovernanceHCSImpl != address(0), "Invalid AjoGovernanceHCS implementation");
         
         owner = msg.sender;
         USDC = _usdc;
@@ -139,14 +142,14 @@ contract AjoFactory is IAjoFactory {
         ajoMembersImplementation = _ajoMembersImpl;
         ajoCollateralImplementation = _ajoCollateralImpl;
         ajoPaymentsImplementation = _ajoPaymentsImpl;
-        ajoGovernanceImplementation = _ajoGovernanceImpl;
+        ajoGovernanceImplementation = _ajoGovernanceHCSImpl;
 
         emit MasterImplementationsSet(
             _ajoCoreImpl,
             _ajoMembersImpl,
             _ajoCollateralImpl,
             _ajoPaymentsImpl,
-            _ajoGovernanceImpl
+            _ajoGovernanceHCSImpl
         );
     }
     
@@ -154,7 +157,7 @@ contract AjoFactory is IAjoFactory {
 
     /**
      * @dev Creates a new Ajo instance using minimal proxies (PHASE 1)
-     * Only deploys proxy contracts, no initialization
+     * Deploys AjoGovernanceHCS proxy automatically
      * @param _name Name for the Ajo instance
      * @return ajoId The ID of the created Ajo instance
      */
@@ -164,8 +167,9 @@ contract AjoFactory is IAjoFactory {
         ajoId = nextAjoId++;
         
         // Deploy proxy contracts only (minimal gas usage)
+        // AjoGovernanceHCS is deployed here just like other contracts
         address ajoMembersProxy = _deployProxy(ajoMembersImplementation, ajoId);
-        address ajoGovernanceProxy = _deployProxy(ajoGovernanceImplementation, ajoId);
+        address ajoGovernanceHCSProxy = _deployProxy(ajoGovernanceImplementation, ajoId); // HCS Governance
         address ajoCollateralProxy = _deployProxy(ajoCollateralImplementation, ajoId);
         address ajoPaymentsProxy = _deployProxy(ajoPaymentsImplementation, ajoId);
         address ajoCoreProxy = _deployProxy(ajoCoreImplementation, ajoId);
@@ -176,7 +180,7 @@ contract AjoFactory is IAjoFactory {
             ajoMembers: ajoMembersProxy,
             ajoCollateral: ajoCollateralProxy,
             ajoPayments: ajoPaymentsProxy,
-            ajoGovernance: ajoGovernanceProxy,
+            ajoGovernance: ajoGovernanceHCSProxy, // HCS Governance proxy
             creator: msg.sender,
             createdAt: block.timestamp,
             name: _name,
@@ -194,7 +198,7 @@ contract AjoFactory is IAjoFactory {
     }
 
     /**
-     * @dev Complete Phase 2: Initialize basic contracts
+     * @dev Complete Phase 2: Initialize AjoMembers and AjoGovernanceHCS
      * @param ajoId The ID of the Ajo to initialize
      */
     function initializeAjoPhase2(uint256 ajoId) public validAjoId(ajoId) onlyCreatorOrOwner(ajoId) {
@@ -202,16 +206,17 @@ contract AjoFactory is IAjoFactory {
         
         AjoInfo memory ajoInfo = ajos[ajoId];
         
-        // Initialize AjoMembers and AjoGovernance (lighter contracts first)
+        // Initialize AjoMembers
         IAjoMembers(ajoInfo.ajoMembers).initialize(
             ajoInfo.ajoCore,
             USDC,
             WHBAR
         );
 
+        // Initialize AjoGovernanceHCS (implements IAjoGovernance interface)
         IAjoGovernance(ajoInfo.ajoGovernance).initialize(
             ajoInfo.ajoCore,
-            address(0) // The governance contract itself is the token
+            address(0) // No external governance token needed for HCS model
         );
         
         ajoInitializationPhase[ajoId] = 2;
@@ -263,7 +268,7 @@ contract AjoFactory is IAjoFactory {
             ajoInfo.ajoMembers,
             ajoInfo.ajoCollateral,
             ajoInfo.ajoPayments,
-            ajoInfo.ajoGovernance
+            ajoInfo.ajoGovernance // Now points to HCS Governance
         );
 
         // Essential token configuration for USDC
@@ -303,7 +308,7 @@ contract AjoFactory is IAjoFactory {
         }
     }
 
-   /**
+    /**
      * @dev Complete final linking, advanced configuration, and lock down all Ajo sub-contracts.
      * @param ajoId The ID of the Ajo to finalize
      */
@@ -313,7 +318,7 @@ contract AjoFactory is IAjoFactory {
         AjoInfo memory ajoInfo = ajos[ajoId];
         
         LockableContract(ajoInfo.ajoMembers).completeSetup();
-        LockableContract(ajoInfo.ajoGovernance).completeSetup();
+        LockableContract(ajoInfo.ajoGovernance).completeSetup(); // HCS Governance locked
         LockableContract(ajoInfo.ajoCollateral).completeSetup();
         LockableContract(ajoInfo.ajoPayments).completeSetup();
         
@@ -456,6 +461,7 @@ contract AjoFactory is IAjoFactory {
 
     /**
      * @dev Get comprehensive health report for a specific Ajo
+     * Includes HCS Governance health check
      * @param ajoId The Ajo ID to diagnose
      * @return report Complete health status of all contracts and linking
      */
@@ -472,7 +478,7 @@ contract AjoFactory is IAjoFactory {
         report.ajoMembers = _testContractHealth(ajoInfo.ajoMembers, "AjoMembers");
         report.ajoCollateral = _testContractHealth(ajoInfo.ajoCollateral, "AjoCollateral");
         report.ajoPayments = _testContractHealth(ajoInfo.ajoPayments, "AjoPayments");
-        report.ajoGovernance = _testContractHealth(ajoInfo.ajoGovernance, "AjoGovernance");
+        report.ajoGovernance = _testContractHealth(ajoInfo.ajoGovernance, "AjoGovernanceHCS"); // HCS check
         
         // Test cross-contract linking
         report.linking = _testCrossContractLinking(ajoInfo);
@@ -720,6 +726,7 @@ contract AjoFactory is IAjoFactory {
 
     /**
      * @dev Get implementation addresses for verification
+     * Returns AjoGovernanceHCS address
      */
     function getImplementations() external view override returns (
         address ajoCore,
@@ -733,7 +740,7 @@ contract AjoFactory is IAjoFactory {
             ajoMembersImplementation,
             ajoCollateralImplementation,
             ajoPaymentsImplementation,
-            ajoGovernanceImplementation
+            ajoGovernanceImplementation // This is AjoGovernanceHCS
         );
     }
     
@@ -747,34 +754,35 @@ contract AjoFactory is IAjoFactory {
         ajos[ajoId].isActive = false;
     }
 
-  /**
+    /**
      * @dev Update implementation addresses (owner only)
+     * Can update to new AjoGovernanceHCS versions
      */
     function setImplementations(
         address _ajoCoreImpl,
         address _ajoMembersImpl,
         address _ajoCollateralImpl,
         address _ajoPaymentsImpl,
-        address _ajoGovernanceImpl
+        address _ajoGovernanceHCSImpl // Now explicitly HCS
     ) external onlyOwner {
         require(_ajoCoreImpl != address(0), "Invalid AjoCore implementation");
         require(_ajoMembersImpl != address(0), "Invalid AjoMembers implementation");
         require(_ajoCollateralImpl != address(0), "Invalid AjoCollateral implementation");
         require(_ajoPaymentsImpl != address(0), "Invalid AjoPayments implementation");
-        require(_ajoGovernanceImpl != address(0), "Invalid AjoGovernance implementation");
+        require(_ajoGovernanceHCSImpl != address(0), "Invalid AjoGovernanceHCS implementation");
         
         ajoCoreImplementation = _ajoCoreImpl;
         ajoMembersImplementation = _ajoMembersImpl;
         ajoCollateralImplementation = _ajoCollateralImpl;
         ajoPaymentsImplementation = _ajoPaymentsImpl;
-        ajoGovernanceImplementation = _ajoGovernanceImpl;
+        ajoGovernanceImplementation = _ajoGovernanceHCSImpl;
 
         emit MasterImplementationsSet(
             _ajoCoreImpl,
             _ajoMembersImpl,
             _ajoCollateralImpl,
             _ajoPaymentsImpl,
-            _ajoGovernanceImpl
+            _ajoGovernanceHCSImpl
         );
     }
 
@@ -838,6 +846,7 @@ contract AjoFactory is IAjoFactory {
 
     /**
      * @dev Test individual contract health
+     * Includes check for AjoGovernanceHCS
      * @param contractAddress Address of the contract to test
      * @param contractType Type of contract for better error reporting
      * @return status Health status of the contract
@@ -891,8 +900,21 @@ contract AjoFactory is IAjoFactory {
                 status.isResponsive = false;
                 status.errorMessage = "AjoPayments not initialized or not responsive";
             }
+        } else if (keccak256(bytes(contractType)) == keccak256(bytes("AjoGovernanceHCS"))) {
+            // Test HCS Governance specifically
+            try IAjoGovernance(contractAddress).getGovernanceSettings() returns (
+                uint256, uint256, uint256, uint256
+            ) {
+                status.isInitialized = true;
+                status.isResponsive = true;
+                status.hasCorrectConfig = true;
+            } catch {
+                status.isInitialized = false;
+                status.isResponsive = false;
+                status.errorMessage = "AjoGovernanceHCS not initialized or not responsive";
+            }
         } else {
-            // For AjoGovernance or unknown contracts, just mark as deployed
+            // Unknown contract type, mark as deployed
             status.isInitialized = true;
             status.isResponsive = true;
             status.hasCorrectConfig = true;
@@ -930,6 +952,7 @@ contract AjoFactory is IAjoFactory {
 
     /**
      * @dev Deploy a minimal proxy for a given implementation
+     * Used for all contracts including AjoGovernanceHCS
      * @param implementation Address of the implementation contract
      * @param ajoId ID of the Ajo being created (for salt)
      * @return proxy Address of the deployed proxy
