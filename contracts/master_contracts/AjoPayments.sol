@@ -29,8 +29,42 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
     mapping(uint256 => PayoutRecord) public payouts;
     mapping(address => uint256) public pendingPenalties;
     
-    // Events specific to this contract
+    // ============ OPTIMIZED STORAGE FOR FRONTEND TRACKING ============
+    
+    // Track only CURRENT cycle data (much cheaper than full history)
+    mapping(uint256 => address[]) private cyclePaidMembers;
+    mapping(uint256 => mapping(address => bool)) private hasPaidInCycle;
+    mapping(uint256 => uint256) private cycleTotalCollected;
+    
+    // Track current cycle payment details per member (for quick lookup)
+    mapping(address => PaymentStatus) public currentCyclePayment;
+    
+    // Track cycle start times for deadline calculations
+    uint256 public cycleStartTime;
+    uint256 public cycleDuration = 30 days; // Default 30 days per cycle
+    
+    // ============ ENHANCED EVENTS (FOR HISTORICAL DATA) ============
+    
     event AjoCoreUpdated(address indexed oldCore, address indexed newCore);
+    
+    // ✅ DETAILED EVENT - Frontend indexes this for payment history
+    event PaymentMadeDetailed(
+        address indexed member,
+        uint256 amountPaid,
+        uint256 penaltyApplied,
+        uint256 totalPayment,
+        uint256 indexed cycle,
+        PaymentToken token,
+        uint256 timestamp
+    );
+    
+    // ✅ CYCLE SUMMARY EVENT - Emitted when cycle advances
+    event CycleSummary(
+        uint256 indexed cycle,
+        uint256 totalCollected,
+        uint256 membersPaidCount,
+        uint256 timestamp
+    );
     
     // ============ MODIFIERS ============
     
@@ -72,6 +106,7 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         currentCycle = 1;
         nextPayoutPosition = 1;
         activePaymentToken = PaymentToken.USDC;
+        cycleStartTime = block.timestamp;
         
         // Initialize token configurations
         tokenConfigs[PaymentToken.USDC] = TokenConfig({
@@ -124,6 +159,10 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         // Distribute payout
         _distributePayout(recipient, payoutAmount, recipientMember.preferredToken);
         
+        // Update member status
+        membersContract.updateTotalPaid(recipient, payoutAmount);
+        membersContract.markPayoutReceived(recipient);
+        
         nextPayoutPosition++;
     }
     
@@ -140,6 +179,9 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         // Add penalty
         pendingPenalties[defaulter] += penalty;
         
+        // Increment default count
+        membersContract.incrementDefaultCount(defaulter);
+        
         emit MemberDefaulted(defaulter, currentCycle, penalty);
     }
     
@@ -154,7 +196,7 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         return tokenConfigs[token];
     }
     
-    // ============ PAYMENT PROCESSING FUNCTIONS ============
+    // ============ PAYMENT PROCESSING FUNCTIONS (GAS OPTIMIZED) ============
     
     function processPayment(address member, uint256 amount, PaymentToken token) external onlyAjoCore nonReentrant {
         IERC20 tokenContract = token == PaymentToken.USDC ? USDC : HBAR;
@@ -164,14 +206,47 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         require(memberData.lastPaymentCycle < currentCycle, "Payment already made");
         
         // Calculate total payment (including any penalties)
-        uint256 totalPayment = amount + pendingPenalties[member];
-        
+        uint256 penalty = pendingPenalties[member];
+        uint256 totalPayment = amount + penalty;
+
         // Transfer payment
         tokenContract.transferFrom(member, address(this), totalPayment);
+        
+        // ✅ OPTIMIZED: Only track current cycle status (minimal storage writes)
+        if (!hasPaidInCycle[currentCycle][member]) {
+            cyclePaidMembers[currentCycle].push(member);
+            hasPaidInCycle[currentCycle][member] = true;
+            cycleTotalCollected[currentCycle] += totalPayment;
+        }
+        
+        // Store current cycle payment details (overwrites each cycle)
+        currentCyclePayment[member] = PaymentStatus({
+            cycle: currentCycle,
+            hasPaid: true,
+            amountPaid: amount,
+            penaltyApplied: penalty,
+            timestamp: block.timestamp
+        });
+        
+        // Update member contract
+        membersContract.updateLastPaymentCycle(member, currentCycle);
+        membersContract.addPastPayment(member, totalPayment);
         
         // Clear penalties
         pendingPenalties[member] = 0;
         
+        // ✅ EMIT DETAILED EVENT - Frontend indexes this for full history
+        emit PaymentMadeDetailed(
+            member,
+            amount,
+            penalty,
+            totalPayment,
+            currentCycle,
+            token,
+            block.timestamp
+        );
+        
+        // Also emit standard event for backwards compatibility
         emit PaymentMade(member, totalPayment, currentCycle, token);
     }
     
@@ -238,6 +313,162 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         return candidate;
     }
     
+    // ============ FRONTEND VIEW FUNCTIONS (OPTIMIZED) ============
+    
+    /**
+     * @dev Get payment history for a member
+     * @notice For complete history, index PaymentMadeDetailed events off-chain
+     * This function only returns current cycle on-chain data
+     * @param member Address of the member
+     * @return Array with current cycle payment status (single element)
+     */
+    function getMemberPaymentHistory(address member) external view override returns (PaymentStatus[] memory) {
+        PaymentStatus[] memory history = new PaymentStatus[](1);
+        history[0] = currentCyclePayment[member];
+        return history;
+    }
+    
+    /**
+     * @dev Get payment status for a specific cycle
+     * @param cycle Cycle number to query
+     * @return paidMembers Array of members who paid
+     * @return unpaidMembers Array of members who didn't pay
+     * @return totalCollected Total amount collected this cycle
+     */
+    function getCyclePaymentStatus(uint256 cycle) external view override returns (
+        address[] memory paidMembers,
+        address[] memory unpaidMembers,
+        uint256 totalCollected
+    ) {
+        paidMembers = cyclePaidMembers[cycle];
+        
+        // Get all active members
+        address[] memory allMembers = membersContract.getActiveMembersList();
+        
+        // Count unpaid members
+        uint256 unpaidCount = 0;
+        for (uint256 i = 0; i < allMembers.length; i++) {
+            if (!hasPaidInCycle[cycle][allMembers[i]]) {
+                unpaidCount++;
+            }
+        }
+        
+        // Build unpaid members array
+        unpaidMembers = new address[](unpaidCount);
+        uint256 index = 0;
+        for (uint256 i = 0; i < allMembers.length; i++) {
+            if (!hasPaidInCycle[cycle][allMembers[i]]) {
+                unpaidMembers[index] = allMembers[i];
+                index++;
+            }
+        }
+        
+        totalCollected = cycleTotalCollected[cycle];
+    }
+    
+    /**
+     * @dev Get comprehensive dashboard data for current cycle (SINGLE CALL OPTIMIZATION)
+     * @return dashboard Complete cycle dashboard information
+     */
+    function getCurrentCycleDashboard() external view override returns (CycleDashboard memory dashboard) {
+        dashboard.currentCycle = currentCycle;
+        dashboard.nextPayoutPosition = nextPayoutPosition;
+        dashboard.nextRecipient = getNextRecipient();
+        dashboard.expectedPayout = calculatePayout();
+        dashboard.totalPaidThisCycle = cycleTotalCollected[currentCycle];
+        dashboard.isPayoutReady = dashboard.nextRecipient != address(0) && dashboard.expectedPayout > 0;
+        
+        // Get paid and unpaid members for current cycle
+        dashboard.membersPaid = cyclePaidMembers[currentCycle];
+        
+        // Calculate remaining to pay
+        TokenConfig memory config = tokenConfigs[activePaymentToken];
+        uint256 totalMembers = membersContract.getTotalActiveMembers();
+        uint256 expectedTotal = config.monthlyPayment * totalMembers;
+        dashboard.remainingToPay = expectedTotal > dashboard.totalPaidThisCycle 
+            ? expectedTotal - dashboard.totalPaidThisCycle 
+            : 0;
+        
+        // Get unpaid members
+        address[] memory allMembers = membersContract.getActiveMembersList();
+        uint256 unpaidCount = 0;
+        for (uint256 i = 0; i < allMembers.length; i++) {
+            if (!hasPaidInCycle[currentCycle][allMembers[i]]) {
+                unpaidCount++;
+            }
+        }
+        
+        dashboard.membersUnpaid = new address[](unpaidCount);
+        uint256 index = 0;
+        for (uint256 i = 0; i < allMembers.length; i++) {
+            if (!hasPaidInCycle[currentCycle][allMembers[i]]) {
+                dashboard.membersUnpaid[index] = allMembers[i];
+                index++;
+            }
+        }
+    }
+    
+    /**
+     * @dev Get upcoming events for a member (payments due, payouts, etc.)
+     * @param member Address of the member
+     * @return events Array of upcoming events
+     */
+    function getUpcomingEvents(address member) external view override returns (UpcomingEvent[] memory events) {
+        Member memory memberInfo = membersContract.getMember(member);
+        if (!memberInfo.isActive) {
+            return new UpcomingEvent[](0);
+        }
+        
+        uint256 eventCount = 0;
+        UpcomingEvent[] memory tempEvents = new UpcomingEvent[](3); // Max 3 events
+        
+        // Event 1: Payment due if not paid this cycle
+        if (memberInfo.lastPaymentCycle < currentCycle) {
+            TokenConfig memory config = tokenConfigs[activePaymentToken];
+            tempEvents[eventCount] = UpcomingEvent({
+                eventType: 0, // Payment due
+                timestamp: cycleStartTime + cycleDuration,
+                affectedMember: member,
+                amount: config.monthlyPayment + pendingPenalties[member]
+            });
+            eventCount++;
+        }
+        
+        // Event 2: Payout if member is next in queue
+        if (memberInfo.queueNumber == nextPayoutPosition && !memberInfo.hasReceivedPayout) {
+            tempEvents[eventCount] = UpcomingEvent({
+                eventType: 1, // Payout
+                timestamp: block.timestamp, // Available now
+                affectedMember: member,
+                amount: calculatePayout()
+            });
+            eventCount++;
+        }
+        
+        // Event 3: Cycle end
+        tempEvents[eventCount] = UpcomingEvent({
+            eventType: 2, // Cycle end
+            timestamp: cycleStartTime + cycleDuration,
+            affectedMember: address(0),
+            amount: 0
+        });
+        eventCount++;
+        
+        // Copy to correctly sized array
+        events = new UpcomingEvent[](eventCount);
+        for (uint256 i = 0; i < eventCount; i++) {
+            events[i] = tempEvents[i];
+        }
+    }
+    
+    /**
+     * @dev Get the deadline for next payment
+     * @return timestamp Unix timestamp of payment deadline
+     */
+    function getNextPaymentDeadline() external view override returns (uint256 timestamp) {
+        return cycleStartTime + cycleDuration;
+    }
+    
     // ============ ADMIN FUNCTIONS ============
     
     function updatePenaltyRate(uint256 newPenaltyRate) external onlyAjoCore {
@@ -255,7 +486,16 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
     }
     
     function advanceCycle() external onlyAjoCore {
+        // ✅ Emit cycle summary before advancing
+        emit CycleSummary(
+            currentCycle,
+            cycleTotalCollected[currentCycle],
+            cyclePaidMembers[currentCycle].length,
+            block.timestamp
+        );
+        
         currentCycle++;
+        cycleStartTime = block.timestamp;
         emit CycleAdvanced(currentCycle, block.timestamp);
     }
     
@@ -276,6 +516,7 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
                 uint256 penalty = (config.monthlyPayment * penaltyRate * cyclesMissed) / 10000;
                 
                 pendingPenalties[defaulter] += penalty;
+                membersContract.incrementDefaultCount(defaulter);
                 
                 emit MemberDefaulted(defaulter, currentCycle, penalty);
             }

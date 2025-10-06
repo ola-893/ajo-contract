@@ -4,12 +4,11 @@ pragma solidity ^0.8.0;
 import "../interfaces/AjoInterfaces.sol";
 import "../core/LockableContract.sol";
 
-
 /**
  * @title AjoFactory
  * @dev Factory contract for creating Ajo instances using EIP-1167 minimal proxies
  * Uses four-phase initialization to minimize gas limit issues
- * Enhanced with comprehensive diagnostic capabilities
+ * Enhanced with comprehensive diagnostic capabilities and frontend aggregation
  */
 contract AjoFactory is IAjoFactory {
     // ============ STATE VARIABLES ============
@@ -339,6 +338,120 @@ contract AjoFactory is IAjoFactory {
         return (phase, isReady, isFullyFinalized);
     }
 
+    // ============ NEW FRONTEND VIEW FUNCTIONS ============
+
+    /**
+     * @dev Get global statistics across ALL Ajos
+     * @return stats Comprehensive global statistics
+     */
+    function getGlobalStatistics() external view override returns (GlobalStats memory stats) {
+        stats.totalAjos = totalAjos;
+        
+        // Iterate through all Ajos to aggregate stats
+        for (uint256 i = 1; i < nextAjoId; i++) {
+            AjoInfo memory ajoInfo = ajos[i];
+            
+            // Only count active Ajos (phase >= 4)
+            if (ajoInfo.isActive && ajoInitializationPhase[i] >= 4) {
+                stats.activeAjos++;
+                
+                // Try to get stats from each Ajo
+                try IAjoCore(ajoInfo.ajoCore).getContractStats() returns (
+                    uint256 totalMembers,
+                    uint256 activeMembers,
+                    uint256 totalCollateralUSDC,
+                    uint256 totalCollateralHBAR,
+                    uint256 contractBalanceUSDC,
+                    uint256 contractBalanceHBAR,
+                    uint256 /* currentQueuePosition */,
+                    PaymentToken /* activeToken */
+                ) {
+                    stats.totalMembers += totalMembers;
+                    stats.totalCollateralUSDC += totalCollateralUSDC;
+                    stats.totalCollateralHBAR += totalCollateralHBAR;
+                    
+                    // Aggregate balances (payments pool)
+                    stats.totalPaymentsProcessed += contractBalanceUSDC;
+                } catch {
+                    // Skip Ajos that can't respond
+                    continue;
+                }
+                
+                // Get payout count
+                try IAjoPayments(ajoInfo.ajoPayments).getTotalPayouts() returns (uint256 payouts) {
+                    stats.totalPayoutsDistributed += payouts;
+                } catch {
+                    // Skip if can't get payout count
+                    continue;
+                }
+            }
+        }
+    }
+
+    /**
+     * @dev Get summary information for multiple Ajos by ID
+     * @param ajoIds Array of Ajo IDs to query
+     * @return summaries Array of Ajo summaries
+     */
+    function getAjoSummaries(uint256[] calldata ajoIds) external view override returns (AjoSummary[] memory summaries) {
+        summaries = new AjoSummary[](ajoIds.length);
+        
+        for (uint256 i = 0; i < ajoIds.length; i++) {
+            uint256 ajoId = ajoIds[i];
+            
+            // Skip invalid IDs
+            if (ajoId == 0 || ajoId >= nextAjoId) {
+                continue;
+            }
+            
+            AjoInfo memory ajoInfo = ajos[ajoId];
+            summaries[i] = _buildAjoSummary(ajoId, ajoInfo);
+        }
+        
+        return summaries;
+    }
+
+    /**
+     * @dev Get active Ajo summaries with pagination
+     * @param offset Starting index
+     * @param limit Maximum number of results
+     * @return summaries Array of Ajo summaries
+     */
+    function getActiveAjoSummaries(uint256 offset, uint256 limit) external view override returns (AjoSummary[] memory summaries) {
+        require(limit > 0 && limit <= 100, "Invalid limit");
+        
+        // Count active Ajos first
+        uint256 activeCount = 0;
+        for (uint256 i = 1; i < nextAjoId; i++) {
+            if (ajos[i].isActive && ajoInitializationPhase[i] >= 4) {
+                activeCount++;
+            }
+        }
+        
+        if (offset >= activeCount) {
+            return new AjoSummary[](0);
+        }
+        
+        uint256 remaining = activeCount - offset;
+        uint256 resultCount = remaining < limit ? remaining : limit;
+        summaries = new AjoSummary[](resultCount);
+        
+        uint256 currentIndex = 0;
+        uint256 resultIndex = 0;
+        
+        for (uint256 i = 1; i < nextAjoId && resultIndex < resultCount; i++) {
+            if (ajos[i].isActive && ajoInitializationPhase[i] >= 4) {
+                if (currentIndex >= offset) {
+                    summaries[resultIndex] = _buildAjoSummary(i, ajos[i]);
+                    resultIndex++;
+                }
+                currentIndex++;
+            }
+        }
+        
+        return summaries;
+    }
+
     // ============ DIAGNOSTIC FUNCTIONS ============
 
     /**
@@ -387,7 +500,7 @@ contract AjoFactory is IAjoFactory {
             uint256 totalCollateralHBAR,
             uint256 contractBalanceUSDC,
             uint256 contractBalanceHBAR,
-            uint256 currentQueuePosition,
+            uint256 /* currentQueuePosition */,
             PaymentToken activeToken
         ) {
             status.totalMembers = totalMembers;
@@ -397,7 +510,7 @@ contract AjoFactory is IAjoFactory {
             status.contractBalanceUSDC = contractBalanceUSDC;
             status.contractBalanceHBAR = contractBalanceHBAR;
             status.activeToken = activeToken;
-            status.canAcceptMembers = true; // If we got this far, basic functions work
+            status.canAcceptMembers = true;
         } catch {
             status.canAcceptMembers = false;
         }
@@ -634,7 +747,7 @@ contract AjoFactory is IAjoFactory {
         ajos[ajoId].isActive = false;
     }
 
-    /**
+  /**
      * @dev Update implementation addresses (owner only)
      */
     function setImplementations(
@@ -673,7 +786,55 @@ contract AjoFactory is IAjoFactory {
         owner = newOwner;
     }
 
-    // ============ INTERNAL DIAGNOSTIC HELPERS ============
+    // ============ INTERNAL HELPER FUNCTIONS ============
+
+    /**
+     * @dev Build an AjoSummary struct for a given Ajo
+     * @param ajoId The Ajo ID
+     * @param ajoInfo The Ajo information
+     * @return summary Complete AjoSummary struct
+     */
+    function _buildAjoSummary(uint256 ajoId, AjoInfo memory ajoInfo) internal view returns (AjoSummary memory summary) {
+        summary.ajoId = ajoId;
+        summary.name = ajoInfo.name;
+        summary.creator = ajoInfo.creator;
+        summary.createdAt = ajoInfo.createdAt;
+        summary.isAcceptingMembers = ajoInfo.isActive && ajoInitializationPhase[ajoId] >= 4;
+        
+        // Only try to fetch data if Ajo is initialized
+        if (ajoInitializationPhase[ajoId] >= 4) {
+            try IAjoCore(ajoInfo.ajoCore).getContractStats() returns (
+                uint256 totalMembers,
+                uint256 activeMembers,
+                uint256 totalCollateralUSDC,
+                uint256 totalCollateralHBAR,
+                uint256 /* contractBalanceUSDC */,
+                uint256 /* contractBalanceHBAR */,
+                uint256 /* currentQueuePosition */,
+                PaymentToken /* activeToken */
+            ) {
+                summary.totalMembers = totalMembers;
+                summary.activeMembers = activeMembers;
+                summary.totalCollateral = totalCollateralUSDC + totalCollateralHBAR;
+            } catch {
+                // Leave at defaults if can't fetch
+            }
+            
+            try IAjoPayments(ajoInfo.ajoPayments).getCurrentCycle() returns (uint256 cycle) {
+                summary.currentCycle = cycle;
+            } catch {
+                // Leave at default
+            }
+            
+            try IAjoCore(ajoInfo.ajoCore).getTokenConfig(PaymentToken.USDC) returns (TokenConfig memory config) {
+                summary.monthlyPayment = config.monthlyPayment;
+            } catch {
+                // Leave at default
+            }
+        }
+        
+        return summary;
+    }
 
     /**
      * @dev Test individual contract health
@@ -746,9 +907,6 @@ contract AjoFactory is IAjoFactory {
      * @return linking Status of all cross-contract links
      */
     function _testCrossContractLinking(AjoInfo memory ajoInfo) internal view returns (CrossContractLinkingStatus memory linking) {
-        // These tests would require specific linking verification functions in each contract
-        // For now, we'll assume linking is correct if contracts are initialized
-        
         // Test if AjoCore can communicate with other contracts
         try IAjoCore(ajoInfo.ajoCore).getContractStats() {
             linking.ajoCoreToMembers = true;
@@ -769,8 +927,6 @@ contract AjoFactory is IAjoFactory {
         
         return linking;
     }
-    
-    // ============ INTERNAL FUNCTIONS ============
 
     /**
      * @dev Deploy a minimal proxy for a given implementation
@@ -791,46 +947,6 @@ contract AjoFactory is IAjoFactory {
             proxy := create2(0, add(bytecode, 0x20), mload(bytecode), salt)
             if iszero(extcodesize(proxy)) {
                 revert(0, 0)
-            }
-        }
-    }
-
-    /**
-     * @dev Safely call setAjoCore on a contract with error handling
-     * @param contractAddress The contract to call
-     * @param functionName The function name (should be "setAjoCore")
-     * @param data The encoded function call data
-     */
-    function _safeLinkContract(
-        address contractAddress,
-        string memory functionName,
-        bytes memory data
-    ) internal {
-        // Create the function selector for setAjoCore(address)
-        bytes4 selector = bytes4(keccak256(bytes("setAjoCore(address)")));
-        
-        // Prepare the call data
-        bytes memory callData = abi.encodePacked(selector, data);
-        
-        // Make the call
-        (bool success, bytes memory returnData) = contractAddress.call(callData);
-        
-        if (!success) {
-            // If the call failed, check if it's because the function doesn't exist
-            // In that case, we can ignore it (some contracts might not have setAjoCore)
-            if (returnData.length == 0) {
-                // Function might not exist, which is acceptable
-                return;
-            } else {
-                // There was an actual error, revert with the error message
-                if (returnData.length > 0) {
-                    assembly {
-                        let returndata_size := mload(returnData)
-                        revert(add(32, returnData), returndata_size)
-                    }
-                } else {
-                    revert(string(abi.encodePacked("Failed to link contract: ", functionName)));
-                }
             }
         }
     }

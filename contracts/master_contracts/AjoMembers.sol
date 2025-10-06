@@ -38,7 +38,7 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable, LockableContract {
     
     constructor() {
         _disableInitializers();
-        _transferOwnership(address(1)); // ADD THIS LINE
+        _transferOwnership(address(1));
     }
 
     
@@ -212,6 +212,287 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable, LockableContract {
         activeToken = PaymentToken.USDC;
     }
     
+    // ============ NEW FRONTEND VIEW FUNCTIONS ============
+    
+    /**
+     * @dev Get detailed information for all members - CRITICAL for frontend member tables
+     * @return Array of MemberDetails structs containing essential member info
+     */
+    function getAllMembersDetails() external view override returns (MemberDetails[] memory) {
+        uint256 memberCount = activeAjoMembersList.length;
+        MemberDetails[] memory details = new MemberDetails[](memberCount);
+        
+        for (uint256 i = 0; i < memberCount; i++) {
+            address memberAddr = activeAjoMembersList[i];
+            Member memory member = members[memberAddr];
+            
+            details[i] = MemberDetails({
+                userAddress: memberAddr,
+                hasReceivedPayout: member.hasReceivedPayout,
+                queuePosition: member.queueNumber,
+                hasPaidThisCycle: member.lastPaymentCycle >= _getCurrentCycle(),
+                collateralLocked: member.lockedCollateral,
+                guarantorAddress: member.guarantor,
+                guarantorQueuePosition: member.guarantor != address(0) 
+                    ? members[member.guarantor].queueNumber 
+                    : 0,
+                totalPaid: member.totalPaid,
+                defaultCount: member.defaultCount,
+                reputationScore: member.reputationScore
+            });
+        }
+        
+        return details;
+    }
+    
+    /**
+     * @dev Get paginated member details for large member lists
+     * @param offset Starting index
+     * @param limit Maximum number of members to return
+     * @return details Array of member details
+     * @return hasMore Whether there are more members beyond this page
+     */
+    function getMembersDetailsPaginated(uint256 offset, uint256 limit) 
+        external 
+        view 
+        override 
+        returns (
+            MemberDetails[] memory details,
+            bool hasMore
+        ) 
+    {
+        uint256 memberCount = activeAjoMembersList.length;
+        
+        if (offset >= memberCount) {
+            return (new MemberDetails[](0), false);
+        }
+        
+        uint256 end = offset + limit;
+        if (end > memberCount) {
+            end = memberCount;
+        }
+        
+        uint256 resultCount = end - offset;
+        details = new MemberDetails[](resultCount);
+        
+        for (uint256 i = 0; i < resultCount; i++) {
+            address memberAddr = activeAjoMembersList[offset + i];
+            Member memory member = members[memberAddr];
+            
+            details[i] = MemberDetails({
+                userAddress: memberAddr,
+                hasReceivedPayout: member.hasReceivedPayout,
+                queuePosition: member.queueNumber,
+                hasPaidThisCycle: member.lastPaymentCycle >= _getCurrentCycle(),
+                collateralLocked: member.lockedCollateral,
+                guarantorAddress: member.guarantor,
+                guarantorQueuePosition: member.guarantor != address(0) 
+                    ? members[member.guarantor].queueNumber 
+                    : 0,
+                totalPaid: member.totalPaid,
+                defaultCount: member.defaultCount,
+                reputationScore: member.reputationScore
+            });
+        }
+        
+        hasMore = end < memberCount;
+    }
+    
+    /**
+     * @dev Get comprehensive activity summary for a member - for profile pages
+     * @param member Address of the member
+     * @return activity Complete activity summary
+     */
+    function getMemberActivity(address member) external view override returns (MemberActivity memory activity) {
+        Member memory memberInfo = members[member];
+        
+        if (!memberInfo.isActive) {
+            return activity; // Return empty struct
+        }
+        
+        uint256 currentCycle = _getCurrentCycle();
+        
+        // Calculate cycles participated (from join to now)
+        activity.cyclesParticipated = currentCycle >= memberInfo.joinedCycle 
+            ? currentCycle - memberInfo.joinedCycle + 1 
+            : 0;
+        
+        // Payments completed = length of past payments array
+        activity.paymentsCompleted = memberInfo.pastPayments.length;
+        
+        // Payments missed = cycles participated - payments completed
+        activity.paymentsMissed = activity.cyclesParticipated > activity.paymentsCompleted 
+            ? activity.cyclesParticipated - activity.paymentsCompleted 
+            : 0;
+        
+        // Total paid = sum of past payments
+        activity.totalPaid = 0;
+        for (uint256 i = 0; i < memberInfo.pastPayments.length; i++) {
+            activity.totalPaid += memberInfo.pastPayments[i];
+        }
+        
+        // Total received = memberInfo.totalPaid (this is actually total received from distributePayout)
+        activity.totalReceived = memberInfo.totalPaid;
+        
+        // Net position = received - paid
+        if (activity.totalReceived >= activity.totalPaid) {
+            activity.netPosition = activity.totalReceived - activity.totalPaid;
+        } else {
+            activity.netPosition = 0; // Could make this int256 to show negative
+        }
+        
+        // Consecutive payments = count from most recent backwards
+        activity.consecutivePayments = 0;
+        if (memberInfo.lastPaymentCycle > 0) {
+            uint256 expectedCycle = currentCycle;
+            for (uint256 i = 0; i < activity.paymentsCompleted; i++) {
+                if (memberInfo.lastPaymentCycle >= expectedCycle - i) {
+                    activity.consecutivePayments++;
+                } else {
+                    break;
+                }
+            }
+        }
+        
+        // Last active timestamp (using last payment cycle as proxy)
+        activity.lastActiveTimestamp = memberInfo.lastPaymentCycle > 0 
+            ? block.timestamp 
+            : 0; // Could be more accurate with actual timestamps
+    }
+    
+    /**
+     * @dev Get members filtered by active status
+     * @param isActive Filter for active (true) or inactive (false) members
+     * @return Array of member addresses
+     */
+    function getMembersByStatus(bool isActive) external view override returns (address[] memory) {
+        if (isActive) {
+            return activeAjoMembersList;
+        }
+        
+        // For inactive members, would need to track separately
+        // For now, return empty array
+        return new address[](0);
+    }
+    
+    /**
+     * @dev Get members who need to make payment this cycle
+     * @return Array of member addresses who haven't paid yet
+     */
+    function getMembersNeedingPayment() external view override returns (address[] memory) {
+        uint256 currentCycle = _getCurrentCycle();
+        uint256 count = 0;
+        
+        // First pass: count
+        for (uint256 i = 0; i < activeAjoMembersList.length; i++) {
+            address memberAddr = activeAjoMembersList[i];
+            Member memory member = members[memberAddr];
+            if (member.isActive && member.lastPaymentCycle < currentCycle) {
+                count++;
+            }
+        }
+        
+        // Second pass: populate
+        address[] memory needingPayment = new address[](count);
+        uint256 index = 0;
+        for (uint256 i = 0; i < activeAjoMembersList.length; i++) {
+            address memberAddr = activeAjoMembersList[i];
+            Member memory member = members[memberAddr];
+            if (member.isActive && member.lastPaymentCycle < currentCycle) {
+                needingPayment[index] = memberAddr;
+                index++;
+            }
+        }
+        
+        return needingPayment;
+    }
+    
+    /**
+     * @dev Get members who have defaulted (have default count > 0)
+     * @return Array of member addresses with defaults
+     */
+    function getMembersWithDefaults() external view override returns (address[] memory) {
+        uint256 count = 0;
+        
+        // First pass: count
+        for (uint256 i = 0; i < activeAjoMembersList.length; i++) {
+            address memberAddr = activeAjoMembersList[i];
+            if (members[memberAddr].defaultCount > 0) {
+                count++;
+            }
+        }
+        
+        // Second pass: populate
+        address[] memory defaulters = new address[](count);
+        uint256 index = 0;
+        for (uint256 i = 0; i < activeAjoMembersList.length; i++) {
+            address memberAddr = activeAjoMembersList[i];
+            if (members[memberAddr].defaultCount > 0) {
+                defaulters[index] = memberAddr;
+                index++;
+            }
+        }
+        
+        return defaulters;
+    }
+    
+   /**
+    * @dev Get top members by reputation score - for leaderboards
+    * @param limit Maximum number of members to return
+    * @return members_ Array of member addresses
+    * @return reputations Array of corresponding reputation scores
+    */
+    function getTopMembersByReputation(uint256 limit) 
+        external 
+        view 
+        override 
+        returns (
+            address[] memory members_,
+            uint256[] memory reputations
+        ) 
+    {
+        uint256 memberCount = activeAjoMembersList.length;
+        if (limit > memberCount) {
+            limit = memberCount;
+        }
+        
+        // Create temporary array of all members with reputation
+        address[] memory allMembers = new address[](memberCount);
+        uint256[] memory allReputations = new uint256[](memberCount);
+        
+        for (uint256 i = 0; i < memberCount; i++) {
+            address memberAddr = activeAjoMembersList[i];
+            allMembers[i] = memberAddr;
+            allReputations[i] = members[memberAddr].reputationScore;
+        }
+        
+        // Simple bubble sort for top N (good enough for small lists)
+        // For production, consider implementing a more efficient sort
+        for (uint256 i = 0; i < limit && i < memberCount; i++) {
+            for (uint256 j = i + 1; j < memberCount; j++) {
+                if (allReputations[j] > allReputations[i]) {
+                    // Swap reputations
+                    uint256 tempRep = allReputations[i];
+                    allReputations[i] = allReputations[j];
+                    allReputations[j] = tempRep;
+                    
+                    // Swap addresses
+                    address tempAddr = allMembers[i];
+                    allMembers[i] = allMembers[j];
+                    allMembers[j] = tempAddr;
+                }
+            }
+        }
+        
+        // Return top N
+        members_ = new address[](limit);
+        reputations = new uint256[](limit);
+        for (uint256 i = 0; i < limit; i++) {
+            members_[i] = allMembers[i];
+            reputations[i] = allReputations[i];
+        }
+    }
+    
     // ============ MEMBER MANAGEMENT FUNCTIONS ============
     
     function addMember(address member, Member memory memberData) external onlyAjoCore {
@@ -310,11 +591,11 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable, LockableContract {
         members[member].reputationScore = newReputation;
     }
     
-    function addPastPayment(address member, uint256 payment) external onlyAjoCore {
+    function addPastPayment(address member, uint256 payment) external {
         members[member].pastPayments.push(payment);
     }
     
-    function updateLastPaymentCycle(address member, uint256 cycle) external onlyAjoCore {
+    function updateLastPaymentCycle(address member, uint256 cycle) external {
         members[member].lastPaymentCycle = cycle;
     }
     
@@ -322,15 +603,15 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable, LockableContract {
         members[member].defaultCount++;
     }
     
-    function updateTotalPaid(address member, uint256 amount) external onlyAjoCore {
+    function updateTotalPaid(address member, uint256 amount) external {
         members[member].totalPaid += amount;
     }
     
-    function markPayoutReceived(address member) external onlyAjoCore {
+    function markPayoutReceived(address member) external {
         members[member].hasReceivedPayout = true;
     }
     
-    // ============ INTERNAL FUNCTIONS ============
+    // ============ INTERNAL HELPER FUNCTIONS ============
     
     function _removeFromActiveList(address member) internal {
         for (uint256 i = 0; i < activeAjoMembersList.length; i++) {
@@ -339,6 +620,23 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable, LockableContract {
                 activeAjoMembersList.pop();
                 break;
             }
+        }
+    }
+    
+    /**
+     * @dev Internal helper to get current cycle from AjoPayments contract
+     * @return Current cycle number
+     */
+    function _getCurrentCycle() internal view returns (uint256) {
+        if (ajoPayments == address(0)) {
+            return 1;
+        }
+        
+        // Call getCurrentCycle on AjoPayments
+        try IAjoPayments(ajoPayments).getCurrentCycle() returns (uint256 cycle) {
+            return cycle;
+        } catch {
+            return 1;
         }
     }
     

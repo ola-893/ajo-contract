@@ -34,6 +34,82 @@ struct PayoutRecord {
     uint256 timestamp;
 }
 
+// ============ NEW FRONTEND STRUCTS ============
+
+struct MemberDetails {
+    address userAddress;
+    bool hasReceivedPayout;
+    uint256 queuePosition;
+    bool hasPaidThisCycle;
+    uint256 collateralLocked;
+    address guarantorAddress;
+    uint256 guarantorQueuePosition;
+    uint256 totalPaid;
+    uint256 defaultCount;
+    uint256 reputationScore;
+}
+
+struct GlobalStats {
+    uint256 totalAjos;
+    uint256 activeAjos;
+    uint256 totalMembers;
+    uint256 totalCollateralUSDC;
+    uint256 totalCollateralHBAR;
+    uint256 totalPaymentsProcessed;
+    uint256 totalPayoutsDistributed;
+}
+
+struct PaymentStatus {
+    uint256 cycle;
+    bool hasPaid;
+    uint256 amountPaid;
+    uint256 penaltyApplied;
+    uint256 timestamp;
+}
+
+struct CycleDashboard {
+    uint256 currentCycle;
+    uint256 nextPayoutPosition;
+    address nextRecipient;
+    uint256 expectedPayout;
+    uint256 totalPaidThisCycle;
+    uint256 remainingToPay;
+    address[] membersPaid;
+    address[] membersUnpaid;
+    bool isPayoutReady;
+}
+
+struct MemberActivity {
+    uint256 cyclesParticipated;
+    uint256 paymentsCompleted;
+    uint256 paymentsMissed;
+    uint256 totalPaid;
+    uint256 totalReceived;
+    uint256 netPosition; // received - paid
+    uint256 consecutivePayments;
+    uint256 lastActiveTimestamp;
+}
+
+struct AjoSummary {
+    uint256 ajoId;
+    string name;
+    uint256 currentCycle;
+    uint256 totalMembers;
+    uint256 activeMembers;
+    uint256 totalCollateral;
+    uint256 monthlyPayment;
+    bool isAcceptingMembers;
+    address creator;
+    uint256 createdAt;
+}
+
+struct UpcomingEvent {
+    uint256 eventType; // 0=payment due, 1=payout, 2=cycle end
+    uint256 timestamp;
+    address affectedMember;
+    uint256 amount;
+}
+
 // ============ MAIN AJO INTERFACE ============
 
 interface IAjoCore {
@@ -107,53 +183,175 @@ interface IAjoCore {
 }
 
 // ============ GOVERNANCE INTERFACE ============
+// ============ GOVERNANCE INTERFACE (HCS-ENABLED) ============
+/**
+ * @title IAjoGovernance
+ * @notice Interface for Ajo.save governance system with HCS support
+ */
 interface IAjoGovernance {
-    // Initialize Function
+    
+    // ============ EVENTS ============
+    
+    event ProposalCreated(
+        uint256 indexed proposalId,
+        address indexed proposer,
+        string description
+    );
+    
+    event ProposalExecuted(uint256 indexed proposalId);
+    
+    event ReputationUpdated(
+        address indexed member,
+        uint256 newReputation
+    );
+    
+    event VotingPowerUpdated(
+        address indexed member,
+        uint256 newPower
+    );
+    
+    // ============ INITIALIZATION ============
+    
+    /**
+     * @dev Initialize governance contract
+     * @param _ajoCore Address of AjoCore contract
+     * @param _governanceToken Address of governance token (may be unused in HCS model)
+     */
     function initialize(
         address _ajoCore,
         address _governanceToken
     ) external;
     
-    // Core Governance Functions
+    /**
+     * @dev Verify setup is complete
+     * @return isValid Whether setup is valid
+     * @return reason Reason if invalid
+     */
+    function verifySetup() external view returns (bool isValid, string memory reason);
+    
+    // ============ PROPOSAL MANAGEMENT ============
+    
+    /**
+     * @dev Create a new proposal
+     * @param description Human-readable description
+     * @param proposalData Encoded execution data
+     * @return proposalId Unique identifier for the proposal
+     */
     function createProposal(
         string memory description,
         bytes memory proposalData
-    ) external returns (uint256);
+    ) external returns (uint256 proposalId);
     
-    function vote(uint256 proposalId, uint8 support) external;
+    /**
+     * @dev Set HCS topic ID for a proposal
+     * @param proposalId The proposal to update
+     * @param hcsTopicId Hedera topic ID
+     */
+    function setHCSTopicId(uint256 proposalId, bytes32 hcsTopicId) external;
+    
+    /**
+     * @dev Execute a successful proposal
+     * @param proposalId Proposal to execute
+     */
     function executeProposal(uint256 proposalId) external;
     
-    // Governance-Only Functions
-    function updatePenaltyRate(uint256 newPenaltyRate) external;
-    function updateReputationAndVotingPower(address member, bool positive) external;
-    function updateVotingPower(address member, uint256 newPower) external;
+    // ============ VOTING ============
     
-    // View Functions
-    function getProposal(uint256 proposalId) external view returns (
-        string memory description,
-        uint256 forVotes,
-        uint256 againstVotes,
-        uint256 abstainVotes,
-        uint256 proposalEndTime,
-        bool executed,
-        bytes memory proposalData
-    );
+    /**
+     * @dev Vote on a proposal
+     * @param proposalId ID of proposal
+     * @param support Vote type: 0=Against, 1=For, 2=Abstain
+     */
+    function vote(uint256 proposalId, uint8 support) external;
     
+    /**
+     * @dev Check if address has voted on proposal
+     * @param proposalId Proposal ID
+     * @param voter Address to check
+     * @return hasVoted Whether the address has voted
+     */
     function hasVoted(uint256 proposalId, address voter) external view returns (bool);
     
-    function getGovernanceSettings() external view returns (
-        uint256 proposalThreshold,
-        uint256 votingPeriod,
-        uint256 currentPenaltyRate,
-        uint256 totalProposals
-    );
+    // ============ AGGREGATOR MANAGEMENT ============
     
-    // Events
-    event ProposalCreated(uint256 indexed proposalId, address indexed proposer, string description);
-    event VoteCast(uint256 indexed proposalId, address indexed voter, uint8 support, uint256 weight);
-    event ProposalExecuted(uint256 indexed proposalId);
-    event VotingPowerUpdated(address indexed member, uint256 newVotingPower);
-    event ReputationUpdated(address indexed member, uint256 newReputation);
+    /**
+     * @dev Register as vote aggregator with stake
+     */
+    function registerAggregator() external payable;
+    
+    /**
+     * @dev Withdraw aggregator stake
+     * @param amount Amount to withdraw
+     */
+    function withdrawAggregatorStake(uint256 amount) external;
+    
+    // ============ GOVERNANCE UPDATES ============
+    
+    /**
+     * @dev Update penalty rate
+     * @param newPenaltyRate New penalty rate in basis points
+     */
+    function updatePenaltyRate(uint256 newPenaltyRate) external;
+    
+    /**
+     * @dev Update member reputation and voting power
+     * @param member Address of member
+     * @param positive Whether update is positive
+     */
+    function updateReputationAndVotingPower(
+        address member,
+        bool positive
+    ) external;
+    
+    /**
+     * @dev Update voting power for a member
+     * @param member Address of member
+     * @param newPower New voting power
+     */
+    function updateVotingPower(address member, uint256 newPower) external;
+    
+    // ============ VIEW FUNCTIONS ============
+    
+    /**
+     * @dev Get proposal details
+     * @param proposalId Proposal ID
+     * @return description Proposal description
+     * @return forVotes Votes in favor
+     * @return againstVotes Votes against
+     * @return abstainVotes Abstain votes
+     * @return proposalEndTime When voting ends
+     * @return executed Whether executed
+     * @return proposalData Encoded execution data
+     */
+    function getProposal(uint256 proposalId)
+        external
+        view
+        returns (
+            string memory description,
+            uint256 forVotes,
+            uint256 againstVotes,
+            uint256 abstainVotes,
+            uint256 proposalEndTime,
+            bool executed,
+            bytes memory proposalData
+        );
+    
+    /**
+     * @dev Get governance settings
+     * @return proposalThreshold Minimum voting power to propose
+     * @return votingPeriod Duration of voting period
+     * @return currentPenaltyRate Current penalty rate
+     * @return totalProposals Total number of proposals
+     */
+    function getGovernanceSettings()
+        external
+        view
+        returns (
+            uint256 proposalThreshold,
+            uint256 votingPeriod,
+            uint256 currentPenaltyRate,
+            uint256 totalProposals
+        );
 }
 
 // ============ COLLATERAL INTERFACE ============
@@ -230,7 +428,7 @@ interface IAjoPayments {
     function updatePenaltyRate(uint256 newPenaltyRate) external;
     function updateNextPayoutPosition(uint256 position) external;
     
-    // View Functions
+    // View Functions - Existing
     function needsToPayThisCycle(address member) external view returns (bool);
     function getTokenConfig(PaymentToken token) external view returns (TokenConfig memory);
     function getCurrentCycle() external view returns (uint256);
@@ -244,6 +442,24 @@ interface IAjoPayments {
     function getPayout(uint256 cycle) external view returns (PayoutRecord memory);
     function calculatePayout() external view returns (uint256);
     function getNextRecipient() external view returns (address);
+    
+    // ============ NEW FRONTEND VIEW FUNCTIONS ============
+    
+    // Payment History & Tracking
+    function getMemberPaymentHistory(address member) external view returns (PaymentStatus[] memory);
+    
+    function getCyclePaymentStatus(uint256 cycle) external view returns (
+        address[] memory paidMembers,
+        address[] memory unpaidMembers,
+        uint256 totalCollected
+    );
+    
+    // Active Cycle Dashboard
+    function getCurrentCycleDashboard() external view returns (CycleDashboard memory);
+    
+    // Timeline & Deadlines
+    function getUpcomingEvents(address member) external view returns (UpcomingEvent[] memory);
+    function getNextPaymentDeadline() external view returns (uint256 timestamp);
     
     // Events
     event PaymentMade(address indexed member, uint256 amount, uint256 cycle, PaymentToken token);
@@ -287,7 +503,7 @@ interface IAjoMembers {
     function updateTotalPaid(address member, uint256 amount) external;
     function markPayoutReceived(address member) external;
     
-    // View Functions
+    // View Functions - Existing
     function getMember(address member) external view returns (Member memory);
     function getTotalActiveMembers() external view returns (uint256);
     
@@ -317,13 +533,34 @@ interface IAjoMembers {
     
     function activeMembersList(uint256 index) external view returns (address);
     
-    // Additional View Functions
+    // Additional View Functions - Existing
     function isMember(address member) external view returns (bool);
     function getActiveMembersList() external view returns (address[] memory);
     function getQueuePosition(uint256 queueNumber) external view returns (address);
     function getGuarantorForPosition(uint256 position) external view returns (address);
     function getLockedCollateral(address member) external view returns (uint256);
     function getMemberAtIndex(uint256 index) external view returns (address);
+    
+    // ============ NEW FRONTEND VIEW FUNCTIONS ============
+    
+    // Batch Member Details
+    function getAllMembersDetails() external view returns (MemberDetails[] memory);
+    function getMembersDetailsPaginated(uint256 offset, uint256 limit) external view returns (
+        MemberDetails[] memory,
+        bool hasMore
+    );
+    
+    // Member Activity Summary
+    function getMemberActivity(address member) external view returns (MemberActivity memory);
+    
+    // Search & Filter Functions
+    function getMembersByStatus(bool isActive) external view returns (address[] memory);
+    function getMembersNeedingPayment() external view returns (address[] memory);
+    function getMembersWithDefaults() external view returns (address[] memory);
+    function getTopMembersByReputation(uint256 limit) external view returns (
+        address[] memory members,
+        uint256[] memory reputations
+    );
     
     // Events
     event MemberJoined(address indexed member, uint256 queueNumber, uint256 collateral, PaymentToken token);
@@ -350,7 +587,7 @@ interface IAjoFactory {
     // Core Factory Functions
     function createAjo(string memory _name) external returns (uint256 ajoId);
     
-    // View Functions
+    // View Functions - Existing
     function getAjo(uint256 ajoId) external view returns (AjoInfo memory info);
     function getAllAjos(uint256 offset, uint256 limit) external view returns (AjoInfo[] memory ajoInfos, bool hasMore);
     function getAjosByCreator(address creator) external view returns (uint256[] memory ajoIds);
@@ -364,6 +601,15 @@ interface IAjoFactory {
         address ajoPayments,
         address ajoGovernance
     );
+    
+    // ============ NEW FRONTEND VIEW FUNCTIONS ============
+    
+    // Global Statistics
+    function getGlobalStatistics() external view returns (GlobalStats memory);
+    
+    // Ajo Summaries for Listing Pages
+    function getAjoSummaries(uint256[] calldata ajoIds) external view returns (AjoSummary[] memory);
+    function getActiveAjoSummaries(uint256 offset, uint256 limit) external view returns (AjoSummary[] memory);
     
     // Admin Functions
     function deactivateAjo(uint256 ajoId) external;
