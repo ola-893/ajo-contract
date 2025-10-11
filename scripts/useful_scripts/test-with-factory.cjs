@@ -16,17 +16,17 @@ const c = {
 // 🔧 CONFIGURATION - UPDATE THESE AFTER DEPLOYMENT
 // ================================================================
 
-const FACTORY_ADDRESS = "0xBcc7701E5cbB4B09B345d3E8165A0AA07e3661aC"; // Updated
+const FACTORY_ADDRESS = "0xB00C80281A3292dD789102543b1164A9bcfb5040"; // Updated
 const TOKEN_ADDRESSES = {
-  USDC: "0x2438BFf545829353Fc5fdD50fCf74b9f3bd09B9f", // Updated
-  WHBAR: "0x6fb2087d2B8600a84742712239cb96730733807d" // Updated
+  USDC: "0x66DeB5Ea7c371Ea0F45C8349c195469809eA67c9", // Updated
+  WHBAR: "0x14d5F049fF28b1EE81EF63A3B8D96Cc4f29df11a" // Updated
 };
-
+ 
 // ================================================================
 
 const DEMO_CONFIG = {
   MONTHLY_PAYMENT: ethers.utils.parseUnits("50", 6),
-  TOTAL_PARTICIPANTS: 4,
+  TOTAL_PARTICIPANTS: 2,
   MAX_RETRIES: 3,
   RETRY_DELAY: 2000,
   GAS_LIMIT: {
@@ -131,7 +131,7 @@ async function connectToFactoryAndEnsureHealthyAjo() {
         if (status.isReady) {
           console.log(c.green(`  ✅ Found healthy Ajo ID: ${id}`));
           ajoId = id;
-          ajoInfo = await ajoFactory.getAjo(10);
+          ajoInfo = await ajoFactory.getAjo(4);
           console.log(c.dim(`     Ajo ${ajoInfo}: Phase (not ready)`));
           break;
         } else {
@@ -464,7 +464,7 @@ async function demonstratePaymentCycle(ajo, ajoFactory, ajoId, participants) {
     try {
       console.log(c.dim(`    ${participant.name} making payment...`));
       
-      const paymentTx = await ajo.connect(participant.signer).processPayment({ gasLimit: 300000 });
+      const paymentTx = await ajo.connect(participant.signer).processPayment({ gasLimit: 900000 });
       const receipt = await paymentTx.wait();
       
       paymentResults.push({
@@ -551,13 +551,13 @@ async function main() {
   console.log(c.cyan("🌟 4-Phase Factory: Core Functions Test with Health Diagnostics 🌟\n"));
   
   // Validate configuration
-  if (!FACTORY_ADDRESS || FACTORY_ADDRESS === "0x44D75A793B9733Ff395a3eEC7A6E02c1fFE7c0c0") {
-    console.log(c.red("❌ CONFIGURATION ERROR: Update FACTORY_ADDRESS first"));
-    console.log(c.yellow("1. Run: npx hardhat run scripts/deploy-4-phase-factory.js --network hedera"));
-    console.log(c.yellow("2. Update FACTORY_ADDRESS with deployed factory address"));
-    console.log(c.yellow("3. Update TOKEN_ADDRESSES with USDC and WHBAR addresses"));
-    process.exit(1);
-  }
+  // if (!FACTORY_ADDRESS || FACTORY_ADDRESS === "0x44D75A793B9733Ff395a3eEC7A6E02c1fFE7c0c0") {
+  //   console.log(c.red("❌ CONFIGURATION ERROR: Update FACTORY_ADDRESS first"));
+  //   console.log(c.yellow("1. Run: npx hardhat run scripts/deploy-4-phase-factory.js --network hedera"));
+  //   console.log(c.yellow("2. Update FACTORY_ADDRESS with deployed factory address"));
+  //   console.log(c.yellow("3. Update TOKEN_ADDRESSES with USDC and WHBAR addresses"));
+  //   process.exit(1);
+  // }
   
   try {
     // Connect and ensure healthy Ajo

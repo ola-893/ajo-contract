@@ -147,20 +147,20 @@ async function testAjoCoreViews(ajo, ajoId, participants) {
 }
 
 // ================================================================
-// AjoGovernance VIEW FUNCTIONS TESTING
+// AjoGovernanceHCS VIEW FUNCTIONS TESTING
 // ================================================================
 
 async function testAjoGovernanceViews(ajoFactory, ajoId) {
-  console.log(c.blue("\n🔍 Testing AjoGovernance View Functions..."));
+  console.log(c.blue("\n🔍 Testing AjoGovernanceHCS View Functions..."));
   
   try {
     const ajoInfo = await ajoFactory.getAjo(ajoId);
-    const ajoGovernance = await ethers.getContractAt("AjoGovernance", ajoInfo.ajoGovernance);
+    const ajoGovernanceHCS = await ethers.getContractAt("AjoGovernanceHCS", ajoInfo.ajoGovernanceHCS);
     
     // Test getGovernanceSettings
     console.log(c.cyan("\n  Testing getGovernanceSettings()..."));
     try {
-      const settings = await ajoGovernance.getGovernanceSettings();
+      const settings = await ajoGovernanceHCS.getGovernanceSettings();
       logTest(
         "getGovernanceSettings()",
         true,
@@ -171,7 +171,7 @@ async function testAjoGovernanceViews(ajoFactory, ajoId) {
       if (settings.totalProposals.gt(0)) {
         console.log(c.cyan("\n  Testing getProposal()..."));
         try {
-          const proposal = await ajoGovernance.getProposal(1);
+          const proposal = await ajoGovernanceHCS.getProposal(1);
           logTest(
             "getProposal(1)",
             true,
@@ -184,7 +184,7 @@ async function testAjoGovernanceViews(ajoFactory, ajoId) {
         console.log(c.cyan("\n  Testing hasVoted()..."));
         const [deployer] = await ethers.getSigners();
         try {
-          const voted = await ajoGovernance.hasVoted(1, deployer.address);
+          const voted = await ajoGovernanceHCS.hasVoted(1, deployer.address);
           logTest(
             "hasVoted(1, deployer)",
             true,
@@ -202,7 +202,7 @@ async function testAjoGovernanceViews(ajoFactory, ajoId) {
     }
     
   } catch (error) {
-    console.log(c.red(`\n  ❌ AjoGovernance view tests failed: ${error.message}`));
+    console.log(c.red(`\n  ❌ AjoGovernanceHCS view tests failed: ${error.message}`));
   }
 }
 

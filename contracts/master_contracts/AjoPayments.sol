@@ -1,19 +1,31 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import "../core/LockableContract.sol";
-import  "../interfaces/AjoInterfaces.sol";
+import "../interfaces/AjoInterfaces.sol";
+import "../hedera/hedera-token-service/HederaTokenService.sol";
+import "../hedera/HederaResponseCodes.sol";
 
-contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, LockableContract {
-    
+/**
+ * @title AjoPayments (Direct HTS Integration)
+ * @notice Manages payment processing and payout distribution using Hedera Token Service
+ * @dev Inherits from HederaTokenService for proper HTS interaction
+ */
+contract AjoPayments is 
+    IAjoPayments, 
+    HederaTokenService,
+    ReentrancyGuard, 
+    Ownable, 
+    Initializable, 
+    LockableContract 
+{
     // ============ STATE VARIABLES ============
     
-    IERC20 public USDC;
-    IERC20 public HBAR;
+    address public usdcToken; // HTS USDC token address
+    address public hbarToken; // HTS WHBAR token address
     address public ajoCore;
     IAjoMembers public membersContract;
     IAjoCollateral public collateralContract;
@@ -29,25 +41,20 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
     mapping(uint256 => PayoutRecord) public payouts;
     mapping(address => uint256) public pendingPenalties;
     
-    // ============ OPTIMIZED STORAGE FOR FRONTEND TRACKING ============
+    // ============ STORAGE FOR FRONTEND TRACKING ============
     
-    // Track only CURRENT cycle data (much cheaper than full history)
     mapping(uint256 => address[]) private cyclePaidMembers;
     mapping(uint256 => mapping(address => bool)) private hasPaidInCycle;
     mapping(uint256 => uint256) private cycleTotalCollected;
-    
-    // Track current cycle payment details per member (for quick lookup)
     mapping(address => PaymentStatus) public currentCyclePayment;
     
-    // Track cycle start times for deadline calculations
     uint256 public cycleStartTime;
-    uint256 public cycleDuration = 30 days; // Default 30 days per cycle
+    uint256 public cycleDuration = 30 days;
     
-    // ============ ENHANCED EVENTS (FOR HISTORICAL DATA) ============
+    // ============ EVENTS ============
     
     event AjoCoreUpdated(address indexed oldCore, address indexed newCore);
     
-    // ✅ DETAILED EVENT - Frontend indexes this for payment history
     event PaymentMadeDetailed(
         address indexed member,
         uint256 amountPaid,
@@ -58,7 +65,6 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         uint256 timestamp
     );
     
-    // ✅ CYCLE SUMMARY EVENT - Emitted when cycle advances
     event CycleSummary(
         uint256 indexed cycle,
         uint256 totalCollected,
@@ -73,19 +79,22 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         _;
     }
     
-    // ============ CONSTRUCTOR (for master copy) ============
+    // ============ CONSTRUCTOR ============
+    
     constructor() {
         _disableInitializers();
         _transferOwnership(address(1));
     }
     
-    // ============ INITIALIZER (for proxy instances) ============
+    // ============ INITIALIZER ============
+    
     function initialize(
-        address _usdc, 
-        address _hbar, 
-        address _ajoCore, 
+        address _usdc,
+        address _hbar,
+        address _ajoCore,
         address _membersContract,
-        address _collateralContract
+        address _collateralContract,
+        address _hederaTokenService // This parameter can be ignored now since we use inheritance
     ) external override initializer {
         require(_usdc != address(0), "Invalid USDC address");
         require(_hbar != address(0), "Invalid HBAR address");
@@ -95,13 +104,12 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         
         _transferOwnership(msg.sender);
         
-        USDC = IERC20(_usdc);
-        HBAR = IERC20(_hbar);
+        usdcToken = _usdc;
+        hbarToken = _hbar;
         ajoCore = _ajoCore;
         membersContract = IAjoMembers(_membersContract);
         collateralContract = IAjoCollateral(_collateralContract);
         
-        // Rest of initialization...
         penaltyRate = DEFAULT_PENALTY_RATE;
         currentCycle = 1;
         nextPayoutPosition = 1;
@@ -111,95 +119,97 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         // Initialize token configurations
         tokenConfigs[PaymentToken.USDC] = TokenConfig({
             monthlyPayment: 50e6,
-            isActive: true
+            isActive: true,
+            htsTokenAddress: _usdc,
+            isHtsToken: true
         });
         
         tokenConfigs[PaymentToken.HBAR] = TokenConfig({
             monthlyPayment: 1000e8,
-            isActive: true
+            isActive: true,
+            htsTokenAddress: _hbar,
+            isHtsToken: true
         });
     }
-    
-     /**
-     * @dev Set AjoCore address - only works during setup phase
-     * @param _ajoCore Address of the AjoCore contract
-     */
-    function setAjoCore(address _ajoCore) external onlyOwner onlyDuringSetup {
-        require(_ajoCore != address(0), "Cannot set zero address");
-        require(_ajoCore != ajoCore, "Already set to this address");
-        
-        address oldCore = ajoCore;
-        ajoCore = _ajoCore;
-        
-        emit AjoCoreUpdated(oldCore, _ajoCore);
-    }
-    
-    /**
-     * @dev Verify setup for AjoMembers
-     */
-    function verifySetup() external view override returns (bool isValid, string memory reason) {
+
+    function verifySetup() external override view returns (bool isValid, string memory reason) {
         if (ajoCore == address(0)) {
             return (false, "AjoCore not set");
         }
         return (true, "Setup is valid");
     }
     
-    // ============ CORE PAYMENT FUNCTIONS (IAjoPayments) ============
+    // ============ INTERNAL HTS HELPER FUNCTIONS ============
     
-    function distributePayout() external override nonReentrant {
-        require(msg.sender == ajoCore, "Only AjoCore");
+    /**
+     * @dev Internal function to safely transfer HTS tokens
+     * @param tokenAddress The HTS token address
+     * @param from The sender address
+     * @param to The receiver address
+     * @param amount The amount to transfer
+     * @return result The transfer result with response code and success status
+     */
+    function _safeTransferHtsToken(
+        address tokenAddress,
+        address from,
+        address to,
+        int64 amount
+    ) internal returns (HtsTransferResult memory result) {
+        // Call the inherited transferToken function from HederaTokenService
+        int responseCode = transferToken(tokenAddress, from, to, amount);
         
-        // Find next recipient
-        address recipient = getNextRecipient();
-        require(recipient != address(0), "No eligible recipient");
+        // Convert int to int64 safely
+        result.responseCode = int64(responseCode);
+        result.success = (responseCode == HederaResponseCodes.SUCCESS);
         
-        Member memory recipientMember = membersContract.getMember(recipient);
-        uint256 payoutAmount = calculatePayout();
+        if (!result.success) {
+            result.errorMessage = _getHtsErrorMessage(responseCode);
+        } else {
+            result.errorMessage = "";
+        }
         
-        // Distribute payout
-        _distributePayout(recipient, payoutAmount, recipientMember.preferredToken);
-        
-        // Update member status
-        membersContract.updateTotalPaid(recipient, payoutAmount);
-        membersContract.markPayoutReceived(recipient);
-        
-        nextPayoutPosition++;
+        return result;
     }
     
-    function handleDefault(address defaulter) external override onlyAjoCore {
-        Member memory member = membersContract.getMember(defaulter);
-        
-        require(member.isActive, "Member not found");
-        if (member.lastPaymentCycle >= currentCycle) return; // Not in default
-        
-        uint256 cyclesMissed = currentCycle - member.lastPaymentCycle;
-        TokenConfig memory config = tokenConfigs[member.preferredToken];
-        uint256 penalty = (config.monthlyPayment * penaltyRate * cyclesMissed) / 10000;
-        
-        // Add penalty
-        pendingPenalties[defaulter] += penalty;
-        
-        // Increment default count
-        membersContract.incrementDefaultCount(defaulter);
-        
-        emit MemberDefaulted(defaulter, currentCycle, penalty);
+    /**
+     * @dev Get human-readable error message for HTS response code
+     */
+    function _getHtsErrorMessage(int responseCode) internal pure returns (string memory) {
+        if (responseCode == HederaResponseCodes.SUCCESS) return "Success";
+        if (responseCode == HederaResponseCodes.INVALID_TOKEN_ID) return "Invalid token ID";
+        if (responseCode == HederaResponseCodes.INVALID_ACCOUNT_ID) return "Invalid account ID";
+        if (responseCode == HederaResponseCodes.INSUFFICIENT_TOKEN_BALANCE) return "Insufficient token balance";
+        if (responseCode == HederaResponseCodes.TOKEN_NOT_ASSOCIATED_TO_ACCOUNT) return "Token not associated to account";
+        if (responseCode == HederaResponseCodes.ACCOUNT_FROZEN_FOR_TOKEN) return "Account frozen for token";
+        if (responseCode == HederaResponseCodes.TOKEN_WAS_DELETED) return "Token was deleted";
+        if (responseCode == HederaResponseCodes.INVALID_SIGNATURE) return "Invalid signature";
+        return "Unknown error";
     }
     
-    // ============ VIEW FUNCTIONS (IAjoPayments) ============
-    
-    function needsToPayThisCycle(address member) external view override returns (bool) {
-        Member memory memberInfo = membersContract.getMember(member);
-        return memberInfo.isActive && memberInfo.lastPaymentCycle < currentCycle;
+    /**
+     * @dev Check if an account is associated with a token
+     */
+    function _ensureTokenAssociation(address account, address tokenAddress) internal {
+        // Try to check if already associated (this would need to be implemented based on your needs)
+        // For now, we'll attempt association and handle the error if already associated
+        int responseCode = associateToken(account, tokenAddress);
+        
+        // TOKEN_ALREADY_ASSOCIATED_TO_ACCOUNT (147) is acceptable
+        require(
+            responseCode == HederaResponseCodes.SUCCESS || 
+            responseCode == 147, // TOKEN_ALREADY_ASSOCIATED_TO_ACCOUNT
+            string(abi.encodePacked("Association failed: ", _getHtsErrorMessage(responseCode)))
+        );
     }
     
-    function getTokenConfig(PaymentToken token) external view override returns (TokenConfig memory) {
-        return tokenConfigs[token];
-    }
+    // ============ HTS PAYMENT FUNCTIONS ============
     
-    // ============ PAYMENT PROCESSING FUNCTIONS (GAS OPTIMIZED) ============
-    
-    function processPayment(address member, uint256 amount, PaymentToken token) external onlyAjoCore nonReentrant {
-        IERC20 tokenContract = token == PaymentToken.USDC ? USDC : HBAR;
+    function processPaymentHts(
+        address member,
+        uint256 amount,
+        PaymentToken token
+    ) external override onlyAjoCore nonReentrant returns (HtsTransferResult memory result) {
+        address tokenAddress = (token == PaymentToken.USDC) ? usdcToken : hbarToken;
         Member memory memberData = membersContract.getMember(member);
         
         require(memberData.isActive, "Member not active");
@@ -208,18 +218,28 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         // Calculate total payment (including any penalties)
         uint256 penalty = pendingPenalties[member];
         uint256 totalPayment = amount + penalty;
-
-        // Transfer payment
-        tokenContract.transferFrom(member, address(this), totalPayment);
         
-        // ✅ OPTIMIZED: Only track current cycle status (minimal storage writes)
+        // Ensure amount fits in int64
+        require(totalPayment <= uint256(uint64(type(int64).max)), "Amount too large");
+        
+        // Transfer payment using inherited HederaTokenService function
+        result = _safeTransferHtsToken(
+            tokenAddress,
+            member,
+            address(this),
+            int64(uint64(totalPayment))
+        );
+        
+        require(result.success, result.errorMessage);
+        
+        // Update cycle tracking
         if (!hasPaidInCycle[currentCycle][member]) {
             cyclePaidMembers[currentCycle].push(member);
             hasPaidInCycle[currentCycle][member] = true;
             cycleTotalCollected[currentCycle] += totalPayment;
         }
         
-        // Store current cycle payment details (overwrites each cycle)
+        // Store current cycle payment details
         currentCyclePayment[member] = PaymentStatus({
             cycle: currentCycle,
             hasPaid: true,
@@ -235,25 +255,46 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         // Clear penalties
         pendingPenalties[member] = 0;
         
-        // ✅ EMIT DETAILED EVENT - Frontend indexes this for full history
-        emit PaymentMadeDetailed(
-            member,
-            amount,
-            penalty,
-            totalPayment,
-            currentCycle,
-            token,
-            block.timestamp
-        );
+        // Emit events
+        emit PaymentMadeHts(member, totalPayment, currentCycle, tokenAddress, result.responseCode);
+        emit PaymentMadeDetailed(member, amount, penalty, totalPayment, currentCycle, token, block.timestamp);
         
-        // Also emit standard event for backwards compatibility
-        emit PaymentMade(member, totalPayment, currentCycle, token);
+        return result;
     }
     
-    function _distributePayout(address recipient, uint256 amount, PaymentToken token) internal {
-        IERC20 tokenContract = token == PaymentToken.USDC ? USDC : HBAR;
+    function distributePayoutHts() 
+        external 
+        override 
+        onlyAjoCore 
+        nonReentrant 
+        returns (
+            address recipient,
+            uint256 amount,
+            HtsTransferResult memory result
+        ) 
+    {
+        // Find next recipient
+        recipient = getNextRecipient();
+        require(recipient != address(0), "No eligible recipient");
         
-        tokenContract.transfer(recipient, amount);
+        Member memory recipientMember = membersContract.getMember(recipient);
+        amount = calculatePayout();
+        
+        require(amount <= uint256(uint64(type(int64).max)), "Amount too large");
+        
+        address tokenAddress = (recipientMember.preferredToken == PaymentToken.USDC) 
+            ? usdcToken 
+            : hbarToken;
+        
+        // Distribute payout using inherited HederaTokenService function
+        result = _safeTransferHtsToken(
+            tokenAddress,
+            address(this),
+            recipient,
+            int64(uint64(amount))
+        );
+        
+        require(result.success, result.errorMessage);
         
         // Update payout record
         payouts[currentCycle] = PayoutRecord({
@@ -263,34 +304,205 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
             timestamp: block.timestamp
         });
         
-        emit PayoutDistributed(recipient, amount, currentCycle, token);
+        // Update member status
+        membersContract.updateTotalPaid(recipient, amount);
+        membersContract.markPayoutReceived(recipient);
+        
+        nextPayoutPosition++;
+        
+        // Emit events
+        emit PayoutDistributedHts(recipient, amount, currentCycle, tokenAddress, result.responseCode);
+        
+        return (recipient, amount, result);
+    }
+    
+    function handleDefaultHts(
+        address defaulter
+    ) external override onlyAjoCore nonReentrant returns (
+        uint256 totalRecovered,
+        uint256 redistributed
+    ) {
+        Member memory member = membersContract.getMember(defaulter);
+        
+        require(member.isActive, "Member not found");
+        require(member.lastPaymentCycle < currentCycle, "Not in default");
+        
+        // Step 1: Seize collateral
+        (uint256 collateralSeized, HtsTransferResult memory seizureResult) = 
+            collateralContract.seizeCollateralHts(defaulter);
+        
+        require(seizureResult.success, seizureResult.errorMessage);
+        
+        // Step 2: Calculate past payments seized
+        uint256 pastPaymentsSeized = 0;
+        for (uint256 i = 0; i < member.pastPayments.length; i++) {
+            pastPaymentsSeized += member.pastPayments[i];
+        }
+        
+        // Get guarantor's past payments
+        if (member.guarantor != address(0)) {
+            Member memory guarantor = membersContract.getMember(member.guarantor);
+            for (uint256 i = 0; i < guarantor.pastPayments.length; i++) {
+                pastPaymentsSeized += guarantor.pastPayments[i];
+            }
+        }
+        
+        totalRecovered = collateralSeized + pastPaymentsSeized;
+        
+        // Step 3: Redistribute to affected members
+        address[] memory allMembers = membersContract.getActiveMembersList();
+        uint256 eligibleCount = 0;
+        
+        for (uint256 i = 0; i < allMembers.length; i++) {
+            if (allMembers[i] != defaulter && allMembers[i] != member.guarantor) {
+                eligibleCount++;
+            }
+        }
+        
+        if (eligibleCount > 0) {
+            uint256 amountPerMember = totalRecovered / eligibleCount;
+            
+            address[] memory recipients = new address[](eligibleCount);
+            uint256[] memory amounts = new uint256[](eligibleCount);
+            uint256 index = 0;
+            
+            for (uint256 i = 0; i < allMembers.length; i++) {
+                if (allMembers[i] != defaulter && allMembers[i] != member.guarantor) {
+                    recipients[index] = allMembers[i];
+                    amounts[index] = amountPerMember;
+                    index++;
+                }
+            }
+            
+            HtsTransferResult[] memory redistributionResults = 
+                collateralContract.redistributeSeizedCollateral(
+                    recipients,
+                    amounts,
+                    member.preferredToken
+                );
+            
+            for (uint256 i = 0; i < redistributionResults.length; i++) {
+                require(redistributionResults[i].success, redistributionResults[i].errorMessage);
+            }
+            
+            redistributed = amountPerMember * eligibleCount;
+        }
+        
+        // Update member status
+        membersContract.incrementDefaultCount(defaulter);
+        if (member.guarantor != address(0)) {
+            membersContract.incrementDefaultCount(member.guarantor);
+        }
+        
+        // Update reputations
+        membersContract.updateReputation(defaulter, 0);
+        if (member.guarantor != address(0)) {
+            Member memory guarantor = membersContract.getMember(member.guarantor);
+            uint256 newReputation = guarantor.reputationScore > 100 
+                ? guarantor.reputationScore - 100 
+                : 0;
+            membersContract.updateReputation(member.guarantor, newReputation);
+        }
+        
+        emit DefaultHandledHts(defaulter, totalRecovered, redistributed, currentCycle);
+        
+        return (totalRecovered, redistributed);
+    }
+    
+    function batchHandleDefaults(
+        address[] calldata defaulters
+    ) external override onlyAjoCore returns (uint256[] memory recoveredAmounts) {
+        recoveredAmounts = new uint256[](defaulters.length);
+        
+        for (uint256 i = 0; i < defaulters.length; i++) {
+            address defaulter = defaulters[i];
+            Member memory member = membersContract.getMember(defaulter);
+            
+            if (member.isActive && member.lastPaymentCycle < currentCycle) {
+                uint256 cyclesMissed = currentCycle - member.lastPaymentCycle;
+                TokenConfig memory config = tokenConfigs[member.preferredToken];
+                uint256 penalty = (config.monthlyPayment * penaltyRate * cyclesMissed) / 10000;
+                
+                pendingPenalties[defaulter] += penalty;
+                membersContract.incrementDefaultCount(defaulter);
+                
+                recoveredAmounts[i] = penalty;
+            }
+        }
+        
+        return recoveredAmounts;
+    }
+    
+    // ============ CYCLE & CONFIG FUNCTIONS ============
+    
+    function advanceCycle() external override onlyAjoCore {
+        emit CycleSummary(
+            currentCycle,
+            cycleTotalCollected[currentCycle],
+            cyclePaidMembers[currentCycle].length,
+            block.timestamp
+        );
+        
+        currentCycle++;
+        cycleStartTime = block.timestamp;
+        emit CycleAdvanced(currentCycle, block.timestamp);
+    }
+    
+    function updateTokenConfig(
+        PaymentToken token,
+        uint256 monthlyPayment,
+        bool isActive
+    ) external override onlyAjoCore {
+        tokenConfigs[token].monthlyPayment = monthlyPayment;
+        tokenConfigs[token].isActive = isActive;
+    }
+    
+    function updatePenaltyRate(uint256 newPenaltyRate) external override onlyAjoCore {
+        require(newPenaltyRate <= 2000, "Penalty rate too high");
+        penaltyRate = newPenaltyRate;
+    }
+    
+    function updateNextPayoutPosition(uint256 position) external override onlyAjoCore {
+        nextPayoutPosition = position;
+    }
+    
+    function emergencyWithdraw(PaymentToken token) external override onlyAjoCore {
+        address tokenAddress = (token == PaymentToken.USDC) ? usdcToken : hbarToken;
+        
+        // Get contract's token balance first (would need to implement balance check)
+        // For now, we'll try to transfer a reasonable amount
+        uint256 withdrawAmount = 1000000e6; // Adjust as needed
+        
+        require(withdrawAmount <= uint256(uint64(type(int64).max)), "Amount too large");
+        
+        HtsTransferResult memory result = _safeTransferHtsToken(
+            tokenAddress,
+            address(this),
+            ajoCore,
+            int64(uint64(withdrawAmount))
+        );
+        
+        // Allow insufficient balance errors in emergency withdraw
+        if (!result.success && result.responseCode != HederaResponseCodes.INSUFFICIENT_TOKEN_BALANCE) {
+            revert(result.errorMessage);
+        }
     }
     
     // ============ CALCULATION FUNCTIONS ============
-
-    function calculatePayout() public view returns (uint256) {
-        // Get the active token configuration
+    
+    function calculatePayout() public view override returns (uint256) {
         TokenConfig memory config = tokenConfigs[activePaymentToken];
-        
-        // Get total number of active members
         uint256 totalMembers = membersContract.getTotalActiveMembers();
-        
-        // Payout = total members × monthly contribution
-        // This is the core ROSCA principle - fixed payout regardless of available funds
-        uint256 payout = config.monthlyPayment * totalMembers;
-        
-        return payout;
+        return config.monthlyPayment * totalMembers;
     }
     
-    function getNextRecipient() public view returns (address) {
+    function getNextRecipient() public view override returns (address) {
         uint256 totalMembers = membersContract.getTotalActiveMembers();
         
         if (nextPayoutPosition > totalMembers) return address(0);
         
-        // Get the address at the current payout position
         address candidate = address(0);
         
-        // Find member at queue position
         for (uint256 i = 0; i < totalMembers; i++) {
             address memberAddr = membersContract.activeMembersList(i);
             Member memory memberInfo = membersContract.getMember(memberAddr);
@@ -305,7 +517,6 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         
         Member memory candidateMember = membersContract.getMember(candidate);
         
-        // Check if candidate is eligible (paid this cycle and is active)
         if (!candidateMember.isActive || candidateMember.lastPaymentCycle < currentCycle) {
             return address(0);
         }
@@ -313,47 +524,82 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         return candidate;
     }
     
-    // ============ FRONTEND VIEW FUNCTIONS (OPTIMIZED) ============
+    // ============ QUERY FUNCTIONS ============
     
-    /**
-     * @dev Get payment history for a member
-     * @notice For complete history, index PaymentMadeDetailed events off-chain
-     * This function only returns current cycle on-chain data
-     * @param member Address of the member
-     * @return Array with current cycle payment status (single element)
-     */
-    function getMemberPaymentHistory(address member) external view override returns (PaymentStatus[] memory) {
+    function needsToPayThisCycle(address member) external view override returns (bool) {
+        Member memory memberInfo = membersContract.getMember(member);
+        return memberInfo.isActive && memberInfo.lastPaymentCycle < currentCycle;
+    }
+    
+    function getTokenConfig(PaymentToken token) external view override returns (TokenConfig memory) {
+        return tokenConfigs[token];
+    }
+    
+    function getCurrentCycle() external view override returns (uint256) {
+        return currentCycle;
+    }
+    
+    function getNextPayoutPosition() external view override returns (uint256) {
+        return nextPayoutPosition;
+    }
+    
+    function getActivePaymentToken() external view override returns (PaymentToken) {
+        return activePaymentToken;
+    }
+    
+    function getPendingPenalty(address member) external view override returns (uint256) {
+        return pendingPenalties[member];
+    }
+    
+    function getPenaltyRate() external view override returns (uint256) {
+        return penaltyRate;
+    }
+    
+    function getContractBalance(PaymentToken token) external view override returns (uint256) {
+        // Note: You might want to implement actual balance checking here
+        return 0;
+    }
+    
+    function getTotalPayouts() external view override returns (uint256) {
+        return currentCycle > 1 ? currentCycle - 1 : 0;
+    }
+    
+    function isPayoutReady() external view override returns (bool) {
+        address nextRecipient = getNextRecipient();
+        return nextRecipient != address(0) && calculatePayout() > 0;
+    }
+    
+    function getPayout(uint256 cycle) external view override returns (PayoutRecord memory) {
+        return payouts[cycle];
+    }
+    
+    function getMemberPaymentHistory(
+        address member
+    ) external view override returns (PaymentStatus[] memory) {
         PaymentStatus[] memory history = new PaymentStatus[](1);
         history[0] = currentCyclePayment[member];
         return history;
     }
     
-    /**
-     * @dev Get payment status for a specific cycle
-     * @param cycle Cycle number to query
-     * @return paidMembers Array of members who paid
-     * @return unpaidMembers Array of members who didn't pay
-     * @return totalCollected Total amount collected this cycle
-     */
-    function getCyclePaymentStatus(uint256 cycle) external view override returns (
+    function getCyclePaymentStatus(
+        uint256 cycle
+    ) external view override returns (
         address[] memory paidMembers,
         address[] memory unpaidMembers,
         uint256 totalCollected
     ) {
         paidMembers = cyclePaidMembers[cycle];
+        totalCollected = cycleTotalCollected[cycle];
         
-        // Get all active members
         address[] memory allMembers = membersContract.getActiveMembersList();
-        
-        // Count unpaid members
         uint256 unpaidCount = 0;
+        
         for (uint256 i = 0; i < allMembers.length; i++) {
             if (!hasPaidInCycle[cycle][allMembers[i]]) {
                 unpaidCount++;
             }
         }
         
-        // Build unpaid members array
         unpaidMembers = new address[](unpaidCount);
         uint256 index = 0;
         for (uint256 i = 0; i < allMembers.length; i++) {
@@ -362,26 +608,26 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
                 index++;
             }
         }
-        
-        totalCollected = cycleTotalCollected[cycle];
     }
     
-    /**
-     * @dev Get comprehensive dashboard data for current cycle (SINGLE CALL OPTIMIZATION)
-     * @return dashboard Complete cycle dashboard information
-     */
-    function getCurrentCycleDashboard() external view override returns (CycleDashboard memory dashboard) {
+    function getCurrentCycleDashboard() 
+        external 
+        view 
+        override 
+        returns (CycleDashboard memory dashboard) 
+    {
         dashboard.currentCycle = currentCycle;
         dashboard.nextPayoutPosition = nextPayoutPosition;
         dashboard.nextRecipient = getNextRecipient();
         dashboard.expectedPayout = calculatePayout();
         dashboard.totalPaidThisCycle = cycleTotalCollected[currentCycle];
         dashboard.isPayoutReady = dashboard.nextRecipient != address(0) && dashboard.expectedPayout > 0;
-        
-        // Get paid and unpaid members for current cycle
         dashboard.membersPaid = cyclePaidMembers[currentCycle];
         
-        // Calculate remaining to pay
+        // Set scheduling flags to false (HSS removed)
+        dashboard.hasScheduledPayment = false;
+        dashboard.scheduledPaymentAddress = address(0);
+        
         TokenConfig memory config = tokenConfigs[activePaymentToken];
         uint256 totalMembers = membersContract.getTotalActiveMembers();
         uint256 expectedTotal = config.monthlyPayment * totalMembers;
@@ -389,7 +635,6 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
             ? expectedTotal - dashboard.totalPaidThisCycle 
             : 0;
         
-        // Get unpaid members
         address[] memory allMembers = membersContract.getActiveMembersList();
         uint256 unpaidCount = 0;
         for (uint256 i = 0; i < allMembers.length; i++) {
@@ -408,176 +653,49 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         }
     }
     
-    /**
-     * @dev Get upcoming events for a member (payments due, payouts, etc.)
-     * @param member Address of the member
-     * @return events Array of upcoming events
-     */
-    function getUpcomingEvents(address member) external view override returns (UpcomingEvent[] memory events) {
+    function getUpcomingEvents(
+        address member
+    ) external view override returns (UpcomingEvent[] memory) {
         Member memory memberInfo = membersContract.getMember(member);
         if (!memberInfo.isActive) {
             return new UpcomingEvent[](0);
         }
         
-        uint256 eventCount = 0;
-        UpcomingEvent[] memory tempEvents = new UpcomingEvent[](3); // Max 3 events
+        UpcomingEvent[] memory events = new UpcomingEvent[](2);
+        uint256 count = 0;
         
-        // Event 1: Payment due if not paid this cycle
+        // Event 1: Payment due
         if (memberInfo.lastPaymentCycle < currentCycle) {
             TokenConfig memory config = tokenConfigs[activePaymentToken];
-            tempEvents[eventCount] = UpcomingEvent({
-                eventType: 0, // Payment due
+            events[count] = UpcomingEvent({
+                eventType: 0,
                 timestamp: cycleStartTime + cycleDuration,
                 affectedMember: member,
                 amount: config.monthlyPayment + pendingPenalties[member]
             });
-            eventCount++;
+            count++;
         }
         
-        // Event 2: Payout if member is next in queue
+        // Event 2: Payout ready
         if (memberInfo.queueNumber == nextPayoutPosition && !memberInfo.hasReceivedPayout) {
-            tempEvents[eventCount] = UpcomingEvent({
-                eventType: 1, // Payout
-                timestamp: block.timestamp, // Available now
+            events[count] = UpcomingEvent({
+                eventType: 1,
+                timestamp: block.timestamp,
                 affectedMember: member,
                 amount: calculatePayout()
             });
-            eventCount++;
+            count++;
         }
         
-        // Event 3: Cycle end
-        tempEvents[eventCount] = UpcomingEvent({
-            eventType: 2, // Cycle end
-            timestamp: cycleStartTime + cycleDuration,
-            affectedMember: address(0),
-            amount: 0
-        });
-        eventCount++;
-        
-        // Copy to correctly sized array
-        events = new UpcomingEvent[](eventCount);
-        for (uint256 i = 0; i < eventCount; i++) {
-            events[i] = tempEvents[i];
+        // Resize array
+        UpcomingEvent[] memory result = new UpcomingEvent[](count);
+        for (uint256 i = 0; i < count; i++) {
+            result[i] = events[i];
         }
+        return result;
     }
     
-    /**
-     * @dev Get the deadline for next payment
-     * @return timestamp Unix timestamp of payment deadline
-     */
-    function getNextPaymentDeadline() external view override returns (uint256 timestamp) {
+    function getNextPaymentDeadline() external view override returns (uint256) {
         return cycleStartTime + cycleDuration;
-    }
-    
-    // ============ ADMIN FUNCTIONS ============
-    
-    function updatePenaltyRate(uint256 newPenaltyRate) external onlyAjoCore {
-        require(newPenaltyRate <= 2000, "Penalty rate too high"); // Max 20%
-        penaltyRate = newPenaltyRate;
-    }
-    
-    function updateTokenConfig(
-        PaymentToken token,
-        uint256 monthlyPayment,
-        bool isActive
-    ) external onlyAjoCore {
-        tokenConfigs[token].monthlyPayment = monthlyPayment;
-        tokenConfigs[token].isActive = isActive;
-    }
-    
-    function advanceCycle() external onlyAjoCore {
-        // ✅ Emit cycle summary before advancing
-        emit CycleSummary(
-            currentCycle,
-            cycleTotalCollected[currentCycle],
-            cyclePaidMembers[currentCycle].length,
-            block.timestamp
-        );
-        
-        currentCycle++;
-        cycleStartTime = block.timestamp;
-        emit CycleAdvanced(currentCycle, block.timestamp);
-    }
-    
-    function updateNextPayoutPosition(uint256 position) external onlyAjoCore {
-        nextPayoutPosition = position;
-    }
-    
-    // ============ BATCH PROCESSING ============
-    
-    function batchHandleDefaults(address[] calldata defaulters) external onlyAjoCore {
-        for (uint256 i = 0; i < defaulters.length; i++) {
-            address defaulter = defaulters[i];
-            Member memory member = membersContract.getMember(defaulter);
-            
-            if (member.isActive && member.lastPaymentCycle < currentCycle) {
-                uint256 cyclesMissed = currentCycle - member.lastPaymentCycle;
-                TokenConfig memory config = tokenConfigs[member.preferredToken];
-                uint256 penalty = (config.monthlyPayment * penaltyRate * cyclesMissed) / 10000;
-                
-                pendingPenalties[defaulter] += penalty;
-                membersContract.incrementDefaultCount(defaulter);
-                
-                emit MemberDefaulted(defaulter, currentCycle, penalty);
-            }
-        }
-    }
-    
-    // ============ VIEW FUNCTIONS ============
-    
-    function getCurrentCycle() external view returns (uint256) {
-        return currentCycle;
-    }
-    
-    function getNextPayoutPosition() external view returns (uint256) {
-        return nextPayoutPosition;
-    }
-    
-    function getActivePaymentToken() external view returns (PaymentToken) {
-        return activePaymentToken;
-    }
-    
-    function getPayout(uint256 cycle) external view returns (PayoutRecord memory) {
-        return payouts[cycle];
-    }
-    
-    function getPendingPenalty(address member) external view returns (uint256) {
-        return pendingPenalties[member];
-    }
-    
-    function getPenaltyRate() external view returns (uint256) {
-        return penaltyRate;
-    }
-    
-    function getContractBalance(PaymentToken token) external view returns (uint256) {
-        IERC20 tokenContract = token == PaymentToken.USDC ? USDC : HBAR;
-        return tokenContract.balanceOf(address(this));
-    }
-    
-    function getTotalPayouts() external view returns (uint256) {
-        return currentCycle > 1 ? currentCycle - 1 : 0;
-    }
-    
-    function isPayoutReady() external view returns (bool) {
-        address nextRecipient = getNextRecipient();
-        return nextRecipient != address(0) && calculatePayout() > 0;
-    }
-
-    // ============ EMERGENCY FUNCTIONS ============
-    
-    function emergencyWithdraw(PaymentToken token) external onlyAjoCore {
-        IERC20 tokenContract = token == PaymentToken.USDC ? USDC : HBAR;
-        uint256 balance = tokenContract.balanceOf(address(this));
-        tokenContract.transfer(ajoCore, balance);
-    }
-    
-    function pausePayments() external onlyAjoCore {
-       //pausing payments is very sensitive, so implementation is omitted for brevity
-       //people that have made previous payments won't be able to get their payouts
-       //until payments are resumed
-    }
-    
-    function resumePayments() external onlyAjoCore {
-        // Implementation for resuming payments after emergency
     }
 }

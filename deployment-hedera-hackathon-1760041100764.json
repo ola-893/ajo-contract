@@ -1,0 +1,50 @@
+{
+  "network": "unknown",
+  "chainId": 296,
+  "deployedAt": "2025-10-09T20:18:17.639Z",
+  "contracts": {
+    "AjoFactory": "0x8B996a880990A9Ea8089D3Fd3d019f51a605BdC0",
+    "USDC": "0xF5ed7FfdC4e3d00efC1169663186D9B02a17c92D",
+    "WHBAR": "0x56522f49223A3b83B870f3E689B6a4B9C50FB323",
+    "USDC_HTS": "0x00000000000000000000000000000000006aFC29",
+    "WHBAR_HTS": "0x00000000000000000000000000000000006aFc2a"
+  },
+  "masterCopies": {
+    "AjoCore": "0xdC6B47bbb0c647D3a7859AB83a76a3015A8ED35d",
+    "AjoMembers": "0x4ca6C7DEeF2f1EbE893D2Bb8667D77a7c2B50B93",
+    "AjoCollateral": "0x2C08b69610bD76e7792c968F45731fec4d9A58E1",
+    "AjoPayments": "0xb75164d54c30B3f19877Ae3f260935fF79d8AC49",
+    "AjoGovernance": "0xEedaBC42Dc879949F04040403c20786F19289e78",
+    "AjoSchedule": "0x4e5c2d16950Dbd035805f930Ab09D94fbCaC677F"
+  },
+  "testAjo": {
+    "id": 1,
+    "name": "Hedera Hackathon 2025 - Production Demo Ajo",
+    "core": "0x54892Ae6f3A2424f307AEEB4311A503fA0EaFA6F",
+    "members": "0x020C9671a271E4CC7DF837fFCF6Af83492269526",
+    "collateral": "0x0f1b3B35DedD099461b4EBDb36B7E3FD507eC10c",
+    "payments": "0xBB24bEC89e650EFd3ac03841A9346746F824faF7",
+    "governance": "0xfF286A2a6109989f2ae04Aa0e6fCe9d869f1742c",
+    "schedule": "0xE73072548b78c96FD9147FE97923F188C906EaF4",
+    "hcsTopicId": "0xb8481a51f6daadebc4b56c06ec6108a3614cc356cf91ee6c24e819bb055c1832"
+  },
+  "hederaServices": {
+    "HTS": {
+      "enabled": true,
+      "address": "0x0000000000000000000000000000000000000167"
+    },
+    "HSS": {
+      "enabled": true,
+      "address": "0x000000000000000000000000000000000000016B"
+    },
+    "HCS": {
+      "enabled": true,
+      "topicId": "0xb8481a51f6daadebc4b56c06ec6108a3614cc356cf91ee6c24e819bb055c1832"
+    }
+  },
+  "participants": [],
+  "statistics": {
+    "totalParticipants": 0,
+    "successfulJoins": 0
+  }
+}
