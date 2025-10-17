@@ -1,0 +1,69 @@
+{
+  "network": "unknown",
+  "chainId": 296,
+  "deployedAt": "2025-10-15T20:31:16.829Z",
+  "htsOnly": true,
+  "individualCalls": true,
+  "contracts": {
+    "AjoFactory": "0xaA946F4B9cC71015751C2Fd9a802bE7252c305dc",
+    "USDC_HTS": "0x00000000000000000000000000000000006BCe2B",
+    "WHBAR_HTS": "0x00000000000000000000000000000000006bce2C"
+  },
+  "masterCopies": {
+    "AjoCore": "0xB3B6E6D6DD37544D34c209B86287dd54feDD4C13",
+    "AjoMembers": "0x920213f1433123f0A20E287ff3014E022Be68B6f",
+    "AjoCollateral": "0xB84457712d6A83b61A5115B38c4a37b0959902D4",
+    "AjoPayments": "0x2e81A895CC7BCC959eE722F5a9A39f3D67F380b2",
+    "AjoGovernance": "0xbeB2a5b9851FA532d279DbB761d72775A137d002",
+    "AjoSchedule": "0x5673D917E7B1b66Bc5B1624E7d6B624E7b309Fe2"
+  },
+  "testAjo": {
+    "id": 1,
+    "name": "Hedera Hackathon 2025 - HTS Auto-Association Demo",
+    "core": "0x1Db270E7787A363764D056769f00575159a4b6e0",
+    "members": "0x33093DAf34F57c93a9882FCac311d67e9f4608A3",
+    "collateral": "0x611D9956F91e7C4722D09DEAb5D98AA0075f9582",
+    "payments": "0xf81FB579a56c5fe2bd97591D182Bd925F49f90CF",
+    "governance": "0xb210B90Da8012C43f85293E2Bf924FAFd2F6f58d",
+    "schedule": "0x4C2B75206471E0cf6183325d140Aad30BC73Aa25",
+    "hcsTopicId": "0x2e8016685f23f850b9d1b8cd6422ae7e8142cb8b626bf6670e32fccddfe4d6bb",
+    "usesHtsTokens": true,
+    "usesScheduledPayments": true
+  },
+  "hederaServices": {
+    "HTS": {
+      "enabled": true,
+      "autoAssociation": true,
+      "usdcToken": "0x00000000000000000000000000000000006BCe2B",
+      "hbarToken": "0x00000000000000000000000000000000006bce2C"
+    },
+    "HSS": {
+      "enabled": true,
+      "address": "0x000000000000000000000000000000000000016b"
+    },
+    "HCS": {
+      "enabled": true,
+      "topicId": "0x2e8016685f23f850b9d1b8cd6422ae7e8142cb8b626bf6670e32fccddfe4d6bb"
+    }
+  },
+  "participants": [
+    {
+      "name": "Funmilayo",
+      "address": "0xa427bd59E330af0997DFD7C1d6A791F8670e8F3E",
+      "position": 6
+    },
+    {
+      "name": "Joke",
+      "address": "0x37f71B1D8BC1337e996788474BcA95aa3686a737",
+      "position": 10
+    }
+  ],
+  "statistics": {
+    "totalParticipants": 2,
+    "successfulJoins": 2,
+    "htsEnabled": true,
+    "autoAssociationEnabled": true,
+    "batchOperations": false,
+    "individualCalls": true
+  }
+}

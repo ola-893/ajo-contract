@@ -1,0 +1,58 @@
+{
+  "network": "unknown",
+  "chainId": 296,
+  "deployedAt": "2025-10-14T22:18:58.564Z",
+  "htsOnly": true,
+  "individualCalls": true,
+  "contracts": {
+    "AjoFactory": "0x2521d9B19F21c9F9E51139e1a3ABaFD65B03A39f",
+    "USDC_HTS": "0x00000000000000000000000000000000006bB8AE",
+    "WHBAR_HTS": "0x00000000000000000000000000000000006bb8AF"
+  },
+  "masterCopies": {
+    "AjoCore": "0xF5CB535005cc9888e4F69315A3C0D1666ac356BF",
+    "AjoMembers": "0xf55E174e8206D4A439d2599d23738CA540c7FB4b",
+    "AjoCollateral": "0x3E65a91A64E85B7c6dF4A8370A077c78F53EC16C",
+    "AjoPayments": "0x1a8bee9d5A5ec7Dc35B8e733C7E439bFc5383fa8",
+    "AjoGovernance": "0x2c4dB7dAf91ddc1b1796EA38d5210D85B88A4bE4",
+    "AjoSchedule": "0x20D9BbB0AC6D4a7A48B86266E29d8b7Ac12c4C64"
+  },
+  "testAjo": {
+    "id": 1,
+    "name": "Hedera Hackathon 2025 - HTS Auto-Association Demo",
+    "core": "0x976dA6b45a84684bA0f42fd96Ea02026Db55F2B8",
+    "members": "0x40F5C6a3998E3510E40D4aA6c93f8ea08228C526",
+    "collateral": "0x508C5Cb7e7C6d9a4053e65f70Ee4Fb2878BC4Ece",
+    "payments": "0xc168a2EeAc95c5c0C8F96C15a5d8da4b1727eF12",
+    "governance": "0x3D4F3a567D81C0a8aB93c1Fe176fB280dEd92042",
+    "schedule": "0x90A2a0A8D260746034417A636a133FF128aE3710",
+    "hcsTopicId": "0xa4cb1c53e70ac53a4c9ea4e9c3bd9757a9dd785b1e0f54412f01a5291cb1465b",
+    "usesHtsTokens": true,
+    "usesScheduledPayments": true
+  },
+  "hederaServices": {
+    "HTS": {
+      "enabled": true,
+      "autoAssociation": true,
+      "usdcToken": "0x00000000000000000000000000000000006bB8AE",
+      "hbarToken": "0x00000000000000000000000000000000006bb8AF"
+    },
+    "HSS": {
+      "enabled": true,
+      "address": "0x000000000000000000000000000000000000016b"
+    },
+    "HCS": {
+      "enabled": true,
+      "topicId": "0xa4cb1c53e70ac53a4c9ea4e9c3bd9757a9dd785b1e0f54412f01a5291cb1465b"
+    }
+  },
+  "participants": [],
+  "statistics": {
+    "totalParticipants": 0,
+    "successfulJoins": 0,
+    "htsEnabled": true,
+    "autoAssociationEnabled": true,
+    "batchOperations": false,
+    "individualCalls": true
+  }
+}

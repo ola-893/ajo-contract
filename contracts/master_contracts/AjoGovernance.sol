@@ -12,10 +12,8 @@ import "../hedera/HederaResponseCodes.sol";
 
 /**
  * @title AjoGovernance
- * @notice Governance using HCS for vote submission (HSS removed - moved to separate contract)
- * @dev Simplified approach: no aggregators, no Merkle trees, no challenges
- * 
- * KEY CHANGE: Now inherits from HederaTokenService instead of using HTSHelper
+ * @notice Governance using HCS for vote submission with full cycle management
+ * @dev Includes cycle completion, restart, member participation, and onboarding governance
  * 
  * Architecture:
  * 1. Member creates proposal on-chain
@@ -25,12 +23,11 @@ import "../hedera/HederaResponseCodes.sol";
  * 5. Contract verifies signatures and counts votes
  * 6. After voting period, proposal can be executed
  * 
- * Key Benefits:
- * - 90%+ cost reduction vs on-chain voting
- * - No trusted aggregators (anyone can tally)
- * - Simple and auditable
- * - Perfect for 10-52 member groups
- * - Direct HTS integration via inheritance
+ * NEW: Full cycle management for ROSCA continuity
+ * - Cycle completion governance
+ * - Member participation opt-in/opt-out
+ * - New member onboarding
+ * - Cycle restart with new parameters
  */
 contract AjoGovernance is 
     Initializable, 
@@ -38,19 +35,16 @@ contract AjoGovernance is
     Ownable, 
     ReentrancyGuard, 
     Pausable,
-    HederaTokenService  // ✅ INHERIT from HederaTokenService
+    HederaTokenService
 {
     using ECDSA for bytes32;
     
     // ============ STATE VARIABLES ============
     
     address public ajoCore;
-    address public ajoSchedule; // Separate contract for HSS
+    address public ajoSchedule;
     address public membersContract;
     bytes32 public hcsTopicId;
-    
-    // ✅ REMOVED: address public hederaTokenService; 
-    // No longer needed - inherited from HederaTokenService
     
     // Proposal tracking
     uint256 public proposalCount;
@@ -61,6 +55,24 @@ contract AjoGovernance is
     uint256 public proposalThreshold;
     uint256 public quorumPercentage;
     uint256 public penaltyRate;
+    
+    // ============ CYCLE MANAGEMENT STATE ============
+    
+    uint256 public currentCycle;
+    mapping(uint256 => mapping(address => bool)) public cycleParticipation;
+    mapping(uint256 => bool) public cycleCompleted;
+    mapping(uint256 => uint256) public cycleEndTime;
+    
+    // Member intentions for next cycle
+    mapping(address => bool) public willParticipateInNextCycle;
+    uint256 public participationDeclarationDeadline;
+    
+    // Carry-over rules
+    bool public carryReputationToNextCycle;
+    bool public carryPenaltiesToNextCycle;
+    
+    // New member proposals
+    mapping(address => uint256) public pendingNewMembers; // address => proposalId
     
     // ============ STRUCTS ============
     
@@ -88,7 +100,13 @@ contract AjoGovernance is
         UpdatePenaltyRate,
         FreezeAccount,
         UnfreezeAccount,
-        Custom
+        Custom,
+        CompleteCurrentCycle,      // ✅ NEW
+        RestartNewCycle,           // ✅ NEW
+        AddNewMember,              // ✅ NEW
+        UpdateCycleParameters,     // ✅ NEW
+        SetParticipationDeadline,  // ✅ NEW
+        SetCarryOverRules          // ✅ NEW
     }
     
     // Vote tracking
@@ -128,35 +146,34 @@ contract AjoGovernance is
     
     // ============ INITIALIZATION ============
     
-    /**
-     * @notice Initialize the governance contract
-     * @param _ajoCore Address of AjoCore contract
-     * @param _ajoSchedule Address of AjoSchedule contract (for HSS integration)
-     * @param _hederaTokenService DEPRECATED - kept for interface compatibility only
-     * @param _hcsTopicId HCS topic ID for this Ajo's governance
-     */
     function initialize(
         address _ajoCore,
+        address _ajoMembers,  
         address _ajoSchedule,
-        address _hederaTokenService, // ✅ Ignored - kept for interface compatibility
+        address _hederaTokenService,
         bytes32 _hcsTopicId
     ) external override initializer {
         require(_ajoCore != address(0), "Invalid AjoCore");
-        // ✅ No longer requiring _hederaTokenService - we inherit it
+        require(_ajoMembers != address(0), "Invalid Members"); 
         
         _transferOwnership(msg.sender);
         
         ajoCore = _ajoCore;
+        membersContract = _ajoMembers;  
         ajoSchedule = _ajoSchedule;
-        // ✅ REMOVED: hederaTokenService = _hederaTokenService;
         hcsTopicId = _hcsTopicId;
         proposalCount = 0;
+        currentCycle = 1;
         
         // Set default governance parameters
         votingPeriod = 7 days;
         proposalThreshold = 1;
         quorumPercentage = 51;
         penaltyRate = 5;
+        
+        // Set default carry-over rules
+        carryReputationToNextCycle = true;
+        carryPenaltiesToNextCycle = false;
     }
     
     function setMembersContract(address _membersContract) external onlyOwner {
@@ -181,9 +198,6 @@ contract AjoGovernance is
     
     // ============ INTERNAL HTS HELPER FUNCTIONS ============
     
-    /**
-     * @dev Get human-readable error message for HTS response code
-     */
     function _getHtsErrorMessage(int responseCode) internal pure returns (string memory) {
         if (responseCode == 22) return "Success";
         if (responseCode == 111) return "Invalid token ID";
@@ -199,21 +213,223 @@ contract AjoGovernance is
         return "Unknown error";
     }
     
-    /**
-     * @dev Check if HTS operation was successful
-     */
     function _isHtsSuccess(int responseCode) internal pure returns (bool) {
         return responseCode == HederaResponseCodes.SUCCESS;
     }
     
-    // ============ PROPOSAL CREATION ============
+    // ============ CYCLE MANAGEMENT - PARTICIPATION ============
     
     /**
-     * @notice Create a new governance proposal
-     * @param description Human-readable description
-     * @param proposalData Encoded execution data
-     * @return proposalId Unique identifier
+     * @notice Member declares intent to participate in next cycle
+     * @param participate true to continue, false to opt out
      */
+    function declareNextCycleParticipation(bool participate) 
+        external 
+        onlyMember 
+        whenNotPaused
+    {
+        require(participationDeclarationDeadline > 0, "No declaration period active");
+        require(block.timestamp <= participationDeclarationDeadline, "Declaration period ended");
+        
+        willParticipateInNextCycle[msg.sender] = participate;
+        
+        emit ParticipationDeclared(msg.sender, participate, currentCycle + 1);
+    }
+    
+    /**
+     * @notice Get member participation status
+     */
+    function getMemberParticipationStatus(address member) 
+        external 
+        view 
+        returns (bool willParticipate) 
+    {
+        return willParticipateInNextCycle[member];
+    }
+    
+    /**
+     * @notice Get cycle status
+     */
+    function getCycleStatus() external view returns (
+        uint256 _currentCycle,
+        bool _isCycleCompleted,
+        uint256 _participationDeadline,
+        uint256 _declaredParticipants
+    ) {
+        uint256 participantCount = 0;
+        uint256 totalMembers = _getTotalMembers();
+        
+        for (uint256 i = 0; i < totalMembers; i++) {
+            address member = _getMemberAtIndex(i);
+            if (willParticipateInNextCycle[member]) {
+                participantCount++;
+            }
+        }
+        
+        return (
+            currentCycle,
+            cycleCompleted[currentCycle],
+            participationDeclarationDeadline,
+            participantCount
+        );
+    }
+    
+    // ============ CYCLE MANAGEMENT - PROPOSALS ============
+    
+    /**
+     * @notice Create proposal to complete current cycle
+     */
+    function proposeCycleCompletion(string memory description) 
+        external 
+        onlyMember 
+        whenNotPaused
+        returns (uint256 proposalId) 
+    {
+        require(!cycleCompleted[currentCycle], "Cycle already completed");
+        
+        bytes memory proposalData = abi.encode(currentCycle);
+        
+        proposalCount++;
+        proposalId = proposalCount;
+        
+        Proposal storage proposal = proposals[proposalId];
+        proposal.id = proposalId;
+        proposal.proposer = msg.sender;
+        proposal.description = description;
+        proposal.proposalData = proposalData;
+        proposal.startTime = block.timestamp;
+        proposal.endTime = block.timestamp + votingPeriod;
+        proposal.proposalType = ProposalType.CompleteCurrentCycle;
+        
+        emit ProposalCreated(proposalId, msg.sender, description, block.timestamp, proposal.endTime);
+        return proposalId;
+    }
+    
+    /**
+     * @notice Create proposal to restart with new parameters
+     */
+    function proposeNewCycleRestart(
+        string memory description,
+        uint256 newDuration,
+        uint256 newMonthlyContribution,
+        address[] memory newMembers
+    ) external onlyMember whenNotPaused returns (uint256 proposalId) {
+        require(cycleCompleted[currentCycle], "Current cycle not completed");
+        require(newDuration > 0, "Invalid duration");
+        require(newMonthlyContribution > 0, "Invalid contribution");
+        
+        bytes memory proposalData = abi.encode(
+            newDuration,
+            newMonthlyContribution,
+            newMembers
+        );
+        
+        proposalCount++;
+        proposalId = proposalCount;
+        
+        Proposal storage proposal = proposals[proposalId];
+        proposal.id = proposalId;
+        proposal.proposer = msg.sender;
+        proposal.description = description;
+        proposal.proposalData = proposalData;
+        proposal.startTime = block.timestamp;
+        proposal.endTime = block.timestamp + votingPeriod;
+        proposal.proposalType = ProposalType.RestartNewCycle;
+        
+        emit ProposalCreated(proposalId, msg.sender, description, block.timestamp, proposal.endTime);
+        return proposalId;
+    }
+    
+    /**
+     * @notice Propose adding a new member for next cycle
+     */
+    function proposeNewMember(
+        address newMember,
+        string memory description
+    ) external onlyMember whenNotPaused returns (uint256 proposalId) {
+        require(newMember != address(0), "Invalid member address");
+        require(!_isMember(newMember), "Already a member");
+        require(pendingNewMembers[newMember] == 0, "Member already proposed");
+        
+        bytes memory proposalData = abi.encode(newMember);
+        
+        proposalCount++;
+        proposalId = proposalCount;
+        
+        Proposal storage proposal = proposals[proposalId];
+        proposal.id = proposalId;
+        proposal.proposer = msg.sender;
+        proposal.description = description;
+        proposal.proposalData = proposalData;
+        proposal.startTime = block.timestamp;
+        proposal.endTime = block.timestamp + votingPeriod;
+        proposal.proposalType = ProposalType.AddNewMember;
+        
+        pendingNewMembers[newMember] = proposalId;
+        
+        emit ProposalCreated(proposalId, msg.sender, description, block.timestamp, proposal.endTime);
+        emit NewMemberProposed(newMember, proposalId, msg.sender);
+        
+        return proposalId;
+    }
+    
+    /**
+     * @notice Propose updating cycle parameters
+     */
+    function proposeUpdateCycleParameters(
+        string memory description,
+        uint256 newDuration,
+        uint256 newMonthlyPayment
+    ) external onlyMember whenNotPaused returns (uint256 proposalId) {
+        require(newDuration > 0, "Invalid duration");
+        require(newMonthlyPayment > 0, "Invalid payment");
+        
+        bytes memory proposalData = abi.encode(newDuration, newMonthlyPayment);
+        
+        proposalCount++;
+        proposalId = proposalCount;
+        
+        Proposal storage proposal = proposals[proposalId];
+        proposal.id = proposalId;
+        proposal.proposer = msg.sender;
+        proposal.description = description;
+        proposal.proposalData = proposalData;
+        proposal.startTime = block.timestamp;
+        proposal.endTime = block.timestamp + votingPeriod;
+        proposal.proposalType = ProposalType.UpdateCycleParameters;
+        
+        emit ProposalCreated(proposalId, msg.sender, description, block.timestamp, proposal.endTime);
+        return proposalId;
+    }
+    
+    /**
+     * @notice Propose setting carry-over rules
+     */
+    function proposeCarryOverRules(
+        string memory description,
+        bool _carryReputation,
+        bool _carryPenalties
+    ) external onlyMember whenNotPaused returns (uint256 proposalId) {
+        bytes memory proposalData = abi.encode(_carryReputation, _carryPenalties);
+        
+        proposalCount++;
+        proposalId = proposalCount;
+        
+        Proposal storage proposal = proposals[proposalId];
+        proposal.id = proposalId;
+        proposal.proposer = msg.sender;
+        proposal.description = description;
+        proposal.proposalData = proposalData;
+        proposal.startTime = block.timestamp;
+        proposal.endTime = block.timestamp + votingPeriod;
+        proposal.proposalType = ProposalType.SetCarryOverRules;
+        
+        emit ProposalCreated(proposalId, msg.sender, description, block.timestamp, proposal.endTime);
+        return proposalId;
+    }
+    
+    // ============ PROPOSAL CREATION (EXISTING) ============
+    
     function createProposal(
         string memory description,
         bytes memory proposalData
@@ -244,9 +460,6 @@ contract AjoGovernance is
         return proposalId;
     }
     
-    /**
-     * @notice Cancel a proposal (only proposer or governance)
-     */
     function cancelProposal(uint256 proposalId) 
         external 
         override
@@ -261,6 +474,13 @@ contract AjoGovernance is
         require(!proposal.canceled, "Already canceled");
         
         proposal.canceled = true;
+        
+        // Clear pending new member if applicable
+        if (proposal.proposalType == ProposalType.AddNewMember) {
+            address newMember = abi.decode(proposal.proposalData, (address));
+            delete pendingNewMembers[newMember];
+        }
+        
         emit ProposalCanceled(proposalId, msg.sender);
     }
     
@@ -324,11 +544,6 @@ contract AjoGovernance is
     
     // ============ VOTING (HCS-ENABLED) ============
     
-    /**
-     * @notice Tally votes from HCS messages
-     * @param proposalId Proposal being voted on
-     * @param hcsVotes Array of votes from HCS topic
-     */
     function tallyVotesFromHCS(
         uint256 proposalId,
         HcsVote[] memory hcsVotes
@@ -344,32 +559,26 @@ contract AjoGovernance is
         for (uint256 i = 0; i < hcsVotes.length; i++) {
             HcsVote memory hcsVote = hcsVotes[i];
             
-            // Skip if already voted
             if (hasVotedMap[proposalId][hcsVote.voter]) {
                 continue;
             }
             
-            // Verify signature
             if (!_verifyVoteSignature(proposalId, hcsVote)) {
                 continue;
             }
             
-            // Check membership
             if (!_isMember(hcsVote.voter)) {
                 continue;
             }
             
-            // Get voting power
             uint256 actualVotingPower = getVotingPower(hcsVote.voter);
             if (actualVotingPower == 0) {
                 continue;
             }
             
-            // Record vote
             hasVotedMap[proposalId][hcsVote.voter] = true;
             votes[proposalId][hcsVote.voter] = hcsVote;
             
-            // Tally vote
             if (hcsVote.support == 1) {
                 proposal.forVotes += actualVotingPower;
             } else if (hcsVote.support == 0) {
@@ -399,9 +608,6 @@ contract AjoGovernance is
         return 100;
     }
     
-    /**
-     * @notice Verify vote signature using ECDSA
-     */
     function _verifyVoteSignature(
         uint256 proposalId,
         HcsVote memory hcsVote
@@ -422,9 +628,6 @@ contract AjoGovernance is
     
     // ============ PROPOSAL EXECUTION ============
     
-    /**
-     * @notice Execute a passed proposal
-     */
     function executeProposal(uint256 proposalId) 
         external 
         override
@@ -455,13 +658,46 @@ contract AjoGovernance is
         return success;
     }
     
-    /**
-     * @notice Execute proposal action based on type
-     */
     function _executeProposalAction(
-        uint256 /* proposalId */,
+        uint256 proposalId,
         Proposal storage proposal
     ) internal returns (bool, bytes memory) {
+        // ✅ NEW: Cycle Management Execution
+        if (proposal.proposalType == ProposalType.CompleteCurrentCycle) {
+            return _executeCycleCompletion(proposalId);
+        }
+        
+        if (proposal.proposalType == ProposalType.RestartNewCycle) {
+            return _executeCycleRestart(proposalId, proposal);
+        }
+        
+        if (proposal.proposalType == ProposalType.AddNewMember) {
+            address newMember = abi.decode(proposal.proposalData, (address));
+            delete pendingNewMembers[newMember];
+            return ajoCore.call(
+                abi.encodeWithSignature("addMemberForNextCycle(address)", newMember)
+            );
+        }
+        
+        if (proposal.proposalType == ProposalType.UpdateCycleParameters) {
+            (uint256 newDuration, uint256 newMonthlyPayment) = 
+                abi.decode(proposal.proposalData, (uint256, uint256));
+            emit CycleParametersUpdated(newDuration, newMonthlyPayment);
+            return ajoCore.call(
+                abi.encodeWithSignature("updateCycleParameters(uint256,uint256)", newDuration, newMonthlyPayment)
+            );
+        }
+        
+        if (proposal.proposalType == ProposalType.SetCarryOverRules) {
+            (bool _carryReputation, bool _carryPenalties) = 
+                abi.decode(proposal.proposalData, (bool, bool));
+            carryReputationToNextCycle = _carryReputation;
+            carryPenaltiesToNextCycle = _carryPenalties;
+            emit CarryOverRulesUpdated(_carryReputation, _carryPenalties);
+            return (true, "");
+        }
+        
+        // Existing proposal types
         if (proposal.proposalType == ProposalType.UpdatePenaltyRate) {
             uint256 newRate = abi.decode(proposal.proposalData, (uint256));
             require(newRate <= 50, "Rate too high");
@@ -493,102 +729,123 @@ contract AjoGovernance is
         return (false, "Unknown proposal type");
     }
     
-    // ============ HTS ADMIN FUNCTIONS (Using Inherited HederaTokenService) ============
+    // ============ CYCLE EXECUTION LOGIC ============
     
-    /**
-     * @notice Freeze member's token (governance-controlled)
-     * @dev Uses inherited freezeToken function from HederaTokenService
-     */
+    function _executeCycleCompletion(uint256 /* proposalId */) internal returns (bool, bytes memory) {
+        cycleCompleted[currentCycle] = true;
+        cycleEndTime[currentCycle] = block.timestamp;
+        
+        // Set declaration period for next cycle (7 days)
+        participationDeclarationDeadline = block.timestamp + 7 days;
+        
+        emit CycleCompleted(currentCycle, block.timestamp);
+        emit ParticipationDeadlineSet(participationDeclarationDeadline, currentCycle + 1);
+        
+        return (true, "");
+    }
+    
+    function _executeCycleRestart(uint256 /* proposalId */, Proposal storage proposal) 
+        internal 
+        returns (bool, bytes memory) 
+    {
+        (uint256 newDuration, uint256 newMonthlyContribution, address[] memory newMembers) = 
+            abi.decode(proposal.proposalData, (uint256, uint256, address[]));
+        
+        // Filter out members who opted out
+        address[] memory continuingMembers = _getContinuingMembers();
+        
+        // Combine continuing members with new members
+        address[] memory allMembers = new address[](continuingMembers.length + newMembers.length);
+        
+        for (uint256 i = 0; i < continuingMembers.length; i++) {
+            allMembers[i] = continuingMembers[i];
+        }
+        
+        for (uint256 i = 0; i < newMembers.length; i++) {
+            allMembers[continuingMembers.length + i] = newMembers[i];
+        }
+        
+        // Call AjoCore to restart with new parameters
+        (bool success, ) = ajoCore.call(
+            abi.encodeWithSignature(
+                "restartCycle(uint256,uint256,address[])",
+                newDuration,
+                newMonthlyContribution,
+                allMembers
+            )
+        );
+        
+        if (success) {
+            currentCycle++;
+            participationDeclarationDeadline = 0; // Reset declaration period
+            
+            // Reset participation flags for all members
+            for (uint256 i = 0; i < allMembers.length; i++) {
+                willParticipateInNextCycle[allMembers[i]] = false;
+            }
+            
+            emit NewCycleStarted(currentCycle, newDuration, newMonthlyContribution, allMembers);
+        }
+        
+        return (success, "");
+    }
+    
+    function _getContinuingMembers() internal view returns (address[] memory) {
+        uint256 continuingCount = 0;
+        uint256 totalMembers = _getTotalMembers();
+        
+        // First pass: count continuing members
+        for (uint256 i = 0; i < totalMembers; i++) {
+            address member = _getMemberAtIndex(i);
+            if (willParticipateInNextCycle[member]) {
+                continuingCount++;
+            }
+        }
+        
+        // Second pass: create array
+        address[] memory continuingMembers = new address[](continuingCount);
+        uint256 index = 0;
+        
+        for (uint256 i = 0; i < totalMembers; i++) {
+            address member = _getMemberAtIndex(i);
+            if (willParticipateInNextCycle[member]) {
+                continuingMembers[index] = member;
+                index++;
+            }
+        }
+        
+        return continuingMembers;
+    }
+    
+    // ============ HTS ADMIN FUNCTIONS ============
+    
     function freezeMemberToken(
         address token,
         address member
     ) external override onlyAjoCore returns (int64 responseCode) {
-        // ✅ Direct call to inherited HederaTokenService function
         int response = freezeToken(token, member);
-        
-        // Convert int to int64
         responseCode = int64(response);
         bool success = _isHtsSuccess(response);
         
         emit TokenFrozen(token, member, responseCode);
         emit TokenFreezeAttempt(token, member, responseCode, success);
         
-        // Log error if failed
-        if (!success) {
-            // Don't revert - allow governance to continue even if freeze fails
-            // The event will show the failure
-        }
-        
         return responseCode;
     }
     
-    /**
-     * @notice Unfreeze member's token
-     * @dev Uses inherited unfreezeToken function from HederaTokenService
-     */
     function unfreezeMemberToken(
         address token,
         address member
     ) external override onlyAjoCore returns (int64 responseCode) {
-        // ✅ Direct call to inherited HederaTokenService function
         int response = unfreezeToken(token, member);
-        
-        // Convert int to int64
         responseCode = int64(response);
         bool success = _isHtsSuccess(response);
         
         emit TokenUnfrozen(token, member, responseCode);
         emit TokenUnfreezeAttempt(token, member, responseCode, success);
         
-        // Log error if failed
-        if (!success) {
-            // Don't revert - allow governance to continue
-        }
-        
         return responseCode;
     }
-    
-    // /**
-    // * @notice Pause token (emergency)
-    // * @dev Overrides inherited pauseToken function from HederaTokenService
-    // */
-    // function pauseToken(
-    //     address token
-    // ) internal override virtual returns (int responseCode) {
-    //     // Call the parent implementation
-    //     responseCode = super.pauseToken(token);
-        
-    //     bool success = _isHtsSuccess(responseCode);
-        
-    //     emit TokenPaused(token, int64(responseCode));
-    //     emit TokenPauseAttempt(token, int64(responseCode), success);
-        
-    //     // For pause, we might want to revert on failure in emergency situations
-    //     require(success, _getHtsErrorMessage(responseCode));
-        
-    //     return responseCode;
-    // }
-
-    // /**
-    // * @notice Unpause token
-    // * @dev Overrides inherited unpauseToken function from HederaTokenService
-    // */
-    // function unpauseToken(
-    //     address token
-    // ) internal override  virtual returns (int responseCode) {
-    //     // Call the parent implementation
-    //     responseCode = super.unpauseToken(token);
-        
-    //     bool success = _isHtsSuccess(responseCode);
-        
-    //     emit TokenUnpaused(token, int64(responseCode));
-    //     emit TokenUnpauseAttempt(token, int64(responseCode), success);
-        
-    //     // Require success for unpause
-    //     require(success, _getHtsErrorMessage(responseCode));
-        
-    //     return responseCode;
-    // }
     
     // ============ GOVERNANCE PARAMETER UPDATES ============
     
@@ -686,6 +943,57 @@ contract AjoGovernance is
         return proposalIds;
     }
     
+    // ✅ NEW: Cycle Management View Functions
+    
+    function getCarryOverRules() external view returns (bool _carryReputation, bool _carryPenalties) {
+        return (carryReputationToNextCycle, carryPenaltiesToNextCycle);
+    }
+    
+    function getContinuingMembersCount() external view returns (uint256) {
+        uint256 count = 0;
+        uint256 totalMembers = _getTotalMembers();
+        
+        for (uint256 i = 0; i < totalMembers; i++) {
+            address member = _getMemberAtIndex(i);
+            if (willParticipateInNextCycle[member]) {
+                count++;
+            }
+        }
+        
+        return count;
+    }
+    
+    function getContinuingMembersList() external view returns (address[] memory) {
+        return _getContinuingMembers();
+    }
+    
+    function getOptOutMembersList() external view returns (address[] memory) {
+        uint256 optOutCount = 0;
+        uint256 totalMembers = _getTotalMembers();
+        
+        // Count opt-out members
+        for (uint256 i = 0; i < totalMembers; i++) {
+            address member = _getMemberAtIndex(i);
+            if (!willParticipateInNextCycle[member] && participationDeclarationDeadline > 0) {
+                optOutCount++;
+            }
+        }
+        
+        // Create array
+        address[] memory optOutMembers = new address[](optOutCount);
+        uint256 index = 0;
+        
+        for (uint256 i = 0; i < totalMembers; i++) {
+            address member = _getMemberAtIndex(i);
+            if (!willParticipateInNextCycle[member] && participationDeclarationDeadline > 0) {
+                optOutMembers[index] = member;
+                index++;
+            }
+        }
+        
+        return optOutMembers;
+    }
+    
     // ============ INTERNAL HELPERS ============
     
     function _isMember(address account) internal view returns (bool) {
@@ -704,5 +1012,14 @@ contract AjoGovernance is
         
         if (!success || data.length == 0) return 0;
         return abi.decode(data, (uint256));
+    }
+    
+    function _getMemberAtIndex(uint256 index) internal view returns (address) {
+        (bool success, bytes memory data) = membersContract.staticcall(
+            abi.encodeWithSignature("getMemberAtIndex(uint256)", index)
+        );
+        
+        if (!success || data.length == 0) return address(0);
+        return abi.decode(data, (address));
     }
 }

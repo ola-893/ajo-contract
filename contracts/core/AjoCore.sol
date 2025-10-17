@@ -1,46 +1,14 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import "../interfaces/AjoInterfaces.sol";
-import "../hedera/hedera-token-service/HederaTokenService.sol";
-import "../hedera/HederaResponseCodes.sol";
+import "hardhat/console.sol";
 
-/**
- * @title AjoCore
- * @notice Core coordinator for Ajo savings circles with HTS integration
- * @dev Manages member lifecycle, payments, and coordinates with sub-contracts
- * 
- * Architecture:
- * - AjoCore: Orchestrates all operations (INHERITS HederaTokenService)
- * - AjoMembers: Member data storage
- * - AjoCollateral: Collateral management with HTS
- * - AjoPayments: Payment processing with HTS
- * - AjoGovernance: HCS-based governance
- * - AjoSchedule: HSS scheduling (dedicated contract)
- * 
- * Key Changes from Original:
- * ✅ Inherits from HederaTokenService instead of calling it externally
- * ✅ Removed HTSHelper library - using direct HTS calls
- * ✅ Removed hederaTokenService state variable
- * ✅ Direct access to HTS precompile functions via inheritance
- * 
- * Key Features:
- * - HTS-native token operations via inheritance
- * - Comprehensive member lifecycle management
- * - Default handling with freeze/transfer
- * - Emergency controls and pause functionality
- */
-contract AjoCore is 
-    IAjoCore, 
-    ReentrancyGuard, 
-    Ownable, 
-    Initializable,
-    HederaTokenService  // ✅ KEY CHANGE: Inherit from HederaTokenService
-{
+contract AjoCore is IAjoCore, ReentrancyGuard, Ownable, Initializable {
     
     // ============ STATE VARIABLES ============
     
@@ -51,12 +19,6 @@ contract AjoCore is
     IAjoCollateral public collateralContract;
     IAjoPayments public paymentsContract;
     IAjoGovernance public governanceContract;
-    IAjoSchedule public scheduleContract;
-    
-    // ✅ REMOVED: address public hederaTokenService; 
-    // No longer needed - inherited from HederaTokenService base contract
-    
-    bytes32 public hcsTopicId;
     
     uint256 public constant CYCLE_DURATION = 30 days;
     uint256 public constant FIXED_TOTAL_PARTICIPANTS = 10;
@@ -66,29 +28,23 @@ contract AjoCore is
     bool public paused;
     bool private isFirstCycleComplete;
     
-    // HTS token addresses
-    bool public usesHtsTokens;
-    address public usdcHtsToken;
-    address public hbarHtsToken;
-    
-    // Local mappings for quick lookups
+    // New mappings needed for joinAjo functionality
     mapping(uint256 => address) public queuePositions;
     mapping(uint256 => address) public guarantorAssignments;
     address[] public activeMembersList;
+
     
     // ============ EVENTS ============
     
     event CycleAdvanced(uint256 newCycle, uint256 timestamp);
-    event ContractsInitialized(address members, address collateral, address payments, address governance, address schedule);
+    event ContractsInitialized(address members, address collateral, address payments, address governance);
     event MemberJoined(address indexed member, uint256 queueNumber, uint256 collateral, PaymentToken token);
     event GuarantorAssigned(address indexed member, address indexed guarantor, uint256 memberPosition, uint256 guarantorPosition);
     event AjoFull(address indexed ajoContract, uint256 timestamp);
+    event CollateralTransferRequired(address indexed member, uint256 amount, PaymentToken token, address collateralContract);
     event Paused(address account);
     event Unpaused(address account);
-    event HtsAssociationAttempt(address indexed member, address indexed token, int64 responseCode);
-    event HtsTransferAttempt(address indexed token, address indexed from, address indexed to, int64 amount, int64 responseCode);
-    event HtsFreezeAttempt(address indexed token, address indexed account, int64 responseCode);
-    
+
     // ============ ERRORS ============
     
     error InsufficientCollateral();
@@ -106,42 +62,26 @@ contract AjoCore is
     error InsufficientAllowance();
     error CollateralTransferFailed();
     error CollateralNotTransferred();
-    error HtsAssociationRequired();
-    error HtsAssociationFailed(int64 responseCode);
-    // error HtsTransferFailed(int64 responseCode);
-    error HtsOperationFailed(string operation, int64 responseCode);
     
-    // ============ CONSTRUCTOR ============
+    // ============ CONSTRUCTOR (for master copy) ============
     
     constructor() {
+        // Disable initializers on the master copy
         _disableInitializers();
+        
+        // Transfer ownership to address(1) to prevent master copy usage
         _transferOwnership(address(1));
     }
     
-    // ============ INITIALIZATION ============
+    // ============ INITIALIZER (for proxy instances) ============
     
-    /**
-     * @notice Initialize the core contract (called by factory)
-     * @param _usdc USDC token address (ERC20 or HTS)
-     * @param _whbar WHBAR token address (ERC20 or HTS)
-     * @param _ajoMembers Members contract address
-     * @param _ajoCollateral Collateral contract address
-     * @param _ajoPayments Payments contract address
-     * @param _ajoGovernance Governance contract address
-     * @param _ajoSchedule Schedule contract address
-     * @param _hederaTokenService DEPRECATED - kept for interface compatibility only
-     * @param _hcsTopicId HCS topic for governance
-     */
     function initialize(
         address _usdc,
         address _whbar,
         address _ajoMembers,
         address _ajoCollateral,
         address _ajoPayments,
-        address _ajoGovernance,
-        address _ajoSchedule,
-        address _hederaTokenService, // ✅ Ignored - kept for interface compatibility
-        bytes32 _hcsTopicId
+        address _ajoGovernance
     ) external override initializer {
         require(_usdc != address(0), "Invalid USDC address");
         require(_whbar != address(0), "Invalid HBAR address");
@@ -149,471 +89,257 @@ contract AjoCore is
         require(_ajoCollateral != address(0), "Invalid collateral contract");
         require(_ajoPayments != address(0), "Invalid payments contract");
         require(_ajoGovernance != address(0), "Invalid governance contract");
-        require(_ajoSchedule != address(0), "Invalid schedule contract");
-        // ✅ No longer validating _hederaTokenService - we inherit the functionality
         
+        // Initialize ownership for the proxy instance
         _transferOwnership(msg.sender);
         
         // Set token contracts
         USDC = IERC20(_usdc);
         HBAR = IERC20(_whbar);
         
-        // Configure HTS
-        usesHtsTokens = true;
-        usdcHtsToken = _usdc;
-        hbarHtsToken = _whbar;
-        hcsTopicId = _hcsTopicId;
-        
         // Set sub-contracts
         membersContract = IAjoMembers(_ajoMembers);
         collateralContract = IAjoCollateral(_ajoCollateral);
         paymentsContract = IAjoPayments(_ajoPayments);
         governanceContract = IAjoGovernance(_ajoGovernance);
-        scheduleContract = IAjoSchedule(_ajoSchedule);
         
         // Initialize state variables
         nextQueueNumber = 1;
         lastCycleTimestamp = block.timestamp;
         
-        emit ContractsInitialized(_ajoMembers, _ajoCollateral, _ajoPayments, _ajoGovernance, _ajoSchedule);
+        emit ContractsInitialized(_ajoMembers, _ajoCollateral, _ajoPayments, _ajoGovernance);
     }
     
-    // ============ HTS VERIFICATION ============
-    
-    /**
-     * @notice Verify HTS setup is valid
-     * @return isValid Whether setup is valid
-     * @return reason Reason if invalid
-     */
-    function verifyHtsSetup() external view override returns (bool isValid, string memory reason) {
-        if (!usesHtsTokens) {
-            return (true, "Using standard ERC20 tokens");
-        }
-        
-        if (usdcHtsToken == address(0)) {
-            return (false, "USDC HTS token not set");
-        }
-        
-        if (hbarHtsToken == address(0)) {
-            return (false, "HBAR HTS token not set");
-        }
-        
-        return (true, "HTS configured correctly");
-    }
-    
-    /**
-     * @notice Get HTS token information
-     * @param token Token type (USDC or HBAR)
-     * @return HTS token information struct
-     */
-    function getHtsTokenInfo(PaymentToken token) external view override returns (HtsTokenInfo memory) {
-        require(usesHtsTokens, "Not using HTS");
-        
-        address tokenAddress = (token == PaymentToken.USDC) ? usdcHtsToken : hbarHtsToken;
-        string memory name = (token == PaymentToken.USDC) ? "USDC" : "WHBAR";
-        string memory symbol = (token == PaymentToken.USDC) ? "USDC" : "WHBAR";
-        
-        return HtsTokenInfo({
-            tokenAddress: tokenAddress,
-            tokenId: bytes32(uint256(uint160(tokenAddress))),
-            name: name,
-            symbol: symbol,
-            decimals: 6,
-            totalSupply: 0,
-            hasFreezeKey: true,
-            hasWipeKey: false,
-            hasSupplyKey: false,
-            hasPauseKey: true,
-            treasury: address(this)
-        });
-    }
-    
-    /**
-     * @notice Check if member is associated with HTS tokens
-     * @param member Member address
-     * @return usdcAssociated Whether USDC is associated
-     * @return hbarAssociated Whether HBAR is associated
-     */
-    function isHtsAssociated(address member) external view override returns (bool usdcAssociated, bool hbarAssociated) {
-        if (!usesHtsTokens) {
-            return (false, false);
-        }
-        
-        // For view functions, we check the member's HTS status from our records
-        Member memory memberData = membersContract.getMember(member);
-        return (memberData.isHtsAssociated, memberData.isHtsAssociated);
-    }
-    
-    /**
-     * @notice Get HTS transfer status for member
-     * @param member Member address
-     * @param token Token type
-     * @return isAssociated Whether token is associated
-     * @return isFrozen Whether account is frozen
-     * @return canReceive Whether can receive tokens
-     * @return canSend Whether can send tokens
-     */
-    function getHtsTransferStatus(address member, PaymentToken token) 
-        external 
-        view 
-        override 
-        returns (bool isAssociated, bool isFrozen, bool canReceive, bool canSend) 
-    {
-        if (!usesHtsTokens) {
-            return (false, false, false, false);
-        }
-        
-        Member memory memberData = membersContract.getMember(member);
-        isAssociated = memberData.isHtsAssociated;
-        isFrozen = memberData.isFrozen;
-        canReceive = isAssociated && !isFrozen;
-        canSend = isAssociated && !isFrozen;
-    }
-    
-    // ============ HTS HELPER FUNCTIONS (Using Inherited HederaTokenService) ============
-    
-    /**
-     * @notice Associate member with HTS token
-     * @dev Uses inherited associateToken function from HederaTokenService
-     * @param member Member address to associate
-     * @param token Token address to associate
-     * @return responseCode HTS response code
-     */
-    function _associateTokenInternal(address member, address token) internal returns (int64 responseCode) {
-        // ✅ Direct call to inherited HederaTokenService function
-        int256 responseCode = associateToken(member, token);
-        
-        emit HtsAssociationAttempt(member, token, int64(responseCode));
-        
-        // Handle TOKEN_ALREADY_ASSOCIATED_TO_ACCOUNT as success
-        if (responseCode == HederaResponseCodes.TOKEN_ALREADY_ASSOCIATED_TO_ACCOUNT) {
-            return HederaResponseCodes.SUCCESS;
-        }
-        
-        return int64(responseCode);
-    }
-    
-    /**
-     * @notice Transfer HTS tokens
-     * @dev Uses inherited transferToken function from HederaTokenService
-     * @param token Token address
-     * @param from Sender address
-     * @param to Recipient address
-     * @param amount Amount to transfer (as int64)
-     * @return responseCode HTS response code
-     */
-    function _transferTokenInternal(
-        address token,
-        address from,
-        address to,
-        int64 amount
-    ) internal returns (int64 responseCode) {
-        // ✅ Direct call to inherited HederaTokenService function
-        int256 responseCode = transferToken(token, from, to, amount);
-        
-        emit HtsTransferAttempt(token, from, to, amount, int64(responseCode));
-        
-        return int64(responseCode);
-    }
-    
-    /**
-     * @notice Check if account is frozen for token
-     * @dev Uses inherited isFrozen function from HederaTokenService
-     * @param token Token address
-     * @param account Account to check
-     * @return responseCode HTS response code
-     * @return frozen Whether account is frozen
-     */
-    function _checkFrozenStatus(address token, address account) 
-        internal 
-        returns (int64 responseCode, bool frozen) 
-    {
-        // ✅ Direct call to inherited HederaTokenService function
-        return isFrozen(token, account);
-    }
-    
-    /**
-     * @notice Freeze token account
-     * @dev Uses inherited freezeToken function from HederaTokenService
-     * @param token Token address
-     * @param account Account to freeze
-     * @return responseCode HTS response code
-     */
-    function _freezeTokenInternal(address token, address account) internal returns (int64 responseCode) {
-        // ✅ Direct call to inherited HederaTokenService function
-        responseCode = freezeToken(token, account);
-        
-        emit HtsFreezeAttempt(token, account, responseCode);
-        
-        return responseCode;
-    }
-    
-    /**
-     * @notice Unfreeze token account
-     * @dev Uses inherited unfreezeToken function from HederaTokenService
-     * @param token Token address
-     * @param account Account to unfreeze
-     * @return responseCode HTS response code
-     */
-    function _unfreezeTokenInternal(address token, address account) internal returns (int64 responseCode) {
-        // ✅ Direct call to inherited HederaTokenService function
-        responseCode = unfreezeToken(token, account);
-        
-        emit HtsFreezeAttempt(token, account, responseCode);
-        
-        return responseCode;
-    }
-    
-    // ============ MEMBER LIFECYCLE ============
-    
-    /**
-     * @notice Join the Ajo circle
-     * @param tokenChoice Preferred payment token (USDC or HBAR)
-     * @return collateralResult HTS transfer result for collateral
-     */
-    function joinAjo(PaymentToken tokenChoice) 
-        external 
-        override 
-        nonReentrant 
-        returns (HtsTransferResult memory collateralResult) 
-    {
-        Member memory existingMember = membersContract.getMember(msg.sender);
-        if (existingMember.isActive) revert MemberAlreadyExists();
-        
-        if (nextQueueNumber > FIXED_TOTAL_PARTICIPANTS) revert AjoCapacityReached();
-        
-        TokenConfig memory config = paymentsContract.getTokenConfig(tokenChoice);
-        if (!config.isActive) revert TokenNotSupported();
-        if (config.monthlyPayment == 0) revert InvalidTokenConfiguration();
-        
-        // ✅ HTS Association - Using inherited HederaTokenService function
-        if (usesHtsTokens) {
-            address tokenAddress = (tokenChoice == PaymentToken.USDC) ? usdcHtsToken : hbarHtsToken;
+    function joinAjo(PaymentToken tokenChoice) external override nonReentrant {
+            console.log("joinAjo: caller=%s, token=%s", msg.sender, uint256(tokenChoice));
             
-            // Associate the token with the member
-            int64 associateResponse = _associateTokenInternal(msg.sender, tokenAddress);
+            // Check if member already exists
+            Member memory existingMember = membersContract.getMember(msg.sender);
+            if (existingMember.isActive) revert MemberAlreadyExists();
             
-            if (associateResponse != HederaResponseCodes.SUCCESS) {
-                revert HtsAssociationFailed(associateResponse);
+            // Check Ajo capacity (max 10 members)
+            if (nextQueueNumber > FIXED_TOTAL_PARTICIPANTS) revert AjoCapacityReached();
+            
+            // Step 1: Check token configuration exists (monthly payment amount set)
+            console.log("Getting token config...");
+            TokenConfig memory config = paymentsContract.getTokenConfig(tokenChoice);
+            if (!config.isActive) revert TokenNotSupported();
+            if (config.monthlyPayment == 0) revert InvalidTokenConfiguration();
+            
+            // Step 2: Calculate collateral for current position
+            console.log("Calculating collateral for position %s", nextQueueNumber);
+            uint256 requiredCollateral = collateralContract.calculateRequiredCollateral(
+                nextQueueNumber,
+                config.monthlyPayment,
+                FIXED_TOTAL_PARTICIPANTS
+            );
+            console.log("Required collateral: %s", requiredCollateral);
+            
+            // Calculate guarantor position (returns 0 if no guarantor for odd-numbered last position)
+            uint256 guarantorPos = collateralContract.calculateGuarantorPosition(
+                nextQueueNumber, 
+                FIXED_TOTAL_PARTICIPANTS
+            );
+            
+            // Find guarantor address if they exist (guarantorPos == 0 means no guarantor)
+            address guarantorAddr = address(0);
+            if (guarantorPos > 0 && guarantorPos != nextQueueNumber) {
+                address potentialGuarantor = membersContract.getQueuePosition(guarantorPos);
+                if (potentialGuarantor != address(0)) {
+                    guarantorAddr = potentialGuarantor;
+                }
             }
             
-            // Update member's HTS association status
-            membersContract.updateHtsAssociationStatus(msg.sender, true);
+            // Step 3 & 4: Handle collateral transfer
+            if (requiredCollateral > 0) {
+                console.log("Processing collateral transfer...");
+                
+                // Get the appropriate token contract
+                IERC20 paymentToken = (tokenChoice == PaymentToken.USDC) ? USDC : HBAR;
+                
+                // Check user has sufficient balance
+                if (paymentToken.balanceOf(msg.sender) < requiredCollateral) {
+                    console.log("ERROR: Insufficient balance");
+                    revert InsufficientCollateralBalance();
+                }
+                
+                // Check allowance and lock collateral
+                if (paymentToken.allowance(msg.sender, address(collateralContract)) >= requiredCollateral) {
+                    console.log("Locking collateral...");
+                    collateralContract.lockCollateral(msg.sender, requiredCollateral, tokenChoice);
+                } else {
+                    console.log("ERROR: Insufficient allowance");
+                    emit CollateralTransferRequired(msg.sender, requiredCollateral, tokenChoice, address(collateralContract));
+                    revert CollateralNotTransferred();
+                }
+            }
+            
+            // Calculate initial reputation
+            uint256 initialReputation = _calculateInitialReputation(requiredCollateral, config.monthlyPayment);
+            
+            // Calculate guarantee position (who this member guarantees) - bidirectional lookup
+            uint256 newMemberGuaranteePosition = 0;
+            for (uint256 i = 1; i <= FIXED_TOTAL_PARTICIPANTS; i++) {
+                uint256 theirGuarantor = collateralContract.calculateGuarantorPosition(i, FIXED_TOTAL_PARTICIPANTS);
+                if (theirGuarantor == nextQueueNumber) {
+                    newMemberGuaranteePosition = i;
+                    break;
+                }
+            }
+            
+            // Step 5: Create member record
+            Member memory newMember = Member({
+                queueNumber: nextQueueNumber,
+                joinedCycle: paymentsContract.getCurrentCycle(),
+                totalPaid: 0,
+                requiredCollateral: requiredCollateral,
+                lockedCollateral: requiredCollateral,
+                lastPaymentCycle: 0,
+                defaultCount: 0,
+                hasReceivedPayout: false,
+                isActive: true,
+                guarantor: guarantorAddr,
+                preferredToken: tokenChoice,
+                reputationScore: initialReputation,
+                pastPayments: new uint256[](0),
+                guaranteePosition: newMemberGuaranteePosition
+            });
+            
+            // Add member to members contract
+            console.log("Adding member to contract...");
+            membersContract.addMember(msg.sender, newMember);
+            
+            // Update local mappings
+            queuePositions[nextQueueNumber] = msg.sender;
+            activeMembersList.push(msg.sender);
+            
+            // Handle guarantor assignment
+            if (guarantorAddr != address(0)) {
+                guarantorAssignments[nextQueueNumber] = guarantorAddr;
+                emit GuarantorAssigned(msg.sender, guarantorAddr, nextQueueNumber, guarantorPos);
+            }
+            
+            // Increment queue number
+            nextQueueNumber++;
+            
+            // Emit member joined event
+            emit MemberJoined(msg.sender, newMember.queueNumber, requiredCollateral, tokenChoice);
+            
+            // If this is the 10th member, mark Ajo as full and ready to start
+            if (nextQueueNumber > FIXED_TOTAL_PARTICIPANTS) {
+                emit AjoFull(address(this), block.timestamp);
+                
+                // Initialize first cycle if needed
+                if (paymentsContract.getCurrentCycle() == 0) {
+                    paymentsContract.advanceCycle(); // Start cycle 1
+                }
+            }
+            
+            console.log("joinAjo: SUCCESS - member %s added at position %s", msg.sender, newMember.queueNumber);
         }
         
-        // Calculate collateral
-        uint256 requiredCollateral = collateralContract.calculateRequiredCollateral(
+    // NEW HELPER FUNCTION: For users to check required collateral before joining
+    function getRequiredCollateralForJoin(PaymentToken tokenChoice) external view returns (uint256) {
+        TokenConfig memory config = paymentsContract.getTokenConfig(tokenChoice);
+        return collateralContract.calculateRequiredCollateral(
             nextQueueNumber,
             config.monthlyPayment,
             FIXED_TOTAL_PARTICIPANTS
         );
-        
-        // Calculate guarantor
-        uint256 guarantorPos = collateralContract.calculateGuarantorPosition(
-            nextQueueNumber, 
-            FIXED_TOTAL_PARTICIPANTS
-        );
-        
-        address guarantorAddr = address(0);
-        if (guarantorPos > 0 && guarantorPos != nextQueueNumber) {
-            address potentialGuarantor = membersContract.getQueuePosition(guarantorPos);
-            if (potentialGuarantor != address(0)) {
-                guarantorAddr = potentialGuarantor;
-            }
-        }
-        
-        // Lock collateral
-        if (requiredCollateral > 0) {
-            collateralResult = collateralContract.lockCollateralHts(
-                msg.sender, 
-                requiredCollateral, 
-                tokenChoice
-            );
-            
-            if (!collateralResult.success) {
-                revert CollateralTransferFailed();
-            }
-        } else {
-            // No collateral required - return success result
-            collateralResult = HtsTransferResult({
-                responseCode: HederaResponseCodes.SUCCESS,
-                success: true,
-                errorMessage: ""
-            });
-        }
-        
-        // Calculate initial reputation
-        uint256 initialReputation = _calculateInitialReputation(requiredCollateral, config.monthlyPayment);
-        
-        // Calculate guarantee position
-        uint256 newMemberGuaranteePosition = 0;
-        for (uint256 i = 1; i <= FIXED_TOTAL_PARTICIPANTS; i++) {
-            uint256 theirGuarantor = collateralContract.calculateGuarantorPosition(i, FIXED_TOTAL_PARTICIPANTS);
-            if (theirGuarantor == nextQueueNumber) {
-                newMemberGuaranteePosition = i;
-                break;
-            }
-        }
-        
-        // Create member record
-        Member memory newMember = Member({
-            queueNumber: nextQueueNumber,
-            joinedCycle: paymentsContract.getCurrentCycle(),
-            totalPaid: 0,
-            requiredCollateral: requiredCollateral,
-            lockedCollateral: requiredCollateral,
-            lastPaymentCycle: 0,
-            defaultCount: 0,
-            hasReceivedPayout: false,
-            isActive: true,
-            guarantor: guarantorAddr,
-            preferredToken: tokenChoice,
-            reputationScore: initialReputation,
-            pastPayments: new uint256[](0),
-            guaranteePosition: newMemberGuaranteePosition,
-            isHtsAssociated: usesHtsTokens,
-            isFrozen: false
-        });
-        
-        membersContract.addMember(msg.sender, newMember);
-        
-        queuePositions[nextQueueNumber] = msg.sender;
-        activeMembersList.push(msg.sender);
-        
-        if (guarantorAddr != address(0)) {
-            guarantorAssignments[nextQueueNumber] = guarantorAddr;
-            emit GuarantorAssigned(msg.sender, guarantorAddr, nextQueueNumber, guarantorPos);
-        }
-        
-        nextQueueNumber++;
-        
-        emit MemberJoined(msg.sender, newMember.queueNumber, requiredCollateral, tokenChoice);
-        
-        if (nextQueueNumber > FIXED_TOTAL_PARTICIPANTS) {
-            emit AjoFull(address(this), block.timestamp);
-            
-            if (paymentsContract.getCurrentCycle() == 0) {
-                paymentsContract.advanceCycle();
-            }
-        }
-        
-        return collateralResult;
     }
     
-    /**
-     * @notice Process monthly payment
-     * @return HTS transfer result
-     */
-    function processPayment() 
-        external 
-        override 
-        nonReentrant 
-        returns (HtsTransferResult memory) 
-    {
-        Member memory member = membersContract.getMember(msg.sender);
-        if (!member.isActive) revert MemberNotFound();
-        
-        TokenConfig memory config = paymentsContract.getTokenConfig(member.preferredToken);
+    function processPayment() external override nonReentrant {
         uint256 currentCycle = paymentsContract.getCurrentCycle();
         
-        HtsTransferResult memory result = paymentsContract.processPaymentHts(
-            msg.sender, 
-            config.monthlyPayment, 
-            member.preferredToken
-        );
+        // Process payment through payments contract
+        paymentsContract.processPayment(msg.sender, 50e6, PaymentToken.USDC);
         
-        if (result.success) {
-            membersContract.updateLastPaymentCycle(msg.sender, currentCycle);
-        }
-        
-        return result;
+        // Update member's last payment cycle
+        membersContract.updateLastPaymentCycle(msg.sender, currentCycle);
     }
+
     
-    /**
-     * @notice Distribute payout to next recipient
-     * @return HTS transfer result
-     */
-    function distributePayout() 
-        external 
-        override 
-        nonReentrant 
-        returns (HtsTransferResult memory) 
-    {
-        HtsTransferResult memory result;
-        
+    function distributePayout() external override nonReentrant {
+        // For the first payout, advance the cycle immediately without a time check.
         if (!isFirstCycleComplete) {
-            (,, result) = paymentsContract.distributePayoutHts();
+            // Attempt to distribute the payout via the payments contract.
+            // This contract will have its own checks to ensure a payout is ready for the current cycle.
+            paymentsContract.distributePayout();
             _advanceCycle();
-            isFirstCycleComplete = true;
+            isFirstCycleComplete = true; // Mark the first cycle as complete.
         } else {
+            // For all subsequent payouts, check if the 30-day cycle duration has passed.
             if (block.timestamp >= lastCycleTimestamp + CYCLE_DURATION) {
-                (,, result) = paymentsContract.distributePayoutHts();
+                // Attempt to distribute the payout via the payments contract.
+                // This contract will have its own checks to ensure a payout is ready for the current cycle.
+                paymentsContract.distributePayout();
                 _advanceCycle();
-            } else {
-                revert InvalidCycle();
             }
         }
-        
-        return result;
     }
     
-    /**
-     * @notice Handle member default
-     * @param defaulter Address of defaulting member
-     * @return totalRecovered Total amount recovered from default
-     */
-    function handleDefault(address defaulter) 
-        external 
-        override 
-        onlyOwner 
-        returns (uint256 totalRecovered) 
-    {
+    function handleDefault(address defaulter) external override onlyOwner {
+        // Retrieve member data from the members contract
         Member memory member = membersContract.getMember(defaulter);
+        
+        // Ensure the member is currently active in the Ajo circle
         if (!member.isActive) revert MemberNotFound();
         
-        (totalRecovered,) = paymentsContract.handleDefaultHts(defaulter);
+        // 1. Mark the member as defaulted in the payments contract.
+        // This will typically apply penalties and update their default status.
+        paymentsContract.handleDefault(defaulter);
         
+        // 2. Update the defaulter's reputation negatively.
+        // The 'false' boolean indicates a negative reputation event.
         governanceContract.updateReputationAndVotingPower(defaulter, false);
         
+        // 3. Check for a severe default condition (e.g., missing 3 or more cycles).
         uint256 currentCycle = paymentsContract.getCurrentCycle();
         uint256 cyclesMissed = currentCycle - member.lastPaymentCycle;
         
         if (cyclesMissed >= 3) {
-            collateralContract.seizeCollateralHts(defaulter);
+            // --- Severe Default Protocol ---
+            
+            // 3a. Execute the seizure of the defaulter's locked collateral.
+            collateralContract.executeSeizure(defaulter);
+            
+            // 3b. Forcibly remove the defaulter from the Ajo circle.
+            // We use `removeMember` as this is an administrative action.
             membersContract.removeMember(defaulter);
             
+            // 3c. If the defaulter had a guarantor, remove the guarantor as well.
+            // This is the core of the social guarantee mechanism.
             if (member.guarantor != address(0)) {
                 membersContract.removeMember(member.guarantor);
             }
         }
-        
-        return totalRecovered;
     }
     
-    /**
-     * @notice Exit Ajo before receiving payout
-     */
     function exitAjo() external override nonReentrant {
         Member memory member = membersContract.getMember(msg.sender);
         
         if (member.hasReceivedPayout) {
+            // Must complete remaining cycles after receiving payout
             revert Unauthorized();
         }
         
+        // Calculate exit penalty (10%)
         uint256 exitPenalty = member.lockedCollateral / 10;
         uint256 returnAmount = member.lockedCollateral > exitPenalty ? member.lockedCollateral - exitPenalty : 0;
         
+        // Remove member through members contract
         membersContract.removeMember(msg.sender);
-        governanceContract.updateReputationAndVotingPower(msg.sender, false);
         
+        // // Burn voting tokens
+        // governanceContract.updateVotingPower(msg.sender, 0);
+        
+        // Unlock and return remaining collateral
         if (returnAmount > 0) {
-            if (usesHtsTokens) {
-                collateralContract.unlockCollateralHts(msg.sender, returnAmount, member.preferredToken);
-            }
+            collateralContract.unlockCollateral(msg.sender, returnAmount, member.preferredToken);
         }
     }
     
-    // ============ VIEW FUNCTIONS ============
+    // ============ VIEW FUNCTIONS - MEMBER INFORMATION (IPatientAjo) ============
     
     function getMemberInfo(address member) 
         external 
@@ -627,7 +353,7 @@ contract AjoCore is
     {
         memberInfo = membersContract.getMember(member);
         pendingPenalty = paymentsContract.getPendingPenalty(member);
-        effectiveVotingPower = governanceContract.getVotingPower(member);
+        effectiveVotingPower = 2;
     }
     
     function getQueueInfo(address member) 
@@ -643,6 +369,8 @@ contract AjoCore is
         return paymentsContract.needsToPayThisCycle(member);
     }
     
+    // ============ VIEW FUNCTIONS - CONTRACT STATISTICS (IPatientAjo) ============
+    
     function getContractStats() 
         external 
         view 
@@ -655,27 +383,19 @@ contract AjoCore is
             uint256 contractBalanceUSDC,
             uint256 contractBalanceHBAR,
             uint256 currentQueuePosition,
-            PaymentToken activeToken,
-            bool _usesHtsTokens
+            PaymentToken activeToken
         ) 
     {
-        (
-            totalMembers,
-            activeMembers,
-            totalCollateralUSDC,
-            totalCollateralHBAR,
-            contractBalanceUSDC,
-            contractBalanceHBAR,
-            currentQueuePosition,
-            activeToken
-        ) = membersContract.getContractStats();
-        
-        _usesHtsTokens = usesHtsTokens;
+        return membersContract.getContractStats();
     }
+    
+    // ============ VIEW FUNCTIONS - TOKEN CONFIGURATION (IPatientAjo) ============
     
     function getTokenConfig(PaymentToken token) external view override returns (TokenConfig memory) {
         return paymentsContract.getTokenConfig(token);
     }
+    
+    // ============ VIEW FUNCTIONS - V2 COLLATERAL DEMO (IPatientAjo) ============
     
     function getCollateralDemo(uint256 participants, uint256 monthlyPayment) 
         external 
@@ -695,6 +415,8 @@ contract AjoCore is
         }
     }
     
+    // ============ VIEW FUNCTIONS - SECURITY MODEL (IPatientAjo) ============
+    
     function calculateSeizableAssets(address defaulterAddress) 
         external 
         view 
@@ -708,46 +430,88 @@ contract AjoCore is
         return collateralContract.calculateSeizableAssets(defaulterAddress);
     }
     
-    // ============ ADMIN FUNCTIONS ============
+    // ============ ADMIN FUNCTIONS (Ajo) ============
     
     function emergencyWithdraw(PaymentToken token) external override onlyOwner {
+        // Withdraw from collateral contract
         collateralContract.emergencyWithdraw(token, owner(), type(uint256).max);
+        
+        // Withdraw from payments contract  
         paymentsContract.emergencyWithdraw(token);
     }
     
-    function updateCycleDuration(uint256 /* newDuration */) external override onlyOwner {
-        // CYCLE_DURATION is constant
+    function updateCycleDuration(uint256 newDuration) external override onlyOwner {
+        // For now, CYCLE_DURATION is a constant CYCLE_DURATION = 30 days;
+        // There a lots of checks that will be needed to change this in a live Ajo
+        // So we will leave this unimplemented for now.
+        // In future, we could make CYCLE_DURATION a state variable and allow updates here.
     }
     
+    /**
+    * @dev Pauses the contract in case of an emergency.
+    * Can only be called by the owner.
+    * Emits a {Paused} event.
+    */
     function emergencyPause() external override onlyOwner {
-        require(!paused, "Already paused");
+        // Ensure the contract is not already paused
+        require(!paused, "Contract is already paused");
+        
+        // Set the paused state to true
         paused = true;
+        
+        // Emit an event to log the action on-chain
         emit Paused(msg.sender);
     }
-    
+
+    /**
+    * @dev Unpauses the contract.
+    * Can only be called by the owner.
+    * Emits an {Unpaused} event.
+    */
     function unpause() external onlyOwner {
-        require(paused, "Not paused");
+        // Ensure the contract is currently paused
+        require(paused, "Contract is not paused");
+        
+        // Set the paused state to false
         paused = false;
+        
+        // Emit an event to log the action on-chain
         emit Unpaused(msg.sender);
     }
     
     function batchHandleDefaults(address[] calldata defaulters) external override onlyOwner {
+        // 1. Handle the financial aspects of the defaults in the payments contract.
+        // This is done as a batch call for gas efficiency.
         paymentsContract.batchHandleDefaults(defaulters);
         
+        // 2. Get the current cycle once to use throughout the loop.
         uint256 currentCycle = paymentsContract.getCurrentCycle();
         
+        // 3. Loop through each defaulter to handle governance and severe default actions.
         for (uint256 i = 0; i < defaulters.length; i++) {
             address defaulter = defaulters[i];
+            
+            // We must fetch the member's data in each loop iteration, as their state
+            // might have been changed if they were removed as a guarantor earlier in this batch.
             Member memory member = membersContract.getMember(defaulter);
             
+            // Proceed only if the member is still active.
             if (member.isActive) {
+                // 3a. Update reputation negatively for the default.
                 governanceContract.updateReputationAndVotingPower(defaulter, false);
                 
+                // 3b. Check for severe default (3+ cycles missed).
                 uint256 cyclesMissed = currentCycle - member.lastPaymentCycle;
                 if (cyclesMissed >= 3) {
-                    collateralContract.seizeCollateralHts(defaulter);
+                    // --- Severe Default Protocol ---
+                    
+                    // Seize the defaulter's collateral.
+                    collateralContract.executeSeizure(defaulter);
+                    
+                    // Forcibly remove the defaulter from the Ajo circle.
                     membersContract.removeMember(defaulter);
                     
+                    // If a guarantor exists, remove them as well.
                     if (member.guarantor != address(0)) {
                         membersContract.removeMember(member.guarantor);
                     }
@@ -764,6 +528,26 @@ contract AjoCore is
         paymentsContract.updateTokenConfig(token, monthlyPayment, isActive);
     }
     
+    // ============ GOVERNANCE INTEGRATION ============
+    
+    function createProposal(string memory description, bytes memory proposalData) external returns (uint256) {
+        return governanceContract.createProposal(description, proposalData);
+    }
+    
+    // function vote(uint256 proposalId, uint8 support) external {
+    //     governanceContract.vote(proposalId, support);
+    // }
+    
+    function executeProposal(uint256 proposalId) external {
+        governanceContract.executeProposal(proposalId);
+    }
+    
+    // Governance-controlled functions
+    function updatePenaltyRate(uint256 newPenaltyRate) external {
+        require(msg.sender == address(governanceContract), "Only governance");
+        paymentsContract.updatePenaltyRate(newPenaltyRate);
+    }
+    
     // ============ INTERNAL FUNCTIONS ============
     
     function _advanceCycle() internal {
@@ -777,7 +561,12 @@ contract AjoCore is
         pure 
         returns (uint256) 
     {
-        if (monthlyPayment == 0) return 100;
+        if (monthlyPayment == 0) return 100; // Default reputation
+        
+        // Higher collateral = higher initial reputation (they're taking more risk)
+        // Scale: 100 + (collateral/monthlyPayment * 50)
+        // Position 1 with $247.5 collateral and $50 monthly gets: 100 + (247.5/50 * 50) = ~347
+        // Position 10 with $0 collateral gets: 100 + 0 = 100
         return 100 + ((collateral * 50) / monthlyPayment);
     }
 }

@@ -52,6 +52,10 @@ module.exports = {
         process.env.PRIVATE_KEY_4,
         process.env.PRIVATE_KEY_5,
         process.env.PRIVATE_KEY_6,
+        process.env.PRIVATE_KEY_7,
+        process.env.PRIVATE_KEY_8,
+        process.env.PRIVATE_KEY_9,
+         process.env.PRIVATE_KEY_10,
       ].filter(key => key), // Remove undefined keys
       gas: "auto",
       gasPrice: "auto",

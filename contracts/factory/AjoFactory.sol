@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import "../interfaces/AjoInterfaces.sol";
 import "../hedera/hedera-token-service/HederaTokenService.sol";
 import "../hedera/HederaResponseCodes.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol"; 
 
 /**
  * @title AjoFactory
@@ -16,6 +17,7 @@ import "../hedera/HederaResponseCodes.sol";
  * - Can create HTS tokens (USDC/WHBAR) for all Ajos via inherited functions
  * - Each Ajo can use shared HTS tokens or standard ERC20
  * - Deploys AjoGovernance with HCS topic support
+ * - User token association and funding management
  * 
  * HSS Features:
  * - Enable/disable scheduled payments per Ajo
@@ -29,7 +31,7 @@ import "../hedera/HederaResponseCodes.sol";
  * 4. Initialize Core + Token config + Activate
  * 5. Initialize AjoSchedule contract (if HSS enabled)
  */
-contract AjoFactory is IAjoFactory, HederaTokenService {  // ✅ INHERIT from HederaTokenService
+contract AjoFactory is IAjoFactory, HederaTokenService {
     
     // ============ STATE VARIABLES ============
     
@@ -46,12 +48,18 @@ contract AjoFactory is IAjoFactory, HederaTokenService {  // ✅ INHERIT from He
     address public WHBAR;
     
     bool public htsEnabled;
+    bool public factoryTokensMinted;
     address public usdcHtsToken;
     address public hbarHtsToken;
     
     // HSS configuration
     address public hederaScheduleService; // 0x16b
     bool public hssEnabled;
+    
+    // HTS User Association Tracking
+    mapping(address => bool) public userUsdcAssociated;
+    mapping(address => bool) public userHbarAssociated;
+    mapping(address => uint256) public userLastAssociationTime;
     
     // ============ AJO STORAGE (Split into mappings for gas efficiency) ============
     
@@ -93,8 +101,7 @@ contract AjoFactory is IAjoFactory, HederaTokenService {  // ✅ INHERIT from He
     event AjoPhase4Completed(uint256 indexed ajoId);
     event AjoPhase5Completed(uint256 indexed ajoId);
     event AjoForceCompleted(uint256 indexed ajoId, address indexed completer, uint8 finalPhase);
-    event HtsTokenCreationAttempt(string tokenName, int64 responseCode, address tokenAddress, bool success);
-    
+     
     // ============ MODIFIERS ============
     
     modifier onlyOwner() {
@@ -115,6 +122,12 @@ contract AjoFactory is IAjoFactory, HederaTokenService {  // ✅ INHERIT from He
         _;
     }
     
+    modifier htsRequired() {
+        require(htsEnabled, "HTS not enabled");
+        require(usdcHtsToken != address(0) && hbarHtsToken != address(0), "HTS tokens not set");
+        _;
+    }
+    
     // ============ CONSTRUCTOR ============
     
     constructor(
@@ -126,7 +139,7 @@ contract AjoFactory is IAjoFactory, HederaTokenService {  // ✅ INHERIT from He
         address _ajoPaymentsImpl,
         address _ajoGovernanceImpl,
         address _ajoScheduleImpl,
-        address _hederaTokenService, // ✅ Kept for interface compatibility but not used
+        address _hederaTokenService, //  Kept for interface compatibility but not used
         address _hederaScheduleService
     ) {
         require(_usdc != address(0), "Invalid USDC address");
@@ -148,8 +161,6 @@ contract AjoFactory is IAjoFactory, HederaTokenService {  // ✅ INHERIT from He
         ajoGovernanceImplementation = _ajoGovernanceImpl;
         ajoScheduleImplementation = _ajoScheduleImpl;
         
-        // ✅ REMOVED: hederaTokenService = _hederaTokenService;
-        // HTS functionality is inherited, not called externally
         htsEnabled = false; // Must explicitly enable after creating tokens
         
         // HSS configuration (optional)
@@ -198,11 +209,9 @@ contract AjoFactory is IAjoFactory, HederaTokenService {  // ✅ INHERIT from He
     
     // ============ HTS TOKEN CREATION (Using Inherited HederaTokenService) ============
     
-    /**
-     * @notice Create HTS tokens for USDC and WHBAR (one-time setup)
-     * @dev Uses low-level call to HTS precompile with value
-     * @return usdcToken Address of created USDC HTS token
-     * @return hbarToken Address of created WHBAR HTS token
+   /**
+     * @notice Create HTS tokens with auto-association enabled
+     * @dev Factory becomes treasury and holds initial supply
      */
     function createHtsTokens() external payable override onlyOwner returns (
         address usdcToken,
@@ -211,60 +220,51 @@ contract AjoFactory is IAjoFactory, HederaTokenService {  // ✅ INHERIT from He
         require(!htsEnabled, "HTS tokens already created");
         require(msg.value >= 40 * 10**8, "Need 40 HBAR for token creation");
         
-        // ✅ Create USDC HTS token
-        IHederaTokenService.HederaToken memory usdcTokenConfig = _buildTokenConfig(
+        //  Create USDC with auto-association
+        IHederaTokenService.HederaToken memory usdcTokenConfig = _buildTokenConfigWithAutoAssociation(
             "USDC Stablecoin",
             "USDC",
             address(this),
-            "USDC for Ajo.Save"
+            "USDC for Ajo.Save",
+            6
         );
         
-        // Use low-level call to pass value
         (int usdcResponse, address usdcAddr) = _createFungibleTokenWithValue(
             usdcTokenConfig,
             1000000000 * 10**6, // 1B USDC initial supply
-            6, // decimals
-            20 * 10**8 // 20 HBAR
+            6,
+            20 * 10**8
         );
         
-        // Convert int to int64
-        int64 usdcResponseCode = int64(usdcResponse);
-        bool usdcSuccess = _isHtsSuccess(usdcResponse);
-        
-        emit HtsTokenCreationAttempt("USDC", usdcResponseCode, usdcAddr, usdcSuccess);
-        require(usdcSuccess, _getHtsErrorMessage(usdcResponse));
-        
+        require(_isHtsSuccess(usdcResponse), _getHtsErrorMessage(usdcResponse));
         usdcHtsToken = usdcAddr;
         emit HtsTokenCreated(usdcAddr, "USDC Stablecoin", "USDC", 6);
         
-        // ✅ Create WHBAR HTS token
-        IHederaTokenService.HederaToken memory hbarTokenConfig = _buildTokenConfig(
+        //  Create WHBAR with auto-association
+        IHederaTokenService.HederaToken memory hbarTokenConfig = _buildTokenConfigWithAutoAssociation(
             "Wrapped HBAR",
             "WHBAR",
             address(this),
-            "WHBAR for Ajo.Save"
+            "WHBAR for Ajo.Save",
+            8
         );
         
-        // Use low-level call to pass value
         (int hbarResponse, address hbarAddr) = _createFungibleTokenWithValue(
             hbarTokenConfig,
             1000000000 * 10**8, // 1B WHBAR initial supply
-            8, // decimals
-            20 * 10**8 // 20 HBAR
+            8,
+            20 * 10**8
         );
         
-        // Convert int to int64
-        int64 hbarResponseCode = int64(hbarResponse);
-        bool hbarSuccess = _isHtsSuccess(hbarResponse);
-        
-        emit HtsTokenCreationAttempt("WHBAR", hbarResponseCode, hbarAddr, hbarSuccess);
-        require(hbarSuccess, _getHtsErrorMessage(hbarResponse));
-        
+        require(_isHtsSuccess(hbarResponse), _getHtsErrorMessage(hbarResponse));
         hbarHtsToken = hbarAddr;
         emit HtsTokenCreated(hbarAddr, "Wrapped HBAR", "WHBAR", 8);
         
-        // Enable HTS mode
+        // Enable HTS and mark tokens as minted
         htsEnabled = true;
+        factoryTokensMinted = true;
+        
+        emit HtsTokensCreatedWithAutoAssociation(usdcAddr, hbarAddr);
         
         return (usdcAddr, hbarAddr);
     }
@@ -328,30 +328,315 @@ contract AjoFactory is IAjoFactory, HederaTokenService {  // ✅ INHERIT from He
         return htsEnabled;
     }
     
-    /**
-     * @notice Get HTS token information
-     */
-    function getHtsTokenInfo(address token) external view override returns (HtsTokenInfo memory) {
-        require(htsEnabled, "HTS not enabled");
-        require(token == usdcHtsToken || token == hbarHtsToken, "Invalid token");
+    // /**
+    //  * @notice Get HTS token information
+    //  */
+    // function getHtsTokenInfo(address token) external view override returns (HtsTokenInfo memory) {
+    //     require(htsEnabled, "HTS not enabled");
+    //     require(token == usdcHtsToken || token == hbarHtsToken, "Invalid token");
         
-        bool isUsdc = (token == usdcHtsToken);
+    //     bool isUsdc = (token == usdcHtsToken);
         
-        return HtsTokenInfo({
-            tokenAddress: token,
-            tokenId: bytes32(uint256(uint160(token))),
-            name: isUsdc ? "USDC Stablecoin" : "Wrapped HBAR",
-            symbol: isUsdc ? "USDC" : "WHBAR",
-            decimals: isUsdc ? 6 : 8,
-            totalSupply: 1000000000 * (isUsdc ? 10**6 : 10**8),
-            hasFreezeKey: true,
-            hasWipeKey: false,
-            hasSupplyKey: false,
-            hasPauseKey: true,
-            treasury: address(this)
-        });
+    //     return HtsTokenInfo({
+    //         tokenAddress: token,
+    //         tokenId: bytes32(uint256(uint160(token))),
+    //         name: isUsdc ? "USDC Stablecoin" : "Wrapped HBAR",
+    //         symbol: isUsdc ? "USDC" : "WHBAR",
+    //         decimals: isUsdc ? 6 : 8,
+    //         totalSupply: 1000000000 * (isUsdc ? 10**6 : 10**8),
+    //         hasFreezeKey: true,
+    //         hasWipeKey: false,
+    //         hasSupplyKey: false,
+    //         hasPauseKey: true,
+    //         treasury: address(this)
+    //     });
+    // }
+    
+    // ============ HTS USER MANAGEMENT FUNCTIONS ============
+    
+   /**
+ * @notice Fund user with verified balance
+ * @dev With auto-association, tokens transfer automatically
+ * @dev Uses graceful error handling - does not revert on transfer failures
+ */
+function fundUserWithHtsTokens(
+    address user,
+    int64 usdcAmount,
+    int64 hbarAmount
+) 
+    external 
+    override 
+    htsRequired 
+    onlyOwner 
+    returns (bool usdcSuccess, bool hbarSuccess) 
+{
+    require(user != address(0), "Invalid user");
+    require(usdcAmount > 0 || hbarAmount > 0, "No amount specified");
+    require(factoryTokensMinted, "Factory tokens not minted");
+    
+    int64 usdcResponse = 0;
+    int64 hbarResponse = 0;
+    
+    // Transfer USDC if requested
+    if (usdcAmount > 0) {
+        uint256 factoryUsdcBalance = IERC20(usdcHtsToken).balanceOf(address(this));
+        
+        // Check balance but don't revert - handle gracefully
+        if (uint256(uint64(usdcAmount)) <= factoryUsdcBalance) {
+            int usdcResp = transferToken(usdcHtsToken, address(this), user, usdcAmount);
+            usdcResponse = int64(usdcResp);
+            usdcSuccess = _isHtsSuccess(usdcResp);
+            
+            if (!usdcSuccess) {
+                emit HtsTransferFailed(
+                    user, 
+                    usdcHtsToken, 
+                    uint256(uint64(usdcAmount)), 
+                    usdcResponse, 
+                    _getHtsErrorMessage(usdcResp)
+                );
+            }
+        } else {
+            // Insufficient balance - set error code and fail gracefully
+            usdcResponse = HederaResponseCodes.INSUFFICIENT_TOKEN_BALANCE;
+            usdcSuccess = false;
+            emit HtsTransferFailed(
+                user, 
+                usdcHtsToken, 
+                uint256(uint64(usdcAmount)), 
+                usdcResponse, 
+                "Insufficient factory balance"
+            );
+        }
+    } else {
+        usdcSuccess = true; // No USDC requested = success
     }
     
+    // Transfer WHBAR if requested
+    if (hbarAmount > 0) {
+        uint256 factoryHbarBalance = IERC20(hbarHtsToken).balanceOf(address(this));
+        
+        // Check balance but don't revert - handle gracefully
+        if (uint256(uint64(hbarAmount)) <= factoryHbarBalance) {
+            int hbarResp = transferToken(hbarHtsToken, address(this), user, hbarAmount);
+            hbarResponse = int64(hbarResp);
+            hbarSuccess = _isHtsSuccess(hbarResp);
+            
+            if (!hbarSuccess) {
+                emit HtsTransferFailed(
+                    user, 
+                    hbarHtsToken, 
+                    uint256(uint64(hbarAmount)), 
+                    hbarResponse, 
+                    _getHtsErrorMessage(hbarResp)
+                );
+            }
+        } else {
+            // Insufficient balance - set error code and fail gracefully
+            hbarResponse = HederaResponseCodes.INSUFFICIENT_TOKEN_BALANCE;
+            hbarSuccess = false;
+            emit HtsTransferFailed(
+                user, 
+                hbarHtsToken, 
+                uint256(uint64(hbarAmount)), 
+                hbarResponse, 
+                "Insufficient factory balance"
+            );
+        }
+    } else {
+        hbarSuccess = true; // No WHBAR requested = success
+    }
+    
+    // Always emit funding event with results (success or failure)
+    emit UserHtsFunded(
+        user, 
+        usdcAmount > 0 ? uint256(uint64(usdcAmount)) : 0, 
+        hbarAmount > 0 ? uint256(uint64(hbarAmount)) : 0, 
+        usdcResponse, 
+        hbarResponse
+    );
+    
+    return (usdcSuccess, hbarSuccess);
+}
+    
+    
+    /**
+     * @notice Check if a user is associated with HTS tokens
+     * @param user Address of the user to check
+     * @return usdcAssociated Whether user is associated with USDC
+     * @return hbarAssociated Whether user is associated with WHBAR
+     * @return lastAssociationTime Timestamp of last association
+     */
+    function checkUserHtsAssociation(address user) 
+        external 
+        view 
+        override 
+        htsRequired 
+        returns (
+            bool usdcAssociated,
+            bool hbarAssociated,
+            uint256 lastAssociationTime
+        ) 
+    {
+        return (
+            userUsdcAssociated[user],
+            userHbarAssociated[user],
+            userLastAssociationTime[user]
+        );
+    }
+    
+//     /**
+//      * @notice Get HTS token balances for a user
+//      * @param user Address of the user
+//      * @return usdcBalance User's USDC balance
+//      * @return hbarBalance User's WHBAR balance
+//      */
+//    function getUserHtsBalance(address user) 
+//     external 
+//     view 
+//     override 
+//     htsRequired 
+//     returns (uint256 usdcBalance, uint256 hbarBalance) 
+// {
+//     require(user != address(0), "Invalid user address");
+    
+//     // Query USDC balance using low-level call
+//     usdcBalance = _getHtsTokenBalance(usdcHtsToken, user);
+    
+//     // Query WHBAR balance using low-level call
+//     hbarBalance = _getHtsTokenBalance(hbarHtsToken, user);
+    
+//     return (usdcBalance, hbarBalance);
+// }
+
+/**
+ * @dev Internal helper to get HTS token balance using low-level call
+ * @param token The HTS token address
+ * @param account The account to query
+ * @return balance The token balance
+ */
+function _getHtsTokenBalance(address token, address account) internal view returns (uint256 balance) {
+    // Use standard ERC20 balanceOf since HTS tokens are ERC20-compatible
+    // This works because HTS tokens implement the ERC20 interface
+    try IERC20(token).balanceOf(account) returns (uint256 bal) {
+        return bal;
+    } catch {
+        return 0;
+    }
+}
+
+    
+    // /**
+    //  * @notice Check if a user is ready to participate in HTS-based Ajos
+    //  * @dev User must be associated with tokens and have minimum balances
+    //  * @param user Address of the user to check
+    //  * @param minUsdcBalance Minimum required USDC balance
+    //  * @param minHbarBalance Minimum required WHBAR balance
+    //  * @return isReady Whether user meets all requirements
+    //  * @return usdcReady Whether USDC requirements are met
+    //  * @return hbarReady Whether WHBAR requirements are met
+    //  */
+    // function isUserReadyForHts(
+    //     address user,
+    //     uint256 minUsdcBalance,
+    //     uint256 minHbarBalance
+    // ) 
+    //     external 
+    //     view 
+    //     override 
+    //     htsRequired 
+    //     returns (
+    //         bool isReady,
+    //         bool usdcReady,
+    //         bool hbarReady
+    //     ) 
+    // {
+    //     require(user != address(0), "Invalid user address");
+        
+    //     // Check associations
+    //     bool usdcAssoc = userUsdcAssociated[user];
+    //     bool hbarAssoc = userHbarAssociated[user];
+        
+    //     // Check balances
+    //     uint256 usdcBalance = 0;
+    //     uint256 hbarBalance = 0;
+        
+    //     (int usdcResponse, uint256 usdcBal) = this.balanceOf(usdcHtsToken, user);
+    //     if (_isHtsSuccess(usdcResponse)) {
+    //         usdcBalance = usdcBal;
+    //     }
+        
+    //     (int hbarResponse, uint256 hbarBal) = this.balanceOf(hbarHtsToken, user);
+    //     if (_isHtsSuccess(hbarResponse)) {
+    //         hbarBalance = hbarBal;
+    //     }
+        
+    //     usdcReady = usdcAssoc && usdcBalance >= minUsdcBalance;
+    //     hbarReady = hbarAssoc && hbarBalance >= minHbarBalance;
+    //     isReady = usdcReady && hbarReady;
+        
+    //     return (isReady, usdcReady, hbarReady);
+    // }
+
+   // ============ HTS APPROVAL FUNCTIONS ============
+
+/**
+ * @notice Approve HTS token spending for a user
+ * @dev Uses inherited HederaTokenService approve() function
+ * @param token The HTS token address (USDC or WHBAR)
+ * @param spender The address authorized to spend tokens
+ * @param amount The amount to approve
+ * @return success Whether the approval succeeded
+ */
+function approveHtsToken(
+    address token,
+    address spender,
+    uint256 amount
+) external htsRequired returns (bool success) {
+    require(token == usdcHtsToken || token == hbarHtsToken, "Invalid HTS token");
+    require(spender != address(0), "Invalid spender");
+    require(amount > 0, "Amount must be greater than zero");
+    
+    // Use inherited approve() from HederaTokenService
+    // msg.sender is automatically the token owner
+    int responseCode = approve(token, spender, amount);
+    success = _isHtsSuccess(responseCode);
+    
+    if (!success) {
+        emit HtsApprovalFailed(msg.sender, token, spender, amount, int64(responseCode), _getHtsErrorMessage(responseCode));
+        revert(_getHtsErrorMessage(responseCode));
+    }
+    
+    // Emit success event
+    emit HtsTokenApproved(msg.sender, token, spender, amount);
+    
+    return success;
+}
+
+/**
+ * @notice Check HTS token allowance
+ * @dev Uses inherited allowance() from HederaTokenService
+ * @param token The HTS token address
+ * @param owner The token owner
+ * @param spender The spender address
+ * @return currentAllowance The current allowance amount
+ */
+function getHtsAllowance(
+    address token,
+    address owner,
+    address spender
+) external htsRequired returns (uint256 currentAllowance) {
+    require(token == usdcHtsToken || token == hbarHtsToken, "Invalid HTS token");
+    
+    (int responseCode, uint256 allowanceAmount) = allowance(token, owner, spender);
+    
+    if (_isHtsSuccess(responseCode)) {
+        return allowanceAmount;
+    }
+    
+    return 0;
+}
+
     //============ HSS CONFIGURATION ============
     
     /**
@@ -365,12 +650,12 @@ contract AjoFactory is IAjoFactory, HederaTokenService {  // ✅ INHERIT from He
         emit ScheduleServiceSet(_scheduleService);
     }
     
-    /**
-     * @notice Get Hedera Schedule Service address
-     */
-    function getScheduleServiceAddress() external view override returns (address) {
-        return hederaScheduleService;
-    }
+    // /**
+    //  * @notice Get Hedera Schedule Service address
+    //  */
+    // function getScheduleServiceAddress() external view override returns (address) {
+    //     return hederaScheduleService;
+    // }
     
     /**
      * @notice Get AjoSchedule contract address for a specific Ajo
@@ -378,6 +663,8 @@ contract AjoFactory is IAjoFactory, HederaTokenService {  // ✅ INHERIT from He
     function getAjoScheduleContract(uint256 ajoId) external view override validAjoId(ajoId) returns (address) {
         return ajoSchedule[ajoId];
     }
+
+    
     
     /**
      * @notice Enable scheduled payments for an Ajo
@@ -426,31 +713,31 @@ contract AjoFactory is IAjoFactory, HederaTokenService {  // ✅ INHERIT from He
         return (isEnabled, scheduledPaymentsCountResult, executedCount);
     }
     
-    /**
-     * @notice Get all Ajos using scheduled payments
-     */
-    function getAjosUsingScheduledPayments() external view override returns (uint256[] memory ajoIds) {
-        uint256 count = 0;
+    // /**
+    //  * @notice Get all Ajos using scheduled payments
+    //  */
+    // function getAjosUsingScheduledPayments() external view override returns (uint256[] memory ajoIds) {
+    //     uint256 count = 0;
         
-        // Count enabled Ajos
-        for (uint256 i = 1; i < nextAjoId; i++) {
-            if (ajoSchedulingEnabled[i]) {
-                count++;
-            }
-        }
+    //     // Count enabled Ajos
+    //     for (uint256 i = 1; i < nextAjoId; i++) {
+    //         if (ajoSchedulingEnabled[i]) {
+    //             count++;
+    //         }
+    //     }
         
-        ajoIds = new uint256[](count);
-        uint256 index = 0;
+    //     ajoIds = new uint256[](count);
+    //     uint256 index = 0;
         
-        for (uint256 i = 1; i < nextAjoId; i++) {
-            if (ajoSchedulingEnabled[i]) {
-                ajoIds[index] = i;
-                index++;
-            }
-        }
+    //     for (uint256 i = 1; i < nextAjoId; i++) {
+    //         if (ajoSchedulingEnabled[i]) {
+    //             ajoIds[index] = i;
+    //             index++;
+    //         }
+    //     }
         
-        return ajoIds;
-    }
+    //     return ajoIds;
+    // }
     
     //============ AJO CREATION (5-PHASE) ============
     
@@ -557,11 +844,12 @@ contract AjoFactory is IAjoFactory, HederaTokenService {  // ✅ INHERIT from He
         // Store HCS topic ID
         ajoHcsTopicId[ajoId] = hcsTopicId;
         
-        // ✅ Initialize AjoGovernance - pass address(0) for HTS since contracts inherit it
-        IAjoGovernance(ajoGovernance[ajoId]).initialize(
+        //  Initialize AjoGovernance - pass address(0) for HTS since contracts inherit it
+       IAjoGovernance(ajoGovernance[ajoId]).initialize(
             ajoCore[ajoId],
+            ajoMembers[ajoId],
             ajoSchedule[ajoId],
-            address(0), // ✅ No longer needed - contracts inherit HederaTokenService
+            address(0),
             hcsTopicId
         );
         
@@ -584,13 +872,13 @@ contract AjoFactory is IAjoFactory, HederaTokenService {  // ✅ INHERIT from He
     {
         require(ajoInitializationPhase[ajoId] == 2, "Phase 2 must be completed first");
         
-        // ✅ Pass address(0) for HTS since contracts inherit it
+        //  Pass address(0) for HTS since contracts inherit it
         IAjoCollateral(ajoCollateral[ajoId]).initialize(
             ajoUsdcToken[ajoId],
             ajoHbarToken[ajoId],
             ajoCore[ajoId],
-            ajoMembers[ajoId],
-            address(0) // ✅ No longer needed
+            ajoMembers[ajoId]
+            // address(0) //  No longer needed
         );
         
         IAjoPayments(ajoPayments[ajoId]).initialize(
@@ -598,8 +886,8 @@ contract AjoFactory is IAjoFactory, HederaTokenService {  // ✅ INHERIT from He
             ajoHbarToken[ajoId],
             ajoCore[ajoId],
             ajoMembers[ajoId],
-            ajoCollateral[ajoId],
-            address(0) // ✅ No longer needed
+            ajoCollateral[ajoId]
+            // address(0) //  No longer needed
         );
         
         ajoInitializationPhase[ajoId] = 3;
@@ -619,17 +907,17 @@ contract AjoFactory is IAjoFactory, HederaTokenService {  // ✅ INHERIT from He
     {
         require(ajoInitializationPhase[ajoId] == 3, "Phase 3 must be completed first");
         
-        // ✅ Initialize AjoCore - pass address(0) for HTS since it inherits it
+        //  Initialize AjoCore - pass address(0) for HTS since it inherits it
         IAjoCore(ajoCore[ajoId]).initialize(
             ajoUsdcToken[ajoId],
             ajoHbarToken[ajoId],
             ajoMembers[ajoId],
             ajoCollateral[ajoId],
             ajoPayments[ajoId],
-            ajoGovernance[ajoId],
-            ajoSchedule[ajoId],
-            address(0), // ✅ No longer needed - AjoCore inherits HederaTokenService
-            ajoHcsTopicId[ajoId]
+            ajoGovernance[ajoId]
+            // ajoSchedule[ajoId],
+            // address(0), //  No longer needed - AjoCore inherits HederaTokenService
+            // ajoHcsTopicId[ajoId]
         );
         
         // Set default token configuration (USDC)
@@ -674,65 +962,65 @@ contract AjoFactory is IAjoFactory, HederaTokenService {  // ✅ INHERIT from He
         emit AjoInitializedPhase5(ajoId, ajoSchedule[ajoId]);
     }
     
-    /**
-     * @notice Complete all remaining phases in one transaction
-     * @param ajoId The ID of the Ajo to complete
-     * @param startFromPhase Which phase to start from
-     */
-    function completeRemainingPhases(uint256 ajoId, uint8 startFromPhase) 
-        external 
-        validAjoId(ajoId) 
-        onlyCreatorOrOwner(ajoId) 
-    {
-        require(startFromPhase >= 2 && startFromPhase <= 5, "Invalid start phase");
-        require(ajoInitializationPhase[ajoId] == startFromPhase - 1, "Previous phase not completed");
+    // /**
+    //  * @notice Complete all remaining phases in one transaction
+    //  * @param ajoId The ID of the Ajo to complete
+    //  * @param startFromPhase Which phase to start from
+    //  */
+    // function completeRemainingPhases(uint256 ajoId, uint8 startFromPhase) 
+    //     external 
+    //     validAjoId(ajoId) 
+    //     onlyCreatorOrOwner(ajoId) 
+    // {
+    //     require(startFromPhase >= 2 && startFromPhase <= 5, "Invalid start phase");
+    //     require(ajoInitializationPhase[ajoId] == startFromPhase - 1, "Previous phase not completed");
         
-        if (startFromPhase <= 2 && ajoInitializationPhase[ajoId] < 2) {
-            initializeAjoPhase2(ajoId);
-        }
+    //     if (startFromPhase <= 2 && ajoInitializationPhase[ajoId] < 2) {
+    //         initializeAjoPhase2(ajoId);
+    //     }
         
-        if (startFromPhase <= 3 && ajoInitializationPhase[ajoId] < 3) {
-            initializeAjoPhase3(ajoId);
-        }
+    //     if (startFromPhase <= 3 && ajoInitializationPhase[ajoId] < 3) {
+    //         initializeAjoPhase3(ajoId);
+    //     }
         
-        if (startFromPhase <= 4 && ajoInitializationPhase[ajoId] < 4) {
-            initializeAjoPhase4(ajoId);
-        }
+    //     if (startFromPhase <= 4 && ajoInitializationPhase[ajoId] < 4) {
+    //         initializeAjoPhase4(ajoId);
+    //     }
         
-        if (startFromPhase <= 5 && ajoInitializationPhase[ajoId] < 5) {
-            initializeAjoPhase5(ajoId);
-        }
-    }
+    //     if (startFromPhase <= 5 && ajoInitializationPhase[ajoId] < 5) {
+    //         initializeAjoPhase5(ajoId);
+    //     }
+    // }
     
-    /**
-     * @notice Force complete abandoned Ajo (public utility)
-     * @param ajoId The abandoned Ajo to complete
-     */
-    function forceCompleteAbandonedAjo(uint256 ajoId) external validAjoId(ajoId) {
-        require(ajoInitializationPhase[ajoId] < 5, "Already fully initialized");
-        require(block.timestamp > ajoCreatedAt[ajoId] + 24 hours, "Not abandoned yet");
+    // /**
+    //  * @notice Force complete abandoned Ajo (public utility)
+    //  * @param ajoId The abandoned Ajo to complete
+    //  */
+    // function forceCompleteAbandonedAjo(uint256 ajoId) external validAjoId(ajoId) {
+    //     require(ajoInitializationPhase[ajoId] < 5, "Already fully initialized");
+    //     require(block.timestamp > ajoCreatedAt[ajoId] + 24 hours, "Not abandoned yet");
         
-        uint8 currentPhase = ajoInitializationPhase[ajoId];
+    //     uint8 currentPhase = ajoInitializationPhase[ajoId];
         
-        if (currentPhase == 1) {
-            try this.initializeAjoPhase2(ajoId) {} catch {}
-            currentPhase = 2;
-        }
-        if (currentPhase == 2) {
-            try this.initializeAjoPhase3(ajoId) {} catch {}
-            currentPhase = 3;
-        }
-        if (currentPhase == 3) {
-            try this.initializeAjoPhase4(ajoId) {} catch {}
-            currentPhase = 4;
-        }
-        if (currentPhase == 4) {
-            try this.initializeAjoPhase5(ajoId) {} catch {}
-            currentPhase = 5;
-        }
+    //     if (currentPhase == 1) {
+    //         try this.initializeAjoPhase2(ajoId) {} catch {}
+    //         currentPhase = 2;
+    //     }
+    //     if (currentPhase == 2) {
+    //         try this.initializeAjoPhase3(ajoId) {} catch {}
+    //         currentPhase = 3;
+    //     }
+    //     if (currentPhase == 3) {
+    //         try this.initializeAjoPhase4(ajoId) {} catch {}
+    //         currentPhase = 4;
+    //     }
+    //     if (currentPhase == 4) {
+    //         try this.initializeAjoPhase5(ajoId) {} catch {}
+    //         currentPhase = 5;
+    //     }
         
-        emit AjoForceCompleted(ajoId, msg.sender, currentPhase);
-    }
+    //     emit AjoForceCompleted(ajoId, msg.sender, currentPhase);
+    // }
     
     //============ VIEW FUNCTIONS ============
     
@@ -773,191 +1061,191 @@ contract AjoFactory is IAjoFactory, HederaTokenService {  // ✅ INHERIT from He
         return (ajoInfos, hasMore);
     }
     
-    function getAjosByCreator(address creator) 
-        external 
-        view 
-        override 
-        returns (uint256[] memory ajoIds) 
-    {
-        return creatorAjos[creator];
-    }
+    // function getAjosByCreator(address creator) 
+    //     external 
+    //     view 
+    //     override 
+    //     returns (uint256[] memory ajoIds) 
+    // {
+    //     return creatorAjos[creator];
+    // }
     
-    function getAjoCore(uint256 ajoId) 
-        external 
-        view 
-        override 
-        validAjoId(ajoId) 
-        returns (address ajoCoreAddr) 
-    {
-        return ajoCore[ajoId];
-    }
+    // function getAjoCore(uint256 ajoId) 
+    //     external 
+    //     view 
+    //     override 
+    //     validAjoId(ajoId) 
+    //     returns (address ajoCoreAddr) 
+    // {
+    //     return ajoCore[ajoId];
+    // }
     
-    function ajoStatus(uint256 ajoId) 
-        external 
-        view 
-        override 
-        returns (bool exists, bool isActive) 
-    {
-        if (ajoId == 0 || ajoId >= nextAjoId) {
-            return (false, false);
-        }
+    // function ajoStatus(uint256 ajoId) 
+    //     external 
+    //     view 
+    //     override 
+    //     returns (bool exists, bool isActive) 
+    // {
+    //     if (ajoId == 0 || ajoId >= nextAjoId) {
+    //         return (false, false);
+    //     }
         
-        bool isReady = ajoInitializationPhase[ajoId] >= 4;
-        return (true, ajoIsActive[ajoId] && isReady);
-    }
+    //     bool isReady = ajoInitializationPhase[ajoId] >= 4;
+    //     return (true, ajoIsActive[ajoId] && isReady);
+    // }
     
-    function getFactoryStats() 
-        external 
-        view 
-        override 
-        returns (uint256 totalCreated, uint256 activeCount) 
-    {
-        totalCreated = totalAjos;
+    // function getFactoryStats() 
+    //     external 
+    //     view 
+    //     override 
+    //     returns (uint256 totalCreated, uint256 activeCount) 
+    // {
+    //     totalCreated = totalAjos;
         
-        for (uint256 i = 1; i < nextAjoId; i++) {
-            if (ajoIsActive[i] && ajoInitializationPhase[i] >= 4) {
-                activeCount++;
-            }
-        }
+    //     for (uint256 i = 1; i < nextAjoId; i++) {
+    //         if (ajoIsActive[i] && ajoInitializationPhase[i] >= 4) {
+    //             activeCount++;
+    //         }
+    //     }
         
-        return (totalCreated, activeCount);
-    }
+    //     return (totalCreated, activeCount);
+    // }
     
-    function getImplementations() 
-        external 
-        view 
-        override 
-        returns (
-            address ajoCoreImpl,
-            address ajoMembersImpl,
-            address ajoCollateralImpl,
-            address ajoPaymentsImpl,
-            address ajoGovernanceImpl,
-            address ajoScheduleImpl
-        ) 
-    {
-        return (
-            ajoCoreImplementation,
-            ajoMembersImplementation,
-            ajoCollateralImplementation,
-            ajoPaymentsImplementation,
-            ajoGovernanceImplementation,
-            ajoScheduleImplementation
-        );
-    }
+    // function getImplementations() 
+    //     external 
+    //     view 
+    //     override 
+    //     returns (
+    //         address ajoCoreImpl,
+    //         address ajoMembersImpl,
+    //         address ajoCollateralImpl,
+    //         address ajoPaymentsImpl,
+    //         address ajoGovernanceImpl,
+    //         address ajoScheduleImpl
+    //     ) 
+    // {
+    //     return (
+    //         ajoCoreImplementation,
+    //         ajoMembersImplementation,
+    //         ajoCollateralImplementation,
+    //         ajoPaymentsImplementation,
+    //         ajoGovernanceImplementation,
+    //         ajoScheduleImplementation
+    //     );
+    // }
     
-    function getActiveAjoSummaries(uint256 offset, uint256 limit) 
-        external 
-        view 
-        override 
-        returns (AjoSummary[] memory summaries) 
-    {
-        require(limit > 0 && limit <= 100, "Invalid limit");
+    // function getActiveAjoSummaries(uint256 offset, uint256 limit) 
+    //     external 
+    //     view 
+    //     override 
+    //     returns (AjoSummary[] memory summaries) 
+    // {
+    //     require(limit > 0 && limit <= 100, "Invalid limit");
         
-        // Count active Ajos
-        uint256 activeCount = 0;
-        for (uint256 i = 1; i < nextAjoId; i++) {
-            if (ajoIsActive[i] && ajoInitializationPhase[i] >= 4) {
-                activeCount++;
-            }
-        }
+    //     // Count active Ajos
+    //     uint256 activeCount = 0;
+    //     for (uint256 i = 1; i < nextAjoId; i++) {
+    //         if (ajoIsActive[i] && ajoInitializationPhase[i] >= 4) {
+    //             activeCount++;
+    //         }
+    //     }
         
-        if (offset >= activeCount) {
-            return new AjoSummary[](0);
-        }
+    //     if (offset >= activeCount) {
+    //         return new AjoSummary[](0);
+    //     }
         
-        uint256 remaining = activeCount - offset;
-        uint256 resultCount = remaining < limit ? remaining : limit;
-        summaries = new AjoSummary[](resultCount);
+    //     uint256 remaining = activeCount - offset;
+    //     uint256 resultCount = remaining < limit ? remaining : limit;
+    //     summaries = new AjoSummary[](resultCount);
         
-        uint256 currentOffset = 0;
-        uint256 resultIndex = 0;
+    //     uint256 currentOffset = 0;
+    //     uint256 resultIndex = 0;
         
-        for (uint256 i = 1; i < nextAjoId && resultIndex < resultCount; i++) {
-            if (ajoIsActive[i] && ajoInitializationPhase[i] >= 4) {
-                if (currentOffset >= offset) {
-                    summaries[resultIndex] = _buildAjoSummary(i);
-                    resultIndex++;
-                }
-                currentOffset++;
-            }
-        }
+    //     for (uint256 i = 1; i < nextAjoId && resultIndex < resultCount; i++) {
+    //         if (ajoIsActive[i] && ajoInitializationPhase[i] >= 4) {
+    //             if (currentOffset >= offset) {
+    //                 summaries[resultIndex] = _buildAjoSummary(i);
+    //                 resultIndex++;
+    //             }
+    //             currentOffset++;
+    //         }
+    //     }
         
-        return summaries;
-    }
+    //     return summaries;
+    // }
     
-    function getAjoHealthReport(uint256 ajoId) 
-        external 
-        view 
-        override 
-        validAjoId(ajoId) 
-        returns (
-            uint256 initializationPhase,
-            bool isReady,
-            bool coreResponsive,
-            bool membersResponsive,
-            bool collateralResponsive,
-            bool paymentsResponsive,
-            bool governanceResponsive,
-            bool scheduleResponsive
-        ) 
-    {
-        initializationPhase = ajoInitializationPhase[ajoId];
-        isReady = initializationPhase >= 4 && ajoIsActive[ajoId];
+    // function getAjoHealthReport(uint256 ajoId) 
+    //     external 
+    //     view 
+    //     override 
+    //     validAjoId(ajoId) 
+    //     returns (
+    //         uint256 initializationPhase,
+    //         bool isReady,
+    //         bool coreResponsive,
+    //         bool membersResponsive,
+    //         bool collateralResponsive,
+    //         bool paymentsResponsive,
+    //         bool governanceResponsive,
+    //         bool scheduleResponsive
+    //     ) 
+    // {
+    //     initializationPhase = ajoInitializationPhase[ajoId];
+    //     isReady = initializationPhase >= 4 && ajoIsActive[ajoId];
         
-        // Test contract responsiveness
-        coreResponsive = _isContractResponsive(ajoCore[ajoId]);
-        membersResponsive = _isContractResponsive(ajoMembers[ajoId]);
-        collateralResponsive = _isContractResponsive(ajoCollateral[ajoId]);
-        paymentsResponsive = _isContractResponsive(ajoPayments[ajoId]);
-        governanceResponsive = _isContractResponsive(ajoGovernance[ajoId]);
-        scheduleResponsive = ajoSchedule[ajoId] == address(0) ? true : _isContractResponsive(ajoSchedule[ajoId]);
+    //     // Test contract responsiveness
+    //     coreResponsive = _isContractResponsive(ajoCore[ajoId]);
+    //     membersResponsive = _isContractResponsive(ajoMembers[ajoId]);
+    //     collateralResponsive = _isContractResponsive(ajoCollateral[ajoId]);
+    //     paymentsResponsive = _isContractResponsive(ajoPayments[ajoId]);
+    //     governanceResponsive = _isContractResponsive(ajoGovernance[ajoId]);
+    //     scheduleResponsive = ajoSchedule[ajoId] == address(0) ? true : _isContractResponsive(ajoSchedule[ajoId]);
         
-        return (
-            initializationPhase,
-            isReady,
-            coreResponsive,
-            membersResponsive,
-            collateralResponsive,
-            paymentsResponsive,
-            governanceResponsive,
-            scheduleResponsive
-        );
-    }
+    //     return (
+    //         initializationPhase,
+    //         isReady,
+    //         coreResponsive,
+    //         membersResponsive,
+    //         collateralResponsive,
+    //         paymentsResponsive,
+    //         governanceResponsive,
+    //         scheduleResponsive
+    //     );
+    // }
     
-    function getAjoOperationalStatus(uint256 ajoId) 
-        external 
-        view 
-        override 
-        validAjoId(ajoId) 
-        returns (
-            uint256 totalMembers,
-            uint256 currentCycle,
-            bool canAcceptMembers,
-            bool hasActiveGovernance,
-            bool hasActiveScheduling
-        ) 
-    {
-        // Get total members
-        try IAjoMembers(ajoMembers[ajoId]).getTotalActiveMembers() returns (uint256 members) {
-            totalMembers = members;
-        } catch {
-            totalMembers = 0;
-        }
+    // function getAjoOperationalStatus(uint256 ajoId) 
+    //     external 
+    //     view 
+    //     override 
+    //     validAjoId(ajoId) 
+    //     returns (
+    //         uint256 totalMembers,
+    //         uint256 currentCycle,
+    //         bool canAcceptMembers,
+    //         bool hasActiveGovernance,
+    //         bool hasActiveScheduling
+    //     ) 
+    // {
+    //     // Get total members
+    //     try IAjoMembers(ajoMembers[ajoId]).getTotalActiveMembers() returns (uint256 members) {
+    //         totalMembers = members;
+    //     } catch {
+    //         totalMembers = 0;
+    //     }
         
-        // Get current cycle
-        try IAjoPayments(ajoPayments[ajoId]).getCurrentCycle() returns (uint256 cycle) {
-            currentCycle = cycle;
-        } catch {
-            currentCycle = 0;
-        }
+    //     // Get current cycle
+    //     try IAjoPayments(ajoPayments[ajoId]).getCurrentCycle() returns (uint256 cycle) {
+    //         currentCycle = cycle;
+    //     } catch {
+    //         currentCycle = 0;
+    //     }
         
-        canAcceptMembers = ajoIsActive[ajoId] && ajoInitializationPhase[ajoId] >= 4;
-        hasActiveGovernance = ajoInitializationPhase[ajoId] >= 2;
-        hasActiveScheduling = ajoUsesScheduledPayments[ajoId] && ajoSchedulingEnabled[ajoId];
+    //     canAcceptMembers = ajoIsActive[ajoId] && ajoInitializationPhase[ajoId] >= 4;
+    //     hasActiveGovernance = ajoInitializationPhase[ajoId] >= 2;
+    //     hasActiveScheduling = ajoUsesScheduledPayments[ajoId] && ajoSchedulingEnabled[ajoId];
         
-        return (totalMembers, currentCycle, canAcceptMembers, hasActiveGovernance, hasActiveScheduling);
-    }
+    //     return (totalMembers, currentCycle, canAcceptMembers, hasActiveGovernance, hasActiveScheduling);
+    // }
     
     function deactivateAjo(uint256 ajoId) external override validAjoId(ajoId) onlyCreatorOrOwner(ajoId) {
         require(ajoIsActive[ajoId], "Ajo already inactive");
@@ -965,7 +1253,52 @@ contract AjoFactory is IAjoFactory, HederaTokenService {  // ✅ INHERIT from He
     }
     
     // ============ INTERNAL HELPER FUNCTIONS ============
-    
+    /**
+     * @notice  NEW: Build token config with auto-association and supply key
+     * @dev Enables users to receive tokens without manual association
+     */
+    function _buildTokenConfigWithAutoAssociation(
+        string memory name,
+        string memory symbol,
+        address treasury,
+        string memory memo,
+        uint8 decimals
+    ) internal view returns (IHederaTokenService.HederaToken memory token) {
+        token.name = name;
+        token.symbol = symbol;
+        token.treasury = treasury;
+        token.memo = memo;
+        token.tokenSupplyType = false; // INFINITE supply
+        token.maxSupply = 0;
+        token.freezeDefault = false; //  Don't freeze by default
+        
+        //  CRITICAL: Set token keys for supply management
+        token.tokenKeys = new IHederaTokenService.TokenKey[](1);
+        
+        // Supply key = factory contract (allows minting/burning)
+        token.tokenKeys[0] = IHederaTokenService.TokenKey({
+            keyType: 16, // SUPPLY_KEY = 16
+            key: IHederaTokenService.KeyValue({
+                inheritAccountKey: false,
+                contractId: address(this),
+                ed25519: bytes(""),
+                ECDSA_secp256k1: bytes(""),
+                delegatableContractId: address(0)
+            })
+        });
+        
+        //  Set expiry with auto-renew
+        token.expiry = IHederaTokenService.Expiry({
+            second: 0,
+            autoRenewAccount: address(this),
+            autoRenewPeriod: 7890000 // 90 days
+        });
+        
+        return token;
+    }
+
+
+
     function _buildAjoInfoFromMappings(uint256 ajoId) internal view returns (AjoInfo memory info) {
         info.ajoCore = ajoCore[ajoId];
         info.ajoMembers = ajoMembers[ajoId];
@@ -987,45 +1320,45 @@ contract AjoFactory is IAjoFactory, HederaTokenService {  // ✅ INHERIT from He
         return info;
     }
     
-    function _buildAjoSummary(uint256 ajoId) internal view returns (AjoSummary memory summary) {
-        summary.ajoId = ajoId;
-        summary.name = ajoName[ajoId];
-        summary.creator = ajoCreator[ajoId];
-        summary.createdAt = ajoCreatedAt[ajoId];
-        summary.usesHtsTokens = ajoUsesHtsTokens[ajoId];
-        summary.usesScheduledPayments = ajoUsesScheduledPayments[ajoId];
-        summary.isAcceptingMembers = ajoIsActive[ajoId] && ajoInitializationPhase[ajoId] >= 4;
+    // function _buildAjoSummary(uint256 ajoId) internal view returns (AjoSummary memory summary) {
+    //     summary.ajoId = ajoId;
+    //     summary.name = ajoName[ajoId];
+    //     summary.creator = ajoCreator[ajoId];
+    //     summary.createdAt = ajoCreatedAt[ajoId];
+    //     summary.usesHtsTokens = ajoUsesHtsTokens[ajoId];
+    //     summary.usesScheduledPayments = ajoUsesScheduledPayments[ajoId];
+    //     summary.isAcceptingMembers = ajoIsActive[ajoId] && ajoInitializationPhase[ajoId] >= 4;
         
-        // Get dynamic data safely
-        try IAjoMembers(ajoMembers[ajoId]).getTotalActiveMembers() returns (uint256 members) {
-            summary.totalMembers = members;
-            summary.activeMembers = members;
-        } catch {}
+    //     // Get dynamic data safely
+    //     try IAjoMembers(ajoMembers[ajoId]).getTotalActiveMembers() returns (uint256 members) {
+    //         summary.totalMembers = members;
+    //         summary.activeMembers = members;
+    //     } catch {}
         
-        try IAjoPayments(ajoPayments[ajoId]).getCurrentCycle() returns (uint256 cycle) {
-            summary.currentCycle = cycle;
-        } catch {}
+    //     try IAjoPayments(ajoPayments[ajoId]).getCurrentCycle() returns (uint256 cycle) {
+    //         summary.currentCycle = cycle;
+    //     } catch {}
         
-        try IAjoCollateral(ajoCollateral[ajoId]).getTotalCollateral() returns (uint256 usdc, uint256 hbar) {
-            summary.totalCollateral = usdc + hbar;
-        } catch {}
+    //     try IAjoCollateral(ajoCollateral[ajoId]).getTotalCollateral() returns (uint256 usdc, uint256 hbar) {
+    //         summary.totalCollateral = usdc + hbar;
+    //     } catch {}
         
-        try IAjoPayments(ajoPayments[ajoId]).getTokenConfig(PaymentToken.USDC) returns (TokenConfig memory config) {
-            summary.monthlyPayment = config.monthlyPayment;
-        } catch {}
+    //     try IAjoPayments(ajoPayments[ajoId]).getTokenConfig(PaymentToken.USDC) returns (TokenConfig memory config) {
+    //         summary.monthlyPayment = config.monthlyPayment;
+    //     } catch {}
         
-        return summary;
-    }
+    //     return summary;
+    // }
     
-    function _isContractResponsive(address contractAddress) internal view returns (bool) {
-        if (contractAddress == address(0)) return false;
+    // function _isContractResponsive(address contractAddress) internal view returns (bool) {
+    //     if (contractAddress == address(0)) return false;
         
-        uint256 size;
-        assembly {
-            size := extcodesize(contractAddress)
-        }
-        return size > 0;
-    }
+    //     uint256 size;
+    //     assembly {
+    //         size := extcodesize(contractAddress)
+    //     }
+    //     return size > 0;
+    // }
     
     /**
      * @notice Build token configuration for HTS token creation

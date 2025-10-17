@@ -49,15 +49,11 @@ struct Member {
     uint256 reputationScore;
     uint256[] pastPayments;
     uint256 guaranteePosition;
-    bool isHtsAssociated;
-    bool isFrozen;
 }
 
 struct TokenConfig {
     uint256 monthlyPayment;
     bool isActive;
-    address htsTokenAddress;
-    bool isHtsToken;
 }
 
 struct PayoutRecord {
@@ -78,8 +74,6 @@ struct MemberDetails {
     uint256 totalPaid;
     uint256 defaultCount;
     uint256 reputationScore;
-    bool isHtsAssociated;
-    bool isFrozen;
 }
 
 struct GlobalStats {
@@ -122,7 +116,7 @@ struct MemberActivity {
     uint256 paymentsMissed;
     uint256 totalPaid;
     uint256 totalReceived;
-    uint256 netPosition;
+    uint256 netPosition; // received - paid
     uint256 consecutivePayments;
     uint256 lastActiveTimestamp;
 }
@@ -526,149 +520,288 @@ interface IAjoSchedule {
     event ScheduleServiceUpdated(address indexed oldAddress, address indexed newAddress);
 }
 
-// ============ AJO CORE INTERFACE (HTS ONLY - HSS REMOVED) ============
+// ============ MAIN AJO INTERFACE ============
 
 interface IAjoCore {
+    // Initialize Function
     function initialize(
         address _usdc,
         address _whbar,
         address _ajoMembers,
         address _ajoCollateral,
         address _ajoPayments,
-        address _ajoGovernance,
-        address _ajoSchedule,
-        address _hederaTokenService,
-        bytes32 _hcsTopicId
+        address _ajoGovernance
     ) external;
     
-    // HTS Functions
-    function verifyHtsSetup() external view returns (bool isValid, string memory reason);
-    function getHtsTokenInfo(PaymentToken token) external view returns (HtsTokenInfo memory);
-    function isHtsAssociated(address member) external view returns (bool usdcAssociated, bool hbarAssociated);
-    function getHtsTransferStatus(address member, PaymentToken token) external view returns (bool isAssociated, bool isFrozen, bool canReceive, bool canSend);
-    
     // Core Ajo Functions
-    function joinAjo(PaymentToken tokenChoice) external returns (HtsTransferResult memory collateralResult);
-    function processPayment() external returns (HtsTransferResult memory);
-    function distributePayout() external returns (HtsTransferResult memory);
-    function handleDefault(address defaulter) external returns (uint256 totalRecovered);
+    function joinAjo(PaymentToken tokenChoice) external;
+    function processPayment() external;
+    function distributePayout() external;
+    function handleDefault(address defaulter) external;
     function exitAjo() external;
     
-    // Member & Stats Functions
-    function getMemberInfo(address member) external view returns (Member memory memberInfo, uint256 pendingPenalty, uint256 effectiveVotingPower);
-    function getQueueInfo(address member) external view returns (uint256 position, uint256 estimatedCyclesWait);
+    // View Functions - Member Information
+    function getMemberInfo(address member) external view returns (
+        Member memory memberInfo, 
+        uint256 pendingPenalty,
+        uint256 effectiveVotingPower
+    );
+    function getQueueInfo(address member) external view returns (
+        uint256 position, 
+        uint256 estimatedCyclesWait
+    );
     function needsToPayThisCycle(address member) external view returns (bool);
-    function getContractStats() external view returns (uint256 totalMembers, uint256 activeMembers, uint256 totalCollateralUSDC, uint256 totalCollateralHBAR, uint256 contractBalanceUSDC, uint256 contractBalanceHBAR, uint256 currentQueuePosition, PaymentToken activeToken, bool usesHtsTokens);
+    
+    // View Functions - Contract Statistics
+    function getContractStats() external view returns (
+        uint256 totalMembers,
+        uint256 activeMembers,
+        uint256 totalCollateralUSDC,
+        uint256 totalCollateralHBAR,
+        uint256 contractBalanceUSDC,
+        uint256 contractBalanceHBAR,
+        uint256 currentQueuePosition,
+        PaymentToken activeToken
+    );
+    
+    // View Functions - Token Configuration
     function getTokenConfig(PaymentToken token) external view returns (TokenConfig memory);
-    function getCollateralDemo(uint256 participants, uint256 monthlyPayment) external view returns (uint256[] memory positions, uint256[] memory collaterals);
-    function calculateSeizableAssets(address defaulterAddress) external view returns (uint256 totalSeizable, uint256 collateralSeized, uint256 paymentsSeized);
+    
+    // View Functions - V2 Collateral Demo
+    function getCollateralDemo(uint256 participants, uint256 monthlyPayment) external view returns (
+        uint256[] memory positions, 
+        uint256[] memory collaterals
+    );
+    
+    // View Functions - Security Model
+    function calculateSeizableAssets(address defaulterAddress) external view returns (
+        uint256 totalSeizable, 
+        uint256 collateralSeized, 
+        uint256 paymentsSeized
+    );
     
     // Admin Functions
     function emergencyWithdraw(PaymentToken token) external;
     function updateCycleDuration(uint256 newDuration) external;
     function emergencyPause() external;
     function batchHandleDefaults(address[] calldata defaulters) external;
-    function updateTokenConfig(PaymentToken token, uint256 monthlyPayment, bool isActive) external;
-    
-    // Events
-    event HtsTokenAssociated(address indexed member, address indexed token);
-    event HtsTransferExecuted(address indexed token, address indexed from, address indexed to, uint256 amount, int64 responseCode);
-    event HtsTransferFailed(address indexed token, address indexed from, address indexed to, uint256 amount, int64 responseCode, string reason);
+    function updateTokenConfig(
+        PaymentToken token,
+        uint256 monthlyPayment,
+        bool isActive
+    ) external;
 }
 
-// ============ AJO GOVERNANCE INTERFACE (HSS REMOVED) ============
+// ============ AJO GOVERNANCE INTERFACE (WITH CYCLE MANAGEMENT) ============
 
 interface IAjoGovernance {
-    function initialize(address _ajoCore, address _ajoSchedule, address _hederaTokenService, bytes32 _hcsTopicId) external;
+    // Initialization
+    function initialize(
+        address _ajoCore, 
+        address _ajoMembers,  
+        address _ajoSchedule, 
+        address _hederaTokenService, 
+        bytes32 _hcsTopicId
+    ) external;
     function verifySetup() external view returns (bool isValid, string memory reason);
     function getHcsTopicId() external view returns (bytes32);
     
-    // Proposal Functions
+    // ============ CORE PROPOSAL FUNCTIONS ============
     function createProposal(string memory description, bytes memory proposalData) external returns (uint256 proposalId);
     function cancelProposal(uint256 proposalId) external;
-    function getProposal(uint256 proposalId) external view returns (string memory description, uint256 forVotes, uint256 againstVotes, uint256 abstainVotes, uint256 startTime, uint256 endTime, bool executed, bool canceled, bytes memory proposalData);
-    function getProposalStatus(uint256 proposalId) external view returns (bool isActive, bool hasQuorum, bool isPassing, uint256 votesNeeded);
+    function getProposal(uint256 proposalId) external view returns (
+        string memory description, 
+        uint256 forVotes, 
+        uint256 againstVotes, 
+        uint256 abstainVotes, 
+        uint256 startTime, 
+        uint256 endTime, 
+        bool executed, 
+        bool canceled, 
+        bytes memory proposalData
+    );
+    function getProposalStatus(uint256 proposalId) external view returns (
+        bool isActive, 
+        bool hasQuorum, 
+        bool isPassing, 
+        uint256 votesNeeded
+    );
     
-    // Voting Functions
-    function tallyVotesFromHCS(uint256 proposalId, HcsVote[] memory votes) external returns (uint256 totalForVotes, uint256 totalAgainstVotes, uint256 totalAbstainVotes);
+    // ============ CYCLE MANAGEMENT PROPOSALS ============
+    function proposeCycleCompletion(string memory description) external returns (uint256 proposalId);
+    function proposeNewCycleRestart(
+        string memory description,
+        uint256 newDuration,
+        uint256 newMonthlyContribution,
+        address[] memory newMembers
+    ) external returns (uint256 proposalId);
+    function proposeNewMember(
+        address newMember,
+        string memory description
+    ) external returns (uint256 proposalId);
+    function proposeUpdateCycleParameters(
+        string memory description,
+        uint256 newDuration,
+        uint256 newMonthlyPayment
+    ) external returns (uint256 proposalId);
+    function proposeCarryOverRules(
+        string memory description,
+        bool _carryReputation,
+        bool _carryPenalties
+    ) external returns (uint256 proposalId);
+    
+    // ============ MEMBER PARTICIPATION ============
+    function declareNextCycleParticipation(bool participate) external;
+    function getMemberParticipationStatus(address member) external view returns (bool willParticipate);
+    
+    // ============ VOTING FUNCTIONS ============
+    function tallyVotesFromHCS(uint256 proposalId, HcsVote[] memory votes) external returns (
+        uint256 totalForVotes, 
+        uint256 totalAgainstVotes, 
+        uint256 totalAbstainVotes
+    );
     function hasVoted(uint256 proposalId, address voter) external view returns (bool);
     function getVotingPower(address member) external view returns (uint256);
     function executeProposal(uint256 proposalId) external returns (bool success);
     
-    // Token Control Functions
+    // ============ TOKEN CONTROL FUNCTIONS ============
     function freezeMemberToken(address token, address member) external returns (int64 responseCode);
     function unfreezeMemberToken(address token, address member) external returns (int64 responseCode);
     
-    // Settings Functions
+    // ============ SETTINGS FUNCTIONS ============
     function updatePenaltyRate(uint256 newPenaltyRate) external;
     function updateVotingPeriod(uint256 newVotingPeriod) external;
     function updateProposalThreshold(uint256 newThreshold) external;
     function updateReputationAndVotingPower(address member, bool positive) external;
     
-    // Query Functions
-    function getGovernanceSettings() external view returns (uint256 proposalThreshold, uint256 votingPeriod, uint256 quorumPercentage, uint256 currentPenaltyRate, uint256 totalProposals);
-    function getAllProposals(uint256 offset, uint256 limit) external view returns (uint256[] memory proposalIds, bool hasMore);
+    // ============ QUERY FUNCTIONS - GOVERNANCE ============
+    function getGovernanceSettings() external view returns (
+        uint256 proposalThreshold, 
+        uint256 votingPeriod, 
+        uint256 quorumPercentage, 
+        uint256 currentPenaltyRate, 
+        uint256 totalProposals
+    );
+    function getAllProposals(uint256 offset, uint256 limit) external view returns (
+        uint256[] memory proposalIds, 
+        bool hasMore
+    );
     function getActiveProposals() external view returns (uint256[] memory proposalIds);
     
-    // Events
+    // ============ QUERY FUNCTIONS - CYCLE MANAGEMENT ============
+    function getCycleStatus() external view returns (
+        uint256 _currentCycle,
+        bool _isCycleCompleted,
+        uint256 _participationDeadline,
+        uint256 _declaredParticipants
+    );
+    function getCarryOverRules() external view returns (
+        bool _carryReputation, 
+        bool _carryPenalties
+    );
+    function getContinuingMembersCount() external view returns (uint256);
+    function getContinuingMembersList() external view returns (address[] memory);
+    function getOptOutMembersList() external view returns (address[] memory);
+    
+    // ============ EVENTS - CORE GOVERNANCE ============
     event ProposalCreated(uint256 indexed proposalId, address indexed proposer, string description, uint256 startTime, uint256 endTime);
     event VoteSubmittedToHCS(uint256 indexed proposalId, address indexed voter, uint8 support, uint256 votingPower, bytes32 hcsMessageId, uint64 sequenceNumber);
     event VotesTallied(uint256 indexed proposalId, uint256 forVotes, uint256 againstVotes, uint256 abstainVotes, address indexed tallier);
     event ProposalExecuted(uint256 indexed proposalId, bool success, bytes returnData);
     event ProposalCanceled(uint256 indexed proposalId, address indexed canceler);
+    
+    // ============ EVENTS - TOKEN CONTROL ============
     event TokenFrozen(address indexed token, address indexed account, int64 responseCode);
     event TokenUnfrozen(address indexed token, address indexed account, int64 responseCode);
     event TokenPaused(address indexed token, int64 responseCode);
     event TokenUnpaused(address indexed token, int64 responseCode);
+    
+    // ============ EVENTS - CYCLE MANAGEMENT ============
+    event ParticipationDeclared(address indexed member, bool willParticipate, uint256 indexed nextCycle);
+    event CycleCompleted(uint256 indexed cycle, uint256 timestamp);
+    event NewCycleStarted(uint256 indexed cycle, uint256 duration, uint256 monthlyContribution, address[] members);
+    event ParticipationDeadlineSet(uint256 deadline, uint256 cycle);
+    event CarryOverRulesUpdated(bool carryReputation, bool carryPenalties);
+    event NewMemberProposed(address indexed newMember, uint256 indexed proposalId, address indexed proposer);
+    event CycleParametersUpdated(uint256 newDuration, uint256 newMonthlyPayment);
 }
 
-// ============ AJO COLLATERAL INTERFACE ============
+// ============ COLLATERAL INTERFACE ============
 
 interface IAjoCollateral {
-    function initialize(address _usdc, address _whbar, address _ajoCore, address _ajoMembers, address _hederaTokenService) external;
+    // Initialize Function
+    function initialize(
+        address _usdc,
+        address _whbar,
+        address _ajoCore,
+        address _ajoMembers
+    ) external;
     
-    // Calculation Functions
-    function calculateRequiredCollateral(uint256 position, uint256 monthlyPayment, uint256 totalParticipants) external pure returns (uint256);
-    function calculateGuarantorPosition(uint256 memberPosition, uint256 totalParticipants) external pure returns (uint256);
+    // Pure Calculation Functions
+    function calculateRequiredCollateral(
+        uint256 position,
+        uint256 monthlyPayment,
+        uint256 totalParticipants
+    ) external view returns (uint256);
+    
+    function calculateGuarantorPosition(
+        uint256 memberPosition,
+        uint256 totalParticipants
+    ) external pure returns (uint256);
+    
+    // View Functions
     function getTotalCollateral() external view returns (uint256 totalUSDC, uint256 totalHBAR);
-    function calculateSeizableAssets(address defaulterAddress) external view returns (uint256 totalSeizable, uint256 collateralSeized, uint256 paymentsSeized);
     
-    // HTS Collateral Functions
-    function lockCollateralHts(address member, uint256 amount, PaymentToken token) external returns (HtsTransferResult memory);
-    function unlockCollateralHts(address member, uint256 amount, PaymentToken token) external returns (HtsTransferResult memory);
-    function seizeCollateralHts(address defaulter) external returns (uint256 totalSeized, HtsTransferResult memory result);
-    function redistributeSeizedCollateral(address[] memory recipients, uint256[] memory amounts, PaymentToken token) external returns (HtsTransferResult[] memory);
+    function calculateSeizableAssets(address defaulterAddress) external view returns (
+        uint256 totalSeizable, 
+        uint256 collateralSeized, 
+        uint256 paymentsSeized
+    );
+        
+    function lockCollateral(address member, uint256 amount, PaymentToken token) external;
     
-    // Admin Functions
+    function unlockCollateral(address member, uint256 amount, PaymentToken token) external;
+    
+    function executeSeizure(address defaulter) external;
+    
     function emergencyWithdraw(PaymentToken token, address to, uint256 amount) external;
     
     // Events
-    event CollateralLockedHts(address indexed member, uint256 amount, address token, int64 responseCode);
-    event CollateralUnlockedHts(address indexed member, uint256 amount, address token, int64 responseCode);
-    event CollateralSeizedHts(address indexed defaulter, uint256 collateralAmount, uint256 pastPaymentsAmount, uint256 guarantorCollateral, uint256 totalSeized);
-    event SeizedCollateralRedistributed(address indexed recipient, uint256 amount, address token);
+    event CollateralLiquidated(address indexed member, uint256 amount, PaymentToken token);
+    event PaymentSeized(address indexed member, uint256 amount, string reason);
     event GuarantorAssigned(address indexed member, address indexed guarantor, uint256 memberPosition, uint256 guarantorPosition);
+    event CollateralCalculated(address indexed member, uint256 requiredAmount, uint256 actualAmount);
 }
 
-// ============ AJO PAYMENTS INTERFACE (HTS ONLY - HSS REMOVED) ============
+
+// ============ PAYMENT INTERFACE ============
 
 interface IAjoPayments {
-    function initialize(address _usdc, address _whbar, address _ajoCore, address _ajoMembers, address _ajoCollateral, address _hederaTokenService) external;
+    // Initialize Function
+    function initialize(
+        address _usdc,
+        address _whbar,
+        address _ajoCore,
+        address _ajoMembers,
+        address _ajoCollateral
+    ) external;
     
-    // HTS Payment Functions
-    function processPaymentHts(address member, uint256 amount, PaymentToken token) external returns (HtsTransferResult memory);
-    function distributePayoutHts() external returns (address recipient, uint256 amount, HtsTransferResult memory result);
-    function handleDefaultHts(address defaulter) external returns (uint256 totalRecovered, uint256 redistributed);
-    function batchHandleDefaults(address[] calldata defaulters) external returns (uint256[] memory recoveredAmounts);
-    
-    // Cycle & Config Functions
+    // Core Payment Functions
+    function processPayment(address member, uint256 amount, PaymentToken token) external;
+    function distributePayout() external;
+    function handleDefault(address defaulter) external;
+    function batchHandleDefaults(address[] calldata defaulters) external;
+    function updateTokenConfig(
+        PaymentToken token,
+        uint256 monthlyPayment,
+        bool isActive
+    ) external;
     function advanceCycle() external;
-    function updateTokenConfig(PaymentToken token, uint256 monthlyPayment, bool isActive) external;
+    function emergencyWithdraw(PaymentToken token) external;
     function updatePenaltyRate(uint256 newPenaltyRate) external;
     function updateNextPayoutPosition(uint256 position) external;
-    function emergencyWithdraw(PaymentToken token) external;
     
-    // Query Functions
+    // View Functions - Existing
     function needsToPayThisCycle(address member) external view returns (bool);
     function getTokenConfig(PaymentToken token) external view returns (TokenConfig memory);
     function getCurrentCycle() external view returns (uint256);
@@ -682,31 +815,60 @@ interface IAjoPayments {
     function getPayout(uint256 cycle) external view returns (PayoutRecord memory);
     function calculatePayout() external view returns (uint256);
     function getNextRecipient() external view returns (address);
+    
+    // ============ NEW FRONTEND VIEW FUNCTIONS ============
+    
+    // Payment History & Tracking
     function getMemberPaymentHistory(address member) external view returns (PaymentStatus[] memory);
-    function getCyclePaymentStatus(uint256 cycle) external view returns (address[] memory paidMembers, address[] memory unpaidMembers, uint256 totalCollected);
+    
+    function getCyclePaymentStatus(uint256 cycle) external view returns (
+        address[] memory paidMembers,
+        address[] memory unpaidMembers,
+        uint256 totalCollected
+    );
+    
+    // Active Cycle Dashboard
     function getCurrentCycleDashboard() external view returns (CycleDashboard memory);
+    
+    // Timeline & Deadlines
     function getUpcomingEvents(address member) external view returns (UpcomingEvent[] memory);
     function getNextPaymentDeadline() external view returns (uint256 timestamp);
     
     // Events
-    event PaymentMadeHts(address indexed member, uint256 amount, uint256 cycle, address token, int64 responseCode);
-    event PayoutDistributedHts(address indexed recipient, uint256 amount, uint256 cycle, address token, int64 responseCode);
-    event DefaultHandledHts(address indexed defaulter, uint256 recovered, uint256 redistributed, uint256 cycle);
+    event PaymentMade(address indexed member, uint256 amount, uint256 cycle, PaymentToken token);
+    event PayoutDistributed(address indexed recipient, uint256 amount, uint256 cycle, PaymentToken token);
+    event MemberDefaulted(address indexed member, uint256 cycle, uint256 penalty);
     event CycleAdvanced(uint256 newCycle, uint256 timestamp);
     event TokenSwitched(PaymentToken oldToken, PaymentToken newToken);
+    event PaymentPulled(address indexed member, uint256 amount, uint256 cycle, PaymentToken token);
+    event PaymentProcessed(address indexed member, uint256 baseAmount, uint256 penalty, uint256 total);
 }
 
-// ============ AJO MEMBERS INTERFACE ============
+// ============ MEMBER MANAGEMENT INTERFACE ============
 
 interface IAjoMembers {
-    function initialize(address _ajoCore, address _usdc, address _whbar) external;
-    function setContractAddresses(address _ajoCollateral, address _ajoPayments) external;
+    // Initialize Function
+    function initialize(
+        address _ajoCore,
+        address _usdc,
+        address _whbar
+    ) external;
+    
+    // Contract Address Management
+    function setContractAddresses(
+        address _ajoCollateral,
+        address _ajoPayments
+    ) external;
+    
+    // Core Member Functions
+    function updateReputation(address member, uint256 newReputation) external;
     
     // Member Management Functions
     function addMember(address member, Member memory memberData) external;
     function removeMember(address member) external;
     function updateMember(address member, Member memory memberData) external;
-    function updateReputation(address member, uint256 newReputation) external;
+    
+    // Additional Member Management Functions
     function updateCollateral(address member, uint256 newAmount) external;
     function addPastPayment(address member, uint256 payment) external;
     function updateLastPaymentCycle(address member, uint256 cycle) external;
@@ -714,19 +876,37 @@ interface IAjoMembers {
     function updateTotalPaid(address member, uint256 amount) external;
     function markPayoutReceived(address member) external;
     
-    // HTS Status Functions
-    function updateHtsAssociationStatus(address member, bool isAssociated) external;
-    function setMemberFrozen(address member, bool isFrozen) external;
-    function getMemberHtsStatus(address member) external view returns (bool isAssociated, bool isFrozen);
-    
-    // Query Functions
+    // View Functions - Existing
     function getMember(address member) external view returns (Member memory);
     function getTotalActiveMembers() external view returns (uint256);
-    function getMemberInfo(address member) external view returns (Member memory memberInfo, uint256 pendingPenalty, uint256 effectiveVotingPower);
-    function getQueueInfo(address member) external view returns (uint256 position, uint256 estimatedCyclesWait);
-    function getContractStats() external view returns (uint256 totalMembers, uint256 activeMembers, uint256 totalCollateralUSDC, uint256 totalCollateralHBAR, uint256 contractBalanceUSDC, uint256 contractBalanceHBAR, uint256 currentQueuePosition, PaymentToken activeToken);
+    
+    function getMemberInfo(address member) external view returns (
+        Member memory memberInfo, 
+        uint256 pendingPenalty,
+        uint256 effectiveVotingPower
+    );
+    
+    function getQueueInfo(address member) external view returns (
+        uint256 position, 
+        uint256 estimatedCyclesWait
+    );
+    
+    function getContractStats() external view returns (
+        uint256 totalMembers,
+        uint256 activeMembers,
+        uint256 totalCollateralUSDC,
+        uint256 totalCollateralHBAR,
+        uint256 contractBalanceUSDC,
+        uint256 contractBalanceHBAR,
+        uint256 currentQueuePosition,
+        PaymentToken activeToken
+    );
+    
     function queuePositions(uint256 position) external view returns (address);
+    
     function activeMembersList(uint256 index) external view returns (address);
+    
+    // Additional View Functions - Existing
     function isMember(address member) external view returns (bool);
     function getActiveMembersList() external view returns (address[] memory);
     function getQueuePosition(uint256 queueNumber) external view returns (address);
@@ -734,26 +914,36 @@ interface IAjoMembers {
     function getLockedCollateral(address member) external view returns (uint256);
     function getMemberAtIndex(uint256 index) external view returns (address);
     
-    // Advanced Query Functions
+    // ============ NEW FRONTEND VIEW FUNCTIONS ============
+    
+    // Batch Member Details
     function getAllMembersDetails() external view returns (MemberDetails[] memory);
-    function getMembersDetailsPaginated(uint256 offset, uint256 limit) external view returns (MemberDetails[] memory, bool hasMore);
+    function getMembersDetailsPaginated(uint256 offset, uint256 limit) external view returns (
+        MemberDetails[] memory,
+        bool hasMore
+    );
+    
+    // Member Activity Summary
     function getMemberActivity(address member) external view returns (MemberActivity memory);
+    
+    // Search & Filter Functions
     function getMembersByStatus(bool isActive) external view returns (address[] memory);
     function getMembersNeedingPayment() external view returns (address[] memory);
     function getMembersWithDefaults() external view returns (address[] memory);
-    function getTopMembersByReputation(uint256 limit) external view returns (address[] memory members, uint256[] memory reputations);
+    function getTopMembersByReputation(uint256 limit) external view returns (
+        address[] memory members,
+        uint256[] memory reputations
+    );
     
     // Events
     event MemberJoined(address indexed member, uint256 queueNumber, uint256 collateral, PaymentToken token);
     event MemberRemoved(address indexed member);
     event MemberUpdated(address indexed member);
-    event MemberHtsAssociated(address indexed member);
-    event MemberHtsFrozen(address indexed member);
-    event MemberHtsUnfrozen(address indexed member);
     event GuarantorAssigned(address indexed member, address indexed guarantor, uint256 memberPosition, uint256 guarantorPosition);
 }
 
 // ============ AJO FACTORY INTERFACE (UPDATED WITH SCHEDULE CONTRACT) ============
+// ============ AJO FACTORY INTERFACE (UPDATED WITH SCHEDULE CONTRACT + HTS USER MANAGEMENT) ============
 
 interface IAjoFactory {
     struct AjoInfo {
@@ -780,6 +970,13 @@ interface IAjoFactory {
     function setHtsTokensForFactory(address _usdcHts, address _hbarHts) external;
     function getHtsTokenAddresses() external view returns (address usdc, address hbar);
     function isHtsEnabled() external view returns (bool);
+    //function getHtsTokenInfo(address token) external view returns (HtsTokenInfo memory);
+    
+    // HTS User Management Functions
+   function fundUserWithHtsTokens(address user, int64 usdcAmount, int64 hbarAmount) external returns (bool usdcSuccess, bool hbarSuccess);
+    function checkUserHtsAssociation(address user) external view returns (bool usdcAssociated, bool hbarAssociated, uint256 lastAssociationTime);
+    //function getUserHtsBalance(address user) external view returns (uint256 usdcBalance, uint256 hbarBalance);
+    //function isUserReadyForHts(address user, uint256 minUsdcBalance, uint256 minHbarBalance) external view returns (bool isReady, bool usdcReady, bool hbarReady);
     
     // Ajo Creation Functions
     function createAjo(string memory _name, bool _useHtsTokens, bool _useScheduledPayments) external returns (uint256 ajoId);
@@ -791,7 +988,7 @@ interface IAjoFactory {
     // HSS Integration - Factory Level Scheduling
     function enableScheduledPaymentsForAjo(uint256 ajoId) external;
     function disableScheduledPaymentsForAjo(uint256 ajoId) external;
-    function getScheduleServiceAddress() external view returns (address);
+    //function getScheduleServiceAddress() external view returns (address);
     function getAjoSchedulingStatus(uint256 ajoId) external view returns (bool isEnabled, uint256 scheduledPaymentsCount, uint256 executedCount);
     function setScheduleServiceAddress(address _scheduleService) external;
     function getAjoScheduleContract(uint256 ajoId) external view returns (address);
@@ -800,20 +997,35 @@ interface IAjoFactory {
     function deactivateAjo(uint256 ajoId) external;
     function getAjo(uint256 ajoId) external view returns (AjoInfo memory info);
     function getAllAjos(uint256 offset, uint256 limit) external view returns (AjoInfo[] memory ajoInfos, bool hasMore);
-    function getAjosByCreator(address creator) external view returns (uint256[] memory ajoIds);
-    function getAjoCore(uint256 ajoId) external view returns (address ajoCore);
-    function ajoStatus(uint256 ajoId) external view returns (bool exists, bool isActive);
-    function getFactoryStats() external view returns (uint256 totalCreated, uint256 activeCount);
-    function getImplementations() external view returns (address ajoCore, address ajoMembers, address ajoCollateral, address ajoPayments, address ajoGovernance, address ajoSchedule);
+    // HTS Approval Functions
+    function approveHtsToken(
+        address token,
+        address spender,
+        uint256 amount
+    ) external returns (bool success);
+
+    function getHtsAllowance(
+        address token,
+        address owner,
+        address spender
+    ) external returns (uint256 currentAllowance);
+
+    // Add these events after the existing events
+    event HtsTokenApproved(address indexed owner, address indexed token, address indexed spender, uint256 amount);
+    event HtsApprovalFailed(address indexed owner, address indexed token, address indexed spender, uint256 amount, int64 responseCode, string reason);
+    // function getAjosByCreator(address creator) external view returns (uint256[] memory ajoIds);
+    // function getAjoCore(uint256 ajoId) external view returns (address ajoCore);
+    // function ajoStatus(uint256 ajoId) external view returns (bool exists, bool isActive);
+    // function getFactoryStats() external view returns (uint256 totalCreated, uint256 activeCount);
+    // function getImplementations() external view returns (address ajoCore, address ajoMembers, address ajoCollateral, address ajoPayments, address ajoGovernance, address ajoSchedule);
     
     //Statistics & Reporting Functions
-    function getActiveAjoSummaries(uint256 offset, uint256 limit) external view returns (AjoSummary[] memory);
-    function getHtsTokenInfo(address token) external view returns (HtsTokenInfo memory);
-    function getAjosUsingScheduledPayments() external view returns (uint256[] memory ajoIds);
+    // function getActiveAjoSummaries(uint256 offset, uint256 limit) external view returns (AjoSummary[] memory);
+    // function getAjosUsingScheduledPayments() external view returns (uint256[] memory ajoIds);
     
     // Health & Status Functions
-    function getAjoHealthReport(uint256 ajoId) external view returns (uint256 initializationPhase, bool isReady, bool coreResponsive, bool membersResponsive, bool collateralResponsive, bool paymentsResponsive, bool governanceResponsive, bool scheduleResponsive);
-    function getAjoOperationalStatus(uint256 ajoId) external view returns (uint256 totalMembers, uint256 currentCycle, bool canAcceptMembers, bool hasActiveGovernance, bool hasActiveScheduling);
+    // function getAjoHealthReport(uint256 ajoId) external view returns (uint256 initializationPhase, bool isReady, bool coreResponsive, bool membersResponsive, bool collateralResponsive, bool paymentsResponsive, bool governanceResponsive, bool scheduleResponsive);
+    // function getAjoOperationalStatus(uint256 ajoId) external view returns (uint256 totalMembers, uint256 currentCycle, bool canAcceptMembers, bool hasActiveGovernance, bool hasActiveScheduling);
     
     // Events
     event AjoCreated(uint256 indexed ajoId, address indexed creator, address ajoCore, string name, bool usesHtsTokens, bool usesScheduledPayments);
@@ -824,8 +1036,25 @@ interface IAjoFactory {
     event ScheduledPaymentsEnabled(uint256 indexed ajoId);
     event ScheduledPaymentsDisabled(uint256 indexed ajoId);
     event HtsTokenCreated(address indexed tokenAddress, string name, string symbol, uint8 decimals);
+    // event HtsTokenCreationAttempt(string tokenName, int64 responseCode, address tokenAddress, bool success);
+    // event UserHtsTokenAssociated(address indexed user, address indexed token, bool success);
+    // event UserHtsTokenFunded(address indexed user, address indexed token, int64 amount, bool success);
+    // event BatchAssociationCompleted(uint256 successCount, uint256 failCount);
+    // event BatchFundingCompleted(uint256 successCount, uint256 failCount);
     event MasterImplementationsSet(address ajoCore, address ajoMembers, address ajoCollateral, address ajoPayments, address ajoGovernance, address ajoSchedule);
     event ScheduleServiceSet(address indexed scheduleService);
+    event HtsTokensCreatedWithAutoAssociation(address indexed usdcToken, address indexed hbarToken);
+    event HtsTokenCreationAttempt(string tokenName, int64 responseCode, address tokenAddress, bool success);
+    event UserHtsAssociated(address indexed user, address indexed usdcToken, address indexed hbarToken, int64 usdcResponse, int64 hbarResponse);
+    event UserHtsTokenAssociated(address indexed user, address indexed token, bool success);
+    event UserHtsFunded(address indexed user, uint256 usdcAmount, uint256 hbarAmount, int64 usdcResponse, int64 hbarResponse);
+    event UserHtsTokenFunded(address indexed user, address indexed token, int64 amount, bool success);
+    event BatchAssociationCompleted(uint256 successCount, uint256 failCount);
+    event BatchFundingCompleted(uint256 successCount, uint256 failCount);
+    event FactoryBalanceCheck(uint256 usdcBalance, uint256 hbarBalance);
+    event HtsTransferFailed(address indexed user, address indexed token, uint256 amount, int64 responseCode, string reason);
+    event HtsAssociationFailed(address indexed user, address indexed token, int64 responseCode, string reason);
+
 }
 
 // ============ HTS RESPONSE CODES ============

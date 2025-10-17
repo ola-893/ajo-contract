@@ -1,38 +1,18 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
+import "../core/LockableContract.sol";
 import "../interfaces/AjoInterfaces.sol";
 
-/**
- * @title AjoMembers
- * @notice Manages Ajo group membership with HTS integration
- * @dev Tracks member data, collateral, payments, and HTS association/freeze status
- * 
- * KEY CHANGE: HTSHelper removed - this contract doesn't need HTS inheritance
- * It only tracks HTS status, doesn't perform HTS operations
- * 
- * Key Features:
- * - Tracks HTS token association status per member
- * - Tracks freeze status for defaulters
- * - Comprehensive member activity tracking
- * - Paginated queries for frontend optimization
- * - Reputation and voting power management
- * - Guarantor assignment and tracking
- * 
- * OpenZeppelin v4.9.3 Compatible
- */
-contract AjoMembers is IAjoMembers, Ownable, Initializable {
+contract AjoMembers is IAjoMembers, Ownable, Initializable, LockableContract {
     
     // ============ STATE VARIABLES ============
     
     IERC20 public USDC;
     IERC20 public HBAR;
-    
-    // ✅ REMOVED: address public hederaTokenService; 
-    // Not needed - contract doesn't perform HTS operations
     
     mapping(address => Member) private members;
     mapping(uint256 => address) public ajoQueuePositions;
@@ -44,8 +24,7 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable {
     address public ajoCollateral;
     address public ajoPayments;
     
-    // ============ EVENTS ============
-    
+    // Events specific to this contract
     event AjoCoreUpdated(address indexed oldCore, address indexed newCore);
     
     // ============ MODIFIERS ============
@@ -55,55 +34,37 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable {
         _;
     }
     
-    modifier onlyAuthorizedContracts() {
-        require(
-            msg.sender == ajoCore || 
-            msg.sender == ajoCollateral || 
-            msg.sender == ajoPayments,
-            "Only authorized contracts"
-        );
-        _;
-    }
-    
-    // ============ CONSTRUCTOR ============
+    // ============ CONSTRUCTOR (for master copy) ============
     
     constructor() {
         _disableInitializers();
         _transferOwnership(address(1));
     }
+
     
-    // ============ INITIALIZER ============
-    
-    /**
-     * @notice Initialize the members contract
-     * @param _ajoCore Address of AjoCore contract
-     * @param _usdc USDC token address (HTS or ERC20)
-     * @param _whbar WHBAR token address (HTS or ERC20)
-     */
+    // ============ INITIALIZER (for proxy instances) ============
     function initialize(
         address _ajoCore,
         address _usdc,
-        address _whbar
+        address _hbar
     ) external override initializer {
         require(_ajoCore != address(0), "Invalid AjoCore address");
         require(_usdc != address(0), "Invalid USDC address");
-        require(_whbar != address(0), "Invalid HBAR address");
+        require(_hbar != address(0), "Invalid HBAR address");
         
         _transferOwnership(msg.sender);
         
         ajoCore = _ajoCore;
         USDC = IERC20(_usdc);
-        HBAR = IERC20(_whbar);
-        
-        // ✅ REMOVED: hederaTokenService = HTSHelper.getHtsAddress();
-        // Not needed - this contract doesn't perform HTS operations
+        HBAR = IERC20(_hbar);
     }
     
+   
     /**
-     * @notice Set AjoCore address - only during setup phase
-     * @param _ajoCore New AjoCore address
+     * @dev Set AjoCore address - only works during setup phase
+     * @param _ajoCore Address of the AjoCore contract
      */
-    function setAjoCore(address _ajoCore) external onlyOwner {
+    function setAjoCore(address _ajoCore) external onlyOwner onlyDuringSetup {
         require(_ajoCore != address(0), "Cannot set zero address");
         require(_ajoCore != ajoCore, "Already set to this address");
         
@@ -114,26 +75,17 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable {
     }
     
     /**
-     * @notice Set contract addresses for balance checking
-     * @param _ajoCollateral AjoCollateral contract address
-     * @param _ajoPayments AjoPayments contract address
+     * @dev Set contract addresses for balance checking
      */
-    function setContractAddresses(
-        address _ajoCollateral, 
-        address _ajoPayments
-    ) external override onlyOwner {
-        require(_ajoCollateral != address(0), "Invalid collateral address");
-        require(_ajoPayments != address(0), "Invalid payments address");
+    function setContractAddresses(address _ajoCollateral, address _ajoPayments) external onlyOwner onlyDuringSetup {
         ajoCollateral = _ajoCollateral;
         ajoPayments = _ajoPayments;
     }
     
     /**
-     * @notice Verify setup for AjoMembers
-     * @return isValid Whether setup is valid
-     * @return reason Reason if invalid
+     * @dev Verify setup for AjoMembers
      */
-    function verifySetup() external view returns (bool isValid, string memory reason) {
+    function verifySetup() external view override returns (bool isValid, string memory reason) {
         if (ajoCore == address(0)) {
             return (false, "AjoCore not set");
         }
@@ -146,335 +98,16 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable {
         return (true, "Setup is valid");
     }
     
-    // ============ HTS STATUS MANAGEMENT ============
+    // ============ VIEW FUNCTIONS - MEMBER INFORMATION (IAjoMembers) ============
     
-    /**
-     * @notice Update HTS association status for a member
-     * @dev Called after successful token association by AjoCore/AjoCollateral
-     * @param member Member address
-     * @param isAssociated Whether tokens are associated
-     */
-    function updateHtsAssociationStatus(
-        address member, 
-        bool isAssociated
-    ) external override onlyAuthorizedContracts {
-        require(members[member].isActive, "Member not found");
-        members[member].isHtsAssociated = isAssociated;
-        
-        if (isAssociated) {
-            emit MemberHtsAssociated(member);
-        }
-    }
-    
-    /**
-     * @notice Set member frozen status (after HTS freeze operation)
-     * @dev Called by AjoCollateral or AjoPayments after freeze/unfreeze
-     * @param member Member address
-     * @param isFrozen Whether member should be frozen
-     */
-    function setMemberFrozen(
-        address member, 
-        bool isFrozen
-    ) external override onlyAuthorizedContracts {
-        require(members[member].isActive, "Member not found");
-        members[member].isFrozen = isFrozen;
-        
-        if (isFrozen) {
-            emit MemberHtsFrozen(member);
-        } else {
-            emit MemberHtsUnfrozen(member);
-        }
-    }
-    
-    /**
-     * @notice Get HTS status for a member
-     * @param member Member address
-     * @return isAssociated Whether member has associated HTS tokens
-     * @return isFrozen Whether member is frozen
-     */
-    function getMemberHtsStatus(
-        address member
-    ) external view override returns (bool isAssociated, bool isFrozen) {
-        Member memory memberInfo = members[member];
-        return (memberInfo.isHtsAssociated, memberInfo.isFrozen);
-    }
-    
-    // ============ MEMBER MANAGEMENT FUNCTIONS ============
-    
-    /**
-     * @notice Add a new member to the Ajo
-     * @param member Member address
-     * @param memberData Member data struct
-     */
-    function addMember(
-        address member, 
-        Member memory memberData
-    ) external override onlyAjoCore {
-        require(!members[member].isActive, "Member already exists");
-        
-        members[member] = memberData;
-        ajoQueuePositions[memberData.queueNumber] = member;
-        lockedCollateralBalances[member] = memberData.lockedCollateral;
-        activeAjoMembersList.push(member);
-        
-        if (memberData.guarantor != address(0)) {
-            members[memberData.guarantor].guaranteePosition = memberData.queueNumber;
-            guarantorAssignments[memberData.queueNumber] = memberData.guarantor;
-            emit GuarantorAssigned(
-                member, 
-                memberData.guarantor, 
-                memberData.queueNumber, 
-                members[memberData.guarantor].queueNumber
-            );
-        }
-        
-        emit MemberJoined(
-            member, 
-            memberData.queueNumber, 
-            memberData.lockedCollateral, 
-            memberData.preferredToken
-        );
-    }
-    
-    /**
-     * @notice Remove a member from the Ajo
-     * @param member Member address
-     */
-    function removeMember(address member) external override onlyAjoCore {
-        require(members[member].isActive, "Member not found");
-        
-        members[member].isActive = false;
-        lockedCollateralBalances[member] = 0;
-        _removeFromActiveList(member);
-        
-        emit MemberRemoved(member);
-    }
-    
-    /**
-     * @notice Update member data
-     * @param member Member address
-     * @param memberData Updated member data
-     */
-    function updateMember(
-        address member, 
-        Member memory memberData
-    ) external override onlyAjoCore {
-        require(members[member].isActive, "Member not found");
-        
-        members[member] = memberData;
-        lockedCollateralBalances[member] = memberData.lockedCollateral;
-        
-        emit MemberUpdated(member);
-    }
-    
-    /**
-     * @notice Update member's collateral amount
-     * @param member Member address
-     * @param newAmount New collateral amount
-     */
-    function updateCollateral(
-        address member, 
-        uint256 newAmount
-    ) external override onlyAuthorizedContracts {
-        require(members[member].isActive, "Member not found");
-        lockedCollateralBalances[member] = newAmount;
-        members[member].lockedCollateral = newAmount;
-    }
-    
-    /**
-     * @notice Update member's reputation score
-     * @param member Member address
-     * @param newReputation New reputation score
-     */
-    function updateReputation(
-        address member, 
-        uint256 newReputation
-    ) external override onlyAuthorizedContracts {
-        require(members[member].isActive, "Member not found");
-        members[member].reputationScore = newReputation;
-    }
-    
-    /**
-     * @notice Add a payment to member's history
-     * @param member Member address
-     * @param payment Payment amount
-     */
-    function addPastPayment(
-        address member, 
-        uint256 payment
-    ) external override onlyAuthorizedContracts {
-        require(members[member].isActive, "Member not found");
-        members[member].pastPayments.push(payment);
-    }
-    
-    /**
-     * @notice Update last payment cycle for member
-     * @param member Member address
-     * @param cycle Cycle number
-     */
-    function updateLastPaymentCycle(
-        address member, 
-        uint256 cycle
-    ) external override onlyAuthorizedContracts {
-        require(members[member].isActive, "Member not found");
-        members[member].lastPaymentCycle = cycle;
-    }
-    
-    /**
-     * @notice Increment default count for member
-     * @param member Member address
-     */
-    function incrementDefaultCount(
-        address member
-    ) external override onlyAjoCore {
-        require(members[member].isActive, "Member not found");
-        members[member].defaultCount++;
-    }
-    
-    /**
-     * @notice Update total amount paid by member
-     * @param member Member address
-     * @param amount Amount to add to total
-     */
-    function updateTotalPaid(
-        address member, 
-        uint256 amount
-    ) external override onlyAuthorizedContracts {
-        require(members[member].isActive, "Member not found");
-        members[member].totalPaid += amount;
-    }
-    
-    /**
-     * @notice Mark that member has received payout
-     * @param member Member address
-     */
-    function markPayoutReceived(
-        address member
-    ) external override onlyAuthorizedContracts {
-        require(members[member].isActive, "Member not found");
-        members[member].hasReceivedPayout = true;
-    }
-    
-    // ============ VIEW FUNCTIONS - BASIC QUERIES ============
-    
-    /**
-     * @notice Get member data
-     * @param member Member address
-     * @return Member data struct
-     */
-    function getMember(
-        address member
-    ) external view override returns (Member memory) {
+    function getMember(address member) external view override returns (Member memory) {
         return members[member];
     }
     
-    /**
-     * @notice Get total number of active members
-     * @return Number of active members
-     */
     function getTotalActiveMembers() external view override returns (uint256) {
         return activeAjoMembersList.length;
     }
     
-    /**
-     * @notice Check if address is a member
-     * @param member Member address
-     * @return Whether address is an active member
-     */
-    function isMember(address member) external view override returns (bool) {
-        return members[member].isActive;
-    }
-    
-    /**
-     * @notice Get list of all active members
-     * @return Array of member addresses
-     */
-    function getActiveMembersList() 
-        external 
-        view 
-        override 
-        returns (address[] memory) 
-    {
-        return activeAjoMembersList;
-    }
-    
-    /**
-     * @notice Get member at specific queue position
-     * @param queueNumber Queue position
-     * @return Member address
-     */
-    function getQueuePosition(
-        uint256 queueNumber
-    ) external view override returns (address) {
-        return ajoQueuePositions[queueNumber];
-    }
-    
-    /**
-     * @notice Get guarantor for a specific position
-     * @param position Queue position
-     * @return Guarantor address
-     */
-    function getGuarantorForPosition(
-        uint256 position
-    ) external view override returns (address) {
-        return guarantorAssignments[position];
-    }
-    
-    /**
-     * @notice Get locked collateral for member
-     * @param member Member address
-     * @return Collateral amount
-     */
-    function getLockedCollateral(
-        address member
-    ) external view override returns (uint256) {
-        return lockedCollateralBalances[member];
-    }
-    
-    /**
-     * @notice Get member at specific index
-     * @param index Index in active members list
-     * @return Member address
-     */
-    function getMemberAtIndex(
-        uint256 index
-    ) external view override returns (address) {
-        require(index < activeAjoMembersList.length, "Index out of bounds");
-        return activeAjoMembersList[index];
-    }
-    
-    /**
-     * @notice Get member at specific index (alternative name for compatibility)
-     * @param index Index in active members list
-     * @return Member address
-     */
-    function activeMembersList(
-        uint256 index
-    ) external view override returns (address) {
-        require(index < activeAjoMembersList.length, "Index out of bounds");
-        return activeAjoMembersList[index];
-    }
-    
-    /**
-     * @notice Get member at queue position (alternative name for compatibility)
-     * @param position Queue position
-     * @return Member address
-     */
-    function queuePositions(
-        uint256 position
-    ) external view override returns (address) {
-        return ajoQueuePositions[position];
-    }
-    
-    // ============ VIEW FUNCTIONS - DETAILED QUERIES ============
-    
-    /**
-     * @notice Get detailed member information
-     * @param member Member address
-     * @return memberInfo Member data struct
-     * @return pendingPenalty Pending penalty amount
-     * @return effectiveVotingPower Voting power
-     */
     function getMemberInfo(address member) 
         external 
         view 
@@ -486,16 +119,12 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable {
         ) 
     {
         memberInfo = members[member];
+        // pendingPenalty and effectiveVotingPower would be calculated by other contracts
+        // For now, return 0 as placeholders - these should be calculated by AjoCore
         pendingPenalty = 0;
-        effectiveVotingPower = memberInfo.isActive ? 100 : 0;
+        effectiveVotingPower = 0;
     }
     
-    /**
-     * @notice Get queue information for member
-     * @param member Member address
-     * @return position Queue position
-     * @return estimatedCyclesWait Estimated cycles until payout
-     */
     function getQueueInfo(address member) 
         external 
         view 
@@ -507,20 +136,11 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable {
     {
         Member memory memberInfo = members[member];
         position = memberInfo.queueNumber;
+        
+    
         estimatedCyclesWait = memberInfo.joinedCycle;
     }
     
-    /**
-     * @notice Get contract statistics
-     * @return totalMembers Total member count
-     * @return activeMembers Active member count
-     * @return totalCollateralUSDC Total USDC collateral
-     * @return totalCollateralHBAR Total HBAR collateral
-     * @return contractBalanceUSDC USDC balance across contracts
-     * @return contractBalanceHBAR HBAR balance across contracts
-     * @return currentQueuePosition Highest queue position
-     * @return activeToken Active payment token
-     */
     function getContractStats() 
         external 
         view 
@@ -536,8 +156,9 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable {
             PaymentToken activeToken
         ) 
     {
+        // Real member counts
         activeMembers = activeAjoMembersList.length;
-        totalMembers = activeMembers;
+        totalMembers = activeMembers; // For simplicity, could track total including inactive
         
         totalCollateralUSDC = 0;
         totalCollateralHBAR = 0;
@@ -577,6 +198,7 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable {
             }
         }
         
+    
         currentQueuePosition = 0;
         for (uint256 i = 0; i < activeMembers; i++) {
             address memberAddr = activeAjoMembersList[i];
@@ -586,26 +208,19 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable {
             }
         }
         
+        // Default to USDC - could be made dynamic based on most common token
         activeToken = PaymentToken.USDC;
     }
     
-    // ============ VIEW FUNCTIONS - FRONTEND OPTIMIZATION ============
+    // ============ NEW FRONTEND VIEW FUNCTIONS ============
     
     /**
-     * @notice Get detailed information for all members
-     * @dev CRITICAL for frontend member tables
-     * @return Array of MemberDetails structs
+     * @dev Get detailed information for all members - CRITICAL for frontend member tables
+     * @return Array of MemberDetails structs containing essential member info
      */
-    function getAllMembersDetails() 
-        external 
-        view 
-        override 
-        returns (MemberDetails[] memory) 
-    {
+    function getAllMembersDetails() external view override returns (MemberDetails[] memory) {
         uint256 memberCount = activeAjoMembersList.length;
         MemberDetails[] memory details = new MemberDetails[](memberCount);
-        
-        uint256 currentCycle = _getCurrentCycle();
         
         for (uint256 i = 0; i < memberCount; i++) {
             address memberAddr = activeAjoMembersList[i];
@@ -615,7 +230,7 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable {
                 userAddress: memberAddr,
                 hasReceivedPayout: member.hasReceivedPayout,
                 queuePosition: member.queueNumber,
-                hasPaidThisCycle: member.lastPaymentCycle >= currentCycle,
+                hasPaidThisCycle: member.lastPaymentCycle >= _getCurrentCycle(),
                 collateralLocked: member.lockedCollateral,
                 guarantorAddress: member.guarantor,
                 guarantorQueuePosition: member.guarantor != address(0) 
@@ -623,9 +238,7 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable {
                     : 0,
                 totalPaid: member.totalPaid,
                 defaultCount: member.defaultCount,
-                reputationScore: member.reputationScore,
-                isHtsAssociated: member.isHtsAssociated,
-                isFrozen: member.isFrozen
+                reputationScore: member.reputationScore
             });
         }
         
@@ -633,11 +246,11 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable {
     }
     
     /**
-     * @notice Get paginated member details for large member lists
+     * @dev Get paginated member details for large member lists
      * @param offset Starting index
-     * @param limit Maximum number of results
-     * @return details Array of MemberDetails
-     * @return hasMore Whether more results exist
+     * @param limit Maximum number of members to return
+     * @return details Array of member details
+     * @return hasMore Whether there are more members beyond this page
      */
     function getMembersDetailsPaginated(uint256 offset, uint256 limit) 
         external 
@@ -661,7 +274,6 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable {
         
         uint256 resultCount = end - offset;
         details = new MemberDetails[](resultCount);
-        uint256 currentCycle = _getCurrentCycle();
         
         for (uint256 i = 0; i < resultCount; i++) {
             address memberAddr = activeAjoMembersList[offset + i];
@@ -671,7 +283,7 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable {
                 userAddress: memberAddr,
                 hasReceivedPayout: member.hasReceivedPayout,
                 queuePosition: member.queueNumber,
-                hasPaidThisCycle: member.lastPaymentCycle >= currentCycle,
+                hasPaidThisCycle: member.lastPaymentCycle >= _getCurrentCycle(),
                 collateralLocked: member.lockedCollateral,
                 guarantorAddress: member.guarantor,
                 guarantorQueuePosition: member.guarantor != address(0) 
@@ -679,9 +291,7 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable {
                     : 0,
                 totalPaid: member.totalPaid,
                 defaultCount: member.defaultCount,
-                reputationScore: member.reputationScore,
-                isHtsAssociated: member.isHtsAssociated,
-                isFrozen: member.isFrozen
+                reputationScore: member.reputationScore
             });
         }
         
@@ -689,44 +299,49 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable {
     }
     
     /**
-     * @notice Get comprehensive activity summary for a member
-     * @param member Member address
-     * @return activity MemberActivity struct
+     * @dev Get comprehensive activity summary for a member - for profile pages
+     * @param member Address of the member
+     * @return activity Complete activity summary
      */
-    function getMemberActivity(
-        address member
-    ) external view override returns (MemberActivity memory activity) {
+    function getMemberActivity(address member) external view override returns (MemberActivity memory activity) {
         Member memory memberInfo = members[member];
         
         if (!memberInfo.isActive) {
-            return activity;
+            return activity; // Return empty struct
         }
         
         uint256 currentCycle = _getCurrentCycle();
         
+        // Calculate cycles participated (from join to now)
         activity.cyclesParticipated = currentCycle >= memberInfo.joinedCycle 
             ? currentCycle - memberInfo.joinedCycle + 1 
             : 0;
         
+        // Payments completed = length of past payments array
         activity.paymentsCompleted = memberInfo.pastPayments.length;
         
+        // Payments missed = cycles participated - payments completed
         activity.paymentsMissed = activity.cyclesParticipated > activity.paymentsCompleted 
             ? activity.cyclesParticipated - activity.paymentsCompleted 
             : 0;
         
+        // Total paid = sum of past payments
         activity.totalPaid = 0;
         for (uint256 i = 0; i < memberInfo.pastPayments.length; i++) {
             activity.totalPaid += memberInfo.pastPayments[i];
         }
         
+        // Total received = memberInfo.totalPaid (this is actually total received from distributePayout)
         activity.totalReceived = memberInfo.totalPaid;
         
+        // Net position = received - paid
         if (activity.totalReceived >= activity.totalPaid) {
             activity.netPosition = activity.totalReceived - activity.totalPaid;
         } else {
-            activity.netPosition = 0;
+            activity.netPosition = 0; // Could make this int256 to show negative
         }
         
+        // Consecutive payments = count from most recent backwards
         activity.consecutivePayments = 0;
         if (memberInfo.lastPaymentCycle > 0) {
             uint256 expectedCycle = currentCycle;
@@ -739,38 +354,36 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable {
             }
         }
         
+        // Last active timestamp (using last payment cycle as proxy)
         activity.lastActiveTimestamp = memberInfo.lastPaymentCycle > 0 
             ? block.timestamp 
-            : 0;
+            : 0; // Could be more accurate with actual timestamps
     }
     
     /**
-     * @notice Get members filtered by active status
-     * @param isActive Status filter
+     * @dev Get members filtered by active status
+     * @param isActive Filter for active (true) or inactive (false) members
      * @return Array of member addresses
      */
-    function getMembersByStatus(
-        bool isActive
-    ) external view override returns (address[] memory) {
+    function getMembersByStatus(bool isActive) external view override returns (address[] memory) {
         if (isActive) {
             return activeAjoMembersList;
         }
+        
+        // For inactive members, would need to track separately
+        // For now, return empty array
         return new address[](0);
     }
     
     /**
-     * @notice Get members who need to make payment this cycle
-     * @return Array of member addresses
+     * @dev Get members who need to make payment this cycle
+     * @return Array of member addresses who haven't paid yet
      */
-    function getMembersNeedingPayment() 
-        external 
-        view 
-        override 
-        returns (address[] memory) 
-    {
+    function getMembersNeedingPayment() external view override returns (address[] memory) {
         uint256 currentCycle = _getCurrentCycle();
         uint256 count = 0;
         
+        // First pass: count
         for (uint256 i = 0; i < activeAjoMembersList.length; i++) {
             address memberAddr = activeAjoMembersList[i];
             Member memory member = members[memberAddr];
@@ -779,6 +392,7 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable {
             }
         }
         
+        // Second pass: populate
         address[] memory needingPayment = new address[](count);
         uint256 index = 0;
         for (uint256 i = 0; i < activeAjoMembersList.length; i++) {
@@ -794,17 +408,13 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable {
     }
     
     /**
-     * @notice Get members who have defaulted
-     * @return Array of member addresses
+     * @dev Get members who have defaulted (have default count > 0)
+     * @return Array of member addresses with defaults
      */
-    function getMembersWithDefaults() 
-        external 
-        view 
-        override 
-        returns (address[] memory) 
-    {
+    function getMembersWithDefaults() external view override returns (address[] memory) {
         uint256 count = 0;
         
+        // First pass: count
         for (uint256 i = 0; i < activeAjoMembersList.length; i++) {
             address memberAddr = activeAjoMembersList[i];
             if (members[memberAddr].defaultCount > 0) {
@@ -812,6 +422,7 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable {
             }
         }
         
+        // Second pass: populate
         address[] memory defaulters = new address[](count);
         uint256 index = 0;
         for (uint256 i = 0; i < activeAjoMembersList.length; i++) {
@@ -825,12 +436,12 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable {
         return defaulters;
     }
     
-    /**
-     * @notice Get top members by reputation score
-     * @param limit Maximum number of results
-     * @return members_ Array of member addresses
-     * @return reputations Array of reputation scores
-     */
+   /**
+    * @dev Get top members by reputation score - for leaderboards
+    * @param limit Maximum number of members to return
+    * @return members_ Array of member addresses
+    * @return reputations Array of corresponding reputation scores
+    */
     function getTopMembersByReputation(uint256 limit) 
         external 
         view 
@@ -845,6 +456,7 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable {
             limit = memberCount;
         }
         
+        // Create temporary array of all members with reputation
         address[] memory allMembers = new address[](memberCount);
         uint256[] memory allReputations = new uint256[](memberCount);
         
@@ -854,13 +466,17 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable {
             allReputations[i] = members[memberAddr].reputationScore;
         }
         
+        // Simple bubble sort for top N (good enough for small lists)
+        // For production, consider implementing a more efficient sort
         for (uint256 i = 0; i < limit && i < memberCount; i++) {
             for (uint256 j = i + 1; j < memberCount; j++) {
                 if (allReputations[j] > allReputations[i]) {
+                    // Swap reputations
                     uint256 tempRep = allReputations[i];
                     allReputations[i] = allReputations[j];
                     allReputations[j] = tempRep;
                     
+                    // Swap addresses
                     address tempAddr = allMembers[i];
                     allMembers[i] = allMembers[j];
                     allMembers[j] = tempAddr;
@@ -868,6 +484,7 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable {
             }
         }
         
+        // Return top N
         members_ = new address[](limit);
         reputations = new uint256[](limit);
         for (uint256 i = 0; i < limit; i++) {
@@ -876,12 +493,126 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable {
         }
     }
     
+    // ============ MEMBER MANAGEMENT FUNCTIONS ============
+    
+    function addMember(address member, Member memory memberData) external onlyAjoCore {
+        require(!members[member].isActive, "Member already exists");
+        
+        members[member] = memberData;
+        ajoQueuePositions[memberData.queueNumber] = member;
+        lockedCollateralBalances[member] = memberData.lockedCollateral;
+        activeAjoMembersList.push(member);
+        
+        // Set up guarantor relationship
+        if (memberData.guarantor != address(0)) {
+            members[memberData.guarantor].guaranteePosition = memberData.queueNumber;
+            guarantorAssignments[memberData.queueNumber] = memberData.guarantor;
+            emit GuarantorAssigned(
+                member, 
+                memberData.guarantor, 
+                memberData.queueNumber, 
+                members[memberData.guarantor].queueNumber
+            );
+        }
+        
+        emit MemberJoined(
+            member, 
+            memberData.queueNumber, 
+            memberData.lockedCollateral, 
+            memberData.preferredToken
+        );
+    }
+    
+    function removeMember(address member) external onlyAjoCore {
+        require(members[member].isActive, "Member not found");
+        
+        members[member].isActive = false;
+        lockedCollateralBalances[member] = 0;
+        _removeFromActiveList(member);
+        
+        emit MemberRemoved(member);
+    }
+    
+    function updateMember(address member, Member memory memberData) external onlyAjoCore {
+        require(members[member].isActive, "Member not found");
+        
+        members[member] = memberData;
+        lockedCollateralBalances[member] = memberData.lockedCollateral;
+        
+        emit MemberUpdated(member);
+    }
+    
+    // ============ ADDITIONAL VIEW FUNCTIONS ============
+    
+    function isMember(address member) external view returns (bool) {
+        return members[member].isActive;
+    }
+    
+    function getActiveMembersList() external view returns (address[] memory) {
+        return activeAjoMembersList;
+    }
+    
+    function getQueuePosition(uint256 queueNumber) external view returns (address) {
+        return ajoQueuePositions[queueNumber];
+    }
+    
+    function getGuarantorForPosition(uint256 position) external view returns (address) {
+        return guarantorAssignments[position];
+    }
+    
+    function getLockedCollateral(address member) external view returns (uint256) {
+        return lockedCollateralBalances[member];
+    }
+    
+    function getMemberAtIndex(uint256 index) external view returns (address) {
+        require(index < activeAjoMembersList.length, "Index out of bounds");
+        return activeAjoMembersList[index];
+    }
+    
+    // For interface compatibility - maps to getActiveMembersList()[index]
+    function activeMembersList(uint256 index) external view returns (address) {
+        require(index < activeAjoMembersList.length, "Index out of bounds");
+        return activeAjoMembersList[index];
+    }
+    
+    // For interface compatibility - maps to ajoQueuePositions
+    function queuePositions(uint256 position) external view returns (address) {
+        return ajoQueuePositions[position];
+    }
+    
+    // ============ UTILITY FUNCTIONS ============
+    
+    function updateCollateral(address member, uint256 newAmount) external onlyAjoCore {
+        lockedCollateralBalances[member] = newAmount;
+        members[member].lockedCollateral = newAmount;
+    }
+    
+    function updateReputation(address member, uint256 newReputation) external onlyAjoCore {
+        members[member].reputationScore = newReputation;
+    }
+    
+    function addPastPayment(address member, uint256 payment) external {
+        members[member].pastPayments.push(payment);
+    }
+    
+    function updateLastPaymentCycle(address member, uint256 cycle) external {
+        members[member].lastPaymentCycle = cycle;
+    }
+    
+    function incrementDefaultCount(address member) external onlyAjoCore {
+        members[member].defaultCount++;
+    }
+    
+    function updateTotalPaid(address member, uint256 amount) external {
+        members[member].totalPaid += amount;
+    }
+    
+    function markPayoutReceived(address member) external {
+        members[member].hasReceivedPayout = true;
+    }
+    
     // ============ INTERNAL HELPER FUNCTIONS ============
     
-    /**
-     * @dev Remove member from active list
-     * @param member Member address to remove
-     */
     function _removeFromActiveList(address member) internal {
         for (uint256 i = 0; i < activeAjoMembersList.length; i++) {
             if (activeAjoMembersList[i] == member) {
@@ -901,10 +632,15 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable {
             return 1;
         }
         
+        // Call getCurrentCycle on AjoPayments
         try IAjoPayments(ajoPayments).getCurrentCycle() returns (uint256 cycle) {
             return cycle;
         } catch {
             return 1;
         }
     }
+    
+    // ============ EVENTS ============
+    
+    // Events are defined in the interface
 }
