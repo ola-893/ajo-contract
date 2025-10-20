@@ -1,32 +1,32 @@
 {
   "network": "unknown",
   "chainId": 296,
-  "deployedAt": "2025-10-17T04:50:46.381Z",
+  "deployedAt": "2025-10-20T09:54:41.646Z",
   "htsOnly": true,
   "individualCalls": true,
   "contracts": {
-    "AjoFactory": "0x27A53113892e3e2146C52D2F45dfbBd1D874b162",
-    "USDC_HTS": "0x00000000000000000000000000000000006bF309",
-    "WHBAR_HTS": "0x00000000000000000000000000000000006bf30a"
+    "AjoFactory": "0xA527Cf04806054DF6f38B61Ee7b9E994caf352F0",
+    "USDC_HTS": "0x00000000000000000000000000000000006c459A",
+    "WHBAR_HTS": "0x00000000000000000000000000000000006C459b"
   },
   "masterCopies": {
-    "AjoCore": "0x08e5Bd244259907B4822f5D50998D6FA17F4cA79",
-    "AjoMembers": "0x40F518e494Ab89c5005B7D48031ee54a94442778",
-    "AjoCollateral": "0x7B6C7cB3e1bfeb8bb59433DE1458953f99fDD73C",
-    "AjoPayments": "0x55E9F92442fbabf17ebFE7Fae9c2F7F9D991AeF6",
-    "AjoGovernance": "0xDfE9Bd714F452636D3048E15B3743411cFf7D443",
-    "AjoSchedule": "0xd11724ac98823da9783aC6f7D32125f1F92E1A77"
+    "AjoCore": "0x4BBcf0050eAF4be6EA67cC52bf3dD306Cf4b3Ca9",
+    "AjoMembers": "0x29f9EAb7f0CC2F4C249dE95bd84e708A6D063bD4",
+    "AjoCollateral": "0x852Bc5982FC07a552A742780e253D9657B23856C",
+    "AjoPayments": "0xb32416d78Cddc2Cf9758fFd62004bB2aFbfD5262",
+    "AjoGovernance": "0x3f6c5F3c97FbEfc1bA9DA2bE8A55a517bFb8C43c",
+    "AjoSchedule": "0x37aAE081D46776F42896CcadFC7443b5c55c048a"
   },
   "testAjo": {
     "id": 1,
     "name": "Hedera Hackathon 2025 - Full Integration Demo",
-    "core": "0x00AA83F51Bb4f47fd09126AaB08d91dfd7843797",
-    "members": "0x033d4E72F6275CD832203906ec1f4ADb46494b95",
-    "collateral": "0x6B18f4c31F87b78959868244070bF646091aB8D4",
-    "payments": "0xC195ECcAA6466e6002BBe95A135ef9BDa42FFf31",
-    "governance": "0xaCc677dbeDB219913F61E804924569D52c6aD60b",
-    "schedule": "0x4B819BeDc0f14a3B6C360a01318334fa2cfaF058",
-    "hcsTopicId": "0xff37d1396962380c45a45ee0c7a4f5c90057e0d1d220614b3ca62b4809e73a8f",
+    "core": "0xC7F920d69d2eF11c6B24Fda0b24CdAfc7f866A91",
+    "members": "0x4f4744DFd7BAbEf4C5b49f2f9913940c4548bf59",
+    "collateral": "0x75E87b6053185049cb2bCc19DcF0d437b0eA8cD9",
+    "payments": "0x3A2933616e793cb6f99eECB6cCE17Eb812b995a8",
+    "governance": "0x20fE5B3771A5C801600Da973308E4401922cDc04",
+    "schedule": "0x8832d03c2b3c1206ef83F394B8aC0E5990907700",
+    "hcsTopicId": "0xba97f1cf455282f729e0f1e8963986a5a188b7141b875e542378efbb44396af0",
     "usesHtsTokens": true,
     "usesScheduledPayments": true
   },
@@ -34,8 +34,8 @@
     "HTS": {
       "enabled": true,
       "autoAssociation": true,
-      "usdcToken": "0x00000000000000000000000000000000006bF309",
-      "hbarToken": "0x00000000000000000000000000000000006bf30a"
+      "usdcToken": "0x00000000000000000000000000000000006c459A",
+      "hbarToken": "0x00000000000000000000000000000000006C459b"
     },
     "HSS": {
       "enabled": true,
@@ -43,7 +43,7 @@
     },
     "HCS": {
       "enabled": true,
-      "topicId": "0xff37d1396962380c45a45ee0c7a4f5c90057e0d1d220614b3ca62b4809e73a8f"
+      "topicId": "0xba97f1cf455282f729e0f1e8963986a5a188b7141b875e542378efbb44396af0"
     }
   },
   "participants": [
@@ -105,7 +105,7 @@
     "autoAssociationEnabled": true,
     "batchOperations": false,
     "individualCalls": true,
-    "governanceProposals": 0,
+    "governanceProposals": 3,
     "governanceVotes": 0,
     "governanceExecuted": false
   }

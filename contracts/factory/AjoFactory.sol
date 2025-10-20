@@ -367,7 +367,6 @@ function fundUserWithHtsTokens(
     external 
     override 
     htsRequired 
-    onlyOwner 
     returns (bool usdcSuccess, bool hbarSuccess) 
 {
     require(user != address(0), "Invalid user");
@@ -1061,15 +1060,17 @@ function getHtsAllowance(
         return (ajoInfos, hasMore);
     }
     
-    // function getAjosByCreator(address creator) 
-    //     external 
-    //     view 
-    //     override 
-    //     returns (uint256[] memory ajoIds) 
-    // {
-    //     return creatorAjos[creator];
-    // }
+    function getAjosByCreator(address creator) 
+        external 
+        view 
+        override 
+        returns (uint256[] memory ajoIds) 
+    {
+        return creatorAjos[creator];
+    }
     
+
+
     // function getAjoCore(uint256 ajoId) 
     //     external 
     //     view 
@@ -1080,19 +1081,19 @@ function getHtsAllowance(
     //     return ajoCore[ajoId];
     // }
     
-    // function ajoStatus(uint256 ajoId) 
-    //     external 
-    //     view 
-    //     override 
-    //     returns (bool exists, bool isActive) 
-    // {
-    //     if (ajoId == 0 || ajoId >= nextAjoId) {
-    //         return (false, false);
-    //     }
+    function ajoStatus(uint256 ajoId) 
+        external 
+        view 
+        override 
+        returns (bool exists, bool isActive) 
+    {
+        if (ajoId == 0 || ajoId >= nextAjoId) {
+            return (false, false);
+        }
         
-    //     bool isReady = ajoInitializationPhase[ajoId] >= 4;
-    //     return (true, ajoIsActive[ajoId] && isReady);
-    // }
+        bool isReady = ajoInitializationPhase[ajoId] >= 4;
+        return (true, ajoIsActive[ajoId] && isReady);
+    }
     
     // function getFactoryStats() 
     //     external 
@@ -1212,40 +1213,57 @@ function getHtsAllowance(
     //         scheduleResponsive
     //     );
     // }
+
+    /**
+     * @dev Check the initialization phase of an Ajo
+     * @param ajoId The Ajo ID to check
+     * @return phase Current initialization phase (1-5, where 5 is fully complete)
+     * @return isReady Whether the Ajo is ready for basic use (phase >= 4)
+     * @return isFullyFinalized Whether the Ajo is completely finalized (phase == 5)
+     */
+    function getAjoInitializationStatus(uint256 ajoId) external view validAjoId(ajoId) returns (
+        uint8 phase,
+        bool isReady,
+        bool isFullyFinalized
+    ) {
+        phase = ajoInitializationPhase[ajoId];
+        isReady = phase >= 4;
+        isFullyFinalized = phase == 5;
+        return (phase, isReady, isFullyFinalized);
+    }
     
-    // function getAjoOperationalStatus(uint256 ajoId) 
-    //     external 
-    //     view 
-    //     override 
-    //     validAjoId(ajoId) 
-    //     returns (
-    //         uint256 totalMembers,
-    //         uint256 currentCycle,
-    //         bool canAcceptMembers,
-    //         bool hasActiveGovernance,
-    //         bool hasActiveScheduling
-    //     ) 
-    // {
-    //     // Get total members
-    //     try IAjoMembers(ajoMembers[ajoId]).getTotalActiveMembers() returns (uint256 members) {
-    //         totalMembers = members;
-    //     } catch {
-    //         totalMembers = 0;
-    //     }
+    function getAjoOperationalStatus(uint256 ajoId) 
+        external 
+        view  
+        validAjoId(ajoId) 
+        returns (
+            uint256 totalMembers,
+            uint256 currentCycle,
+            bool canAcceptMembers,
+            bool hasActiveGovernance,
+            bool hasActiveScheduling
+        ) 
+    {
+        // Get total members
+        try IAjoMembers(ajoMembers[ajoId]).getTotalActiveMembers() returns (uint256 members) {
+            totalMembers = members;
+        } catch {
+            totalMembers = 0;
+        }
         
-    //     // Get current cycle
-    //     try IAjoPayments(ajoPayments[ajoId]).getCurrentCycle() returns (uint256 cycle) {
-    //         currentCycle = cycle;
-    //     } catch {
-    //         currentCycle = 0;
-    //     }
+        // Get current cycle
+        try IAjoPayments(ajoPayments[ajoId]).getCurrentCycle() returns (uint256 cycle) {
+            currentCycle = cycle;
+        } catch {
+            currentCycle = 0;
+        }
         
-    //     canAcceptMembers = ajoIsActive[ajoId] && ajoInitializationPhase[ajoId] >= 4;
-    //     hasActiveGovernance = ajoInitializationPhase[ajoId] >= 2;
-    //     hasActiveScheduling = ajoUsesScheduledPayments[ajoId] && ajoSchedulingEnabled[ajoId];
+        canAcceptMembers = ajoIsActive[ajoId] && ajoInitializationPhase[ajoId] >= 4;
+        hasActiveGovernance = ajoInitializationPhase[ajoId] >= 2;
+        hasActiveScheduling = ajoUsesScheduledPayments[ajoId] && ajoSchedulingEnabled[ajoId];
         
-    //     return (totalMembers, currentCycle, canAcceptMembers, hasActiveGovernance, hasActiveScheduling);
-    // }
+        return (totalMembers, currentCycle, canAcceptMembers, hasActiveGovernance, hasActiveScheduling);
+    }
     
     function deactivateAjo(uint256 ajoId) external override validAjoId(ajoId) onlyCreatorOrOwner(ajoId) {
         require(ajoIsActive[ajoId], "Ajo already inactive");
