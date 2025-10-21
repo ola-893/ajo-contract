@@ -1013,9 +1013,10 @@ interface IAjoFactory {
     // Add these events after the existing events
     event HtsTokenApproved(address indexed owner, address indexed token, address indexed spender, uint256 amount);
     event HtsApprovalFailed(address indexed owner, address indexed token, address indexed spender, uint256 amount, int64 responseCode, string reason);
-    // function getAjosByCreator(address creator) external view returns (uint256[] memory ajoIds);
+    function getAjosByCreator(address creator) external view returns (uint256[] memory ajoIds);
     // function getAjoCore(uint256 ajoId) external view returns (address ajoCore);
-    // function ajoStatus(uint256 ajoId) external view returns (bool exists, bool isActive);
+    // function getAjo(uint256 ajoId) external view returns (AjoInfo memory info);
+    function ajoStatus(uint256 ajoId) external view returns (bool exists, bool isActive);
     // function getFactoryStats() external view returns (uint256 totalCreated, uint256 activeCount);
     // function getImplementations() external view returns (address ajoCore, address ajoMembers, address ajoCollateral, address ajoPayments, address ajoGovernance, address ajoSchedule);
     
@@ -1024,8 +1025,8 @@ interface IAjoFactory {
     // function getAjosUsingScheduledPayments() external view returns (uint256[] memory ajoIds);
     
     // Health & Status Functions
-    // function getAjoHealthReport(uint256 ajoId) external view returns (uint256 initializationPhase, bool isReady, bool coreResponsive, bool membersResponsive, bool collateralResponsive, bool paymentsResponsive, bool governanceResponsive, bool scheduleResponsive);
-    // function getAjoOperationalStatus(uint256 ajoId) external view returns (uint256 totalMembers, uint256 currentCycle, bool canAcceptMembers, bool hasActiveGovernance, bool hasActiveScheduling);
+    //function getAjoHealthReport(uint256 ajoId) external view returns (uint256 initializationPhase, bool isReady, bool coreResponsive, bool membersResponsive, bool collateralResponsive, bool paymentsResponsive, bool governanceResponsive, bool scheduleResponsive);
+    //function getAjoOperationalStatus(uint256 ajoId) external view returns (uint256 totalMembers, uint256 currentCycle, bool canAcceptMembers, bool hasActiveGovernance, bool hasActiveScheduling);
     
     // Events
     event AjoCreated(uint256 indexed ajoId, address indexed creator, address ajoCore, string name, bool usesHtsTokens, bool usesScheduledPayments);
