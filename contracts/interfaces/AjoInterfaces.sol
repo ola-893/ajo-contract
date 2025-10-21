@@ -550,6 +550,7 @@ interface IAjoCore {
         uint256 position, 
         uint256 estimatedCyclesWait
     );
+    function getCycleDuration() external view returns (uint256);
     function needsToPayThisCycle(address member) external view returns (bool);
     
     // View Functions - Contract Statistics
@@ -979,8 +980,14 @@ interface IAjoFactory {
     //function isUserReadyForHts(address user, uint256 minUsdcBalance, uint256 minHbarBalance) external view returns (bool isReady, bool usdcReady, bool hbarReady);
     
     // Ajo Creation Functions
-    function createAjo(string memory _name, bool _useHtsTokens, bool _useScheduledPayments) external returns (uint256 ajoId);
-    function initializeAjoPhase2(uint256 ajoId) external returns (bytes32 hcsTopicId);
+    function createAjo(
+        string memory _name,
+        bool _useHtsTokens,
+        bool _useScheduledPayments,
+        uint256 _cycleDuration,
+        uint256 _monthlyPaymentUSDC,
+        uint256 _monthlyPaymentHBAR
+    ) external returns (uint256 ajoId);    function initializeAjoPhase2(uint256 ajoId, bytes32 hcsTopicId) external returns (bytes32);    
     function initializeAjoPhase3(uint256 ajoId) external;
     function initializeAjoPhase4(uint256 ajoId) external;
     function initializeAjoPhase5(uint256 ajoId) external; // New phase for Schedule contract
@@ -992,6 +999,14 @@ interface IAjoFactory {
     function getAjoSchedulingStatus(uint256 ajoId) external view returns (bool isEnabled, uint256 scheduledPaymentsCount, uint256 executedCount);
     function setScheduleServiceAddress(address _scheduleService) external;
     function getAjoScheduleContract(uint256 ajoId) external view returns (address);
+    function getAjoConfiguration(uint256 ajoId) 
+        external 
+        view 
+        returns (
+            uint256 cycleDuration,
+            uint256 monthlyPaymentUSDC,
+            uint256 monthlyPaymentHBAR
+        );
     
     // Ajo Management Functions
     function deactivateAjo(uint256 ajoId) external;

@@ -47,7 +47,7 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
     
     event AjoCoreUpdated(address indexed oldCore, address indexed newCore);
     
-    // ✅ DETAILED EVENT - Frontend indexes this for payment history
+    // DETAILED EVENT - Frontend indexes this for payment history
     event PaymentMadeDetailed(
         address indexed member,
         uint256 amountPaid,
@@ -58,7 +58,7 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         uint256 timestamp
     );
     
-    // ✅ CYCLE SUMMARY EVENT - Emitted when cycle advances
+    // CYCLE SUMMARY EVENT - Emitted when cycle advances
     event CycleSummary(
         uint256 indexed cycle,
         uint256 totalCollected,
@@ -101,7 +101,6 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         membersContract = IAjoMembers(_membersContract);
         collateralContract = IAjoCollateral(_collateralContract);
         
-        // Rest of initialization...
         penaltyRate = DEFAULT_PENALTY_RATE;
         currentCycle = 1;
         nextPayoutPosition = 1;
@@ -212,7 +211,7 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         // Transfer payment
         tokenContract.transferFrom(member, address(this), totalPayment);
         
-        // ✅ OPTIMIZED: Only track current cycle status (minimal storage writes)
+        // OPTIMIZED: Only track current cycle status (minimal storage writes)
         if (!hasPaidInCycle[currentCycle][member]) {
             cyclePaidMembers[currentCycle].push(member);
             hasPaidInCycle[currentCycle][member] = true;
@@ -235,7 +234,7 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         // Clear penalties
         pendingPenalties[member] = 0;
         
-        // ✅ EMIT DETAILED EVENT - Frontend indexes this for full history
+        // EMIT DETAILED EVENT - Frontend indexes this for full history
         emit PaymentMadeDetailed(
             member,
             amount,
@@ -313,7 +312,6 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         return candidate;
     }
     
-    // ============ FRONTEND VIEW FUNCTIONS (OPTIMIZED) ============
     
     /**
      * @dev Get payment history for a member
@@ -419,15 +417,16 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
             return new UpcomingEvent[](0);
         }
         
+        uint256 duration = getCycleDuration(); // Get from AjoCore
         uint256 eventCount = 0;
-        UpcomingEvent[] memory tempEvents = new UpcomingEvent[](3); // Max 3 events
+        UpcomingEvent[] memory tempEvents = new UpcomingEvent[](3);
         
         // Event 1: Payment due if not paid this cycle
         if (memberInfo.lastPaymentCycle < currentCycle) {
             TokenConfig memory config = tokenConfigs[activePaymentToken];
             tempEvents[eventCount] = UpcomingEvent({
-                eventType: 0, // Payment due
-                timestamp: cycleStartTime + cycleDuration,
+                eventType: 0,
+                timestamp: cycleStartTime + duration, // Use dynamic duration
                 affectedMember: member,
                 amount: config.monthlyPayment + pendingPenalties[member]
             });
@@ -437,8 +436,8 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         // Event 2: Payout if member is next in queue
         if (memberInfo.queueNumber == nextPayoutPosition && !memberInfo.hasReceivedPayout) {
             tempEvents[eventCount] = UpcomingEvent({
-                eventType: 1, // Payout
-                timestamp: block.timestamp, // Available now
+                eventType: 1,
+                timestamp: block.timestamp,
                 affectedMember: member,
                 amount: calculatePayout()
             });
@@ -447,8 +446,8 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         
         // Event 3: Cycle end
         tempEvents[eventCount] = UpcomingEvent({
-            eventType: 2, // Cycle end
-            timestamp: cycleStartTime + cycleDuration,
+            eventType: 2,
+            timestamp: cycleStartTime + duration, // Use dynamic duration
             affectedMember: address(0),
             amount: 0
         });
@@ -466,7 +465,8 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
      * @return timestamp Unix timestamp of payment deadline
      */
     function getNextPaymentDeadline() external view override returns (uint256 timestamp) {
-        return cycleStartTime + cycleDuration;
+        uint256 duration = getCycleDuration(); // Get from AjoCore
+        return cycleStartTime + duration;
     }
     
     // ============ ADMIN FUNCTIONS ============
@@ -486,7 +486,7 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
     }
     
     function advanceCycle() external onlyAjoCore {
-        // ✅ Emit cycle summary before advancing
+        // Emit cycle summary before advancing
         emit CycleSummary(
             currentCycle,
             cycleTotalCollected[currentCycle],
@@ -557,6 +557,10 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
     function getTotalPayouts() external view returns (uint256) {
         return currentCycle > 1 ? currentCycle - 1 : 0;
     }
+
+    function getCycleDuration() public view returns (uint256) {
+        return IAjoCore(ajoCore).getCycleDuration();
+    }
     
     function isPayoutReady() external view returns (bool) {
         address nextRecipient = getNextRecipient();
@@ -569,15 +573,5 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         IERC20 tokenContract = token == PaymentToken.USDC ? USDC : HBAR;
         uint256 balance = tokenContract.balanceOf(address(this));
         tokenContract.transfer(ajoCore, balance);
-    }
-    
-    function pausePayments() external onlyAjoCore {
-       //pausing payments is very sensitive, so implementation is omitted for brevity
-       //people that have made previous payments won't be able to get their payouts
-       //until payments are resumed
-    }
-    
-    function resumePayments() external onlyAjoCore {
-        // Implementation for resuming payments after emergency
     }
 }

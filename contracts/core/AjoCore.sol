@@ -20,7 +20,7 @@ contract AjoCore is IAjoCore, ReentrancyGuard, Ownable, Initializable {
     IAjoPayments public paymentsContract;
     IAjoGovernance public governanceContract;
     
-    uint256 public constant CYCLE_DURATION = 30 days;
+    uint256 public cycleDuration;
     uint256 public constant FIXED_TOTAL_PARTICIPANTS = 10;
     
     uint256 public nextQueueNumber = 1;
@@ -42,6 +42,7 @@ contract AjoCore is IAjoCore, ReentrancyGuard, Ownable, Initializable {
     event GuarantorAssigned(address indexed member, address indexed guarantor, uint256 memberPosition, uint256 guarantorPosition);
     event AjoFull(address indexed ajoContract, uint256 timestamp);
     event CollateralTransferRequired(address indexed member, uint256 amount, PaymentToken token, address collateralContract);
+    event CycleDurationUpdated(uint256 oldDuration, uint256 newDuration);
     event Paused(address account);
     event Unpaused(address account);
 
@@ -90,154 +91,188 @@ contract AjoCore is IAjoCore, ReentrancyGuard, Ownable, Initializable {
         require(_ajoPayments != address(0), "Invalid payments contract");
         require(_ajoGovernance != address(0), "Invalid governance contract");
         
-        // Initialize ownership for the proxy instance
         _transferOwnership(msg.sender);
         
-        // Set token contracts
         USDC = IERC20(_usdc);
         HBAR = IERC20(_whbar);
         
-        // Set sub-contracts
         membersContract = IAjoMembers(_ajoMembers);
         collateralContract = IAjoCollateral(_ajoCollateral);
         paymentsContract = IAjoPayments(_ajoPayments);
         governanceContract = IAjoGovernance(_ajoGovernance);
         
-        // Initialize state variables
         nextQueueNumber = 1;
         lastCycleTimestamp = block.timestamp;
+        cycleDuration = 30 days; // Default value
         
         emit ContractsInitialized(_ajoMembers, _ajoCollateral, _ajoPayments, _ajoGovernance);
     }
     
     function joinAjo(PaymentToken tokenChoice) external override nonReentrant {
-            console.log("joinAjo: caller=%s, token=%s", msg.sender, uint256(tokenChoice));
-            
-            // Check if member already exists
-            Member memory existingMember = membersContract.getMember(msg.sender);
-            if (existingMember.isActive) revert MemberAlreadyExists();
-            
-            // Check Ajo capacity (max 10 members)
-            if (nextQueueNumber > FIXED_TOTAL_PARTICIPANTS) revert AjoCapacityReached();
-            
-            // Step 1: Check token configuration exists (monthly payment amount set)
-            console.log("Getting token config...");
-            TokenConfig memory config = paymentsContract.getTokenConfig(tokenChoice);
-            if (!config.isActive) revert TokenNotSupported();
-            if (config.monthlyPayment == 0) revert InvalidTokenConfiguration();
-            
-            // Step 2: Calculate collateral for current position
-            console.log("Calculating collateral for position %s", nextQueueNumber);
-            uint256 requiredCollateral = collateralContract.calculateRequiredCollateral(
-                nextQueueNumber,
-                config.monthlyPayment,
-                FIXED_TOTAL_PARTICIPANTS
-            );
-            console.log("Required collateral: %s", requiredCollateral);
-            
-            // Calculate guarantor position (returns 0 if no guarantor for odd-numbered last position)
-            uint256 guarantorPos = collateralContract.calculateGuarantorPosition(
-                nextQueueNumber, 
-                FIXED_TOTAL_PARTICIPANTS
-            );
-            
-            // Find guarantor address if they exist (guarantorPos == 0 means no guarantor)
-            address guarantorAddr = address(0);
-            if (guarantorPos > 0 && guarantorPos != nextQueueNumber) {
-                address potentialGuarantor = membersContract.getQueuePosition(guarantorPos);
-                if (potentialGuarantor != address(0)) {
-                    guarantorAddr = potentialGuarantor;
-                }
+        console.log("joinAjo: caller=%s, token=%s", msg.sender, uint256(tokenChoice));
+        
+        // Check if member already exists
+        Member memory existingMember = membersContract.getMember(msg.sender);
+        if (existingMember.isActive) revert MemberAlreadyExists();
+        
+        // Check Ajo capacity (max 10 members)
+        if (nextQueueNumber > FIXED_TOTAL_PARTICIPANTS) revert AjoCapacityReached();
+        
+        // Step 1: Check token configuration exists (monthly payment amount set)
+        console.log("Getting token config...");
+        TokenConfig memory config = paymentsContract.getTokenConfig(tokenChoice);
+        if (!config.isActive) revert TokenNotSupported();
+        if (config.monthlyPayment == 0) revert InvalidTokenConfiguration();
+        
+        // Step 2: Calculate collateral for current position
+        console.log("Calculating collateral for position %s", nextQueueNumber);
+        uint256 requiredCollateral = collateralContract.calculateRequiredCollateral(
+            nextQueueNumber,
+            config.monthlyPayment,
+            FIXED_TOTAL_PARTICIPANTS
+        );
+        console.log("Required collateral: %s", requiredCollateral);
+        
+        // Calculate guarantor position (returns 0 if no guarantor for odd-numbered last position)
+        uint256 guarantorPos = collateralContract.calculateGuarantorPosition(
+            nextQueueNumber, 
+            FIXED_TOTAL_PARTICIPANTS
+        );
+        
+        // Find guarantor address if they exist (guarantorPos == 0 means no guarantor)
+        address guarantorAddr = address(0);
+        if (guarantorPos > 0 && guarantorPos != nextQueueNumber) {
+            address potentialGuarantor = membersContract.getQueuePosition(guarantorPos);
+            if (potentialGuarantor != address(0)) {
+                guarantorAddr = potentialGuarantor;
             }
-            
-            // Step 3 & 4: Handle collateral transfer
-            if (requiredCollateral > 0) {
-                console.log("Processing collateral transfer...");
-                
-                // Get the appropriate token contract
-                IERC20 paymentToken = (tokenChoice == PaymentToken.USDC) ? USDC : HBAR;
-                
-                // Check user has sufficient balance
-                if (paymentToken.balanceOf(msg.sender) < requiredCollateral) {
-                    console.log("ERROR: Insufficient balance");
-                    revert InsufficientCollateralBalance();
-                }
-                
-                // Check allowance and lock collateral
-                if (paymentToken.allowance(msg.sender, address(collateralContract)) >= requiredCollateral) {
-                    console.log("Locking collateral...");
-                    collateralContract.lockCollateral(msg.sender, requiredCollateral, tokenChoice);
-                } else {
-                    console.log("ERROR: Insufficient allowance");
-                    emit CollateralTransferRequired(msg.sender, requiredCollateral, tokenChoice, address(collateralContract));
-                    revert CollateralNotTransferred();
-                }
-            }
-            
-            // Calculate initial reputation
-            uint256 initialReputation = _calculateInitialReputation(requiredCollateral, config.monthlyPayment);
-            
-            // Calculate guarantee position (who this member guarantees) - bidirectional lookup
-            uint256 newMemberGuaranteePosition = 0;
-            for (uint256 i = 1; i <= FIXED_TOTAL_PARTICIPANTS; i++) {
-                uint256 theirGuarantor = collateralContract.calculateGuarantorPosition(i, FIXED_TOTAL_PARTICIPANTS);
-                if (theirGuarantor == nextQueueNumber) {
-                    newMemberGuaranteePosition = i;
-                    break;
-                }
-            }
-            
-            // Step 5: Create member record
-            Member memory newMember = Member({
-                queueNumber: nextQueueNumber,
-                joinedCycle: paymentsContract.getCurrentCycle(),
-                totalPaid: 0,
-                requiredCollateral: requiredCollateral,
-                lockedCollateral: requiredCollateral,
-                lastPaymentCycle: 0,
-                defaultCount: 0,
-                hasReceivedPayout: false,
-                isActive: true,
-                guarantor: guarantorAddr,
-                preferredToken: tokenChoice,
-                reputationScore: initialReputation,
-                pastPayments: new uint256[](0),
-                guaranteePosition: newMemberGuaranteePosition
-            });
-            
-            // Add member to members contract
-            console.log("Adding member to contract...");
-            membersContract.addMember(msg.sender, newMember);
-            
-            // Update local mappings
-            queuePositions[nextQueueNumber] = msg.sender;
-            activeMembersList.push(msg.sender);
-            
-            // Handle guarantor assignment
-            if (guarantorAddr != address(0)) {
-                guarantorAssignments[nextQueueNumber] = guarantorAddr;
-                emit GuarantorAssigned(msg.sender, guarantorAddr, nextQueueNumber, guarantorPos);
-            }
-            
-            // Increment queue number
-            nextQueueNumber++;
-            
-            // Emit member joined event
-            emit MemberJoined(msg.sender, newMember.queueNumber, requiredCollateral, tokenChoice);
-            
-            // If this is the 10th member, mark Ajo as full and ready to start
-            if (nextQueueNumber > FIXED_TOTAL_PARTICIPANTS) {
-                emit AjoFull(address(this), block.timestamp);
-                
-                // Initialize first cycle if needed
-                if (paymentsContract.getCurrentCycle() == 0) {
-                    paymentsContract.advanceCycle(); // Start cycle 1
-                }
-            }
-            
-            console.log("joinAjo: SUCCESS - member %s added at position %s", msg.sender, newMember.queueNumber);
         }
         
+        // Step 3 & 4: Handle collateral transfer
+        if (requiredCollateral > 0) {
+            console.log("Processing collateral transfer...");
+            
+            // Get the appropriate token contract
+            IERC20 paymentToken = (tokenChoice == PaymentToken.USDC) ? USDC : HBAR;
+            
+            // Check user has sufficient balance
+            if (paymentToken.balanceOf(msg.sender) < requiredCollateral) {
+                console.log("ERROR: Insufficient balance");
+                revert InsufficientCollateralBalance();
+            }
+            
+            // Check allowance and lock collateral
+            if (paymentToken.allowance(msg.sender, address(collateralContract)) >= requiredCollateral) {
+                console.log("Locking collateral...");
+                collateralContract.lockCollateral(msg.sender, requiredCollateral, tokenChoice);
+            } else {
+                console.log("ERROR: Insufficient allowance");
+                emit CollateralTransferRequired(msg.sender, requiredCollateral, tokenChoice, address(collateralContract));
+                revert CollateralNotTransferred();
+            }
+        }
+        
+        // Calculate initial reputation
+        uint256 initialReputation = _calculateInitialReputation(requiredCollateral, config.monthlyPayment);
+        
+        // Calculate guarantee position (who this member guarantees) - bidirectional lookup
+        uint256 newMemberGuaranteePosition = 0;
+        for (uint256 i = 1; i <= FIXED_TOTAL_PARTICIPANTS; i++) {
+            uint256 theirGuarantor = collateralContract.calculateGuarantorPosition(i, FIXED_TOTAL_PARTICIPANTS);
+            if (theirGuarantor == nextQueueNumber) {
+                newMemberGuaranteePosition = i;
+                break;
+            }
+        }
+        
+        // Step 5: Create member record
+        Member memory newMember = Member({
+            queueNumber: nextQueueNumber,
+            joinedCycle: paymentsContract.getCurrentCycle(),
+            totalPaid: 0,
+            requiredCollateral: requiredCollateral,
+            lockedCollateral: requiredCollateral,
+            lastPaymentCycle: 0,
+            defaultCount: 0,
+            hasReceivedPayout: false,
+            isActive: true,
+            guarantor: guarantorAddr,
+            preferredToken: tokenChoice,
+            reputationScore: initialReputation,
+            pastPayments: new uint256[](0),
+            guaranteePosition: newMemberGuaranteePosition
+        });
+        
+        // Add member to members contract
+        console.log("Adding member to contract...");
+        membersContract.addMember(msg.sender, newMember);
+        
+        // Update local mappings
+        queuePositions[nextQueueNumber] = msg.sender;
+        activeMembersList.push(msg.sender);
+        
+        // Handle guarantor assignment
+        if (guarantorAddr != address(0)) {
+            guarantorAssignments[nextQueueNumber] = guarantorAddr;
+            emit GuarantorAssigned(msg.sender, guarantorAddr, nextQueueNumber, guarantorPos);
+        }
+        
+        // ============ NEW SECTION: UPDATE BIDIRECTIONAL GUARANTOR RELATIONSHIPS ============
+        // Check if this new member should be the guarantor for an existing member
+        // This handles the case where members 1-5 join before 6-10 exist
+        if (newMemberGuaranteePosition > 0) {
+            address memberToUpdate = membersContract.getQueuePosition(newMemberGuaranteePosition);
+            
+            // If that member exists and doesn't have a guarantor yet
+            if (memberToUpdate != address(0)) {
+                Member memory existingMemberData = membersContract.getMember(memberToUpdate);
+                
+                // Update their guarantor if it's currently zero address
+                if (existingMemberData.guarantor == address(0)) {
+                    console.log("Updating guarantor for existing member at position %s", newMemberGuaranteePosition);
+                    
+                    // Update the existing member's guarantor to the new member
+                    existingMemberData.guarantor = msg.sender;
+                    
+                    // Update using the AjoMembers contract
+                    membersContract.updateMember(memberToUpdate, existingMemberData);
+                    
+                    // Update local guarantor assignments mapping
+                    guarantorAssignments[newMemberGuaranteePosition] = msg.sender;
+                    
+                    // Emit event for the updated relationship
+                    emit GuarantorAssigned(
+                        memberToUpdate, 
+                        msg.sender, 
+                        newMemberGuaranteePosition, 
+                        nextQueueNumber
+                    );
+                    
+                    console.log("Successfully updated guarantor for member %s to %s", memberToUpdate, msg.sender);
+                }
+            }
+        }
+        // ============ END NEW SECTION ============
+        
+        // Increment queue number
+        nextQueueNumber++;
+        
+        // Emit member joined event
+        emit MemberJoined(msg.sender, newMember.queueNumber, requiredCollateral, tokenChoice);
+        
+        // If this is the 10th member, mark Ajo as full and ready to start
+        if (nextQueueNumber > FIXED_TOTAL_PARTICIPANTS) {
+            emit AjoFull(address(this), block.timestamp);
+            
+            // Initialize first cycle if needed
+            if (paymentsContract.getCurrentCycle() == 0) {
+                paymentsContract.advanceCycle(); // Start cycle 1
+            }
+        }
+        
+        console.log("joinAjo: SUCCESS - member %s added at position %s", msg.sender, newMember.queueNumber);
+    }
+    
     // NEW HELPER FUNCTION: For users to check required collateral before joining
     function getRequiredCollateralForJoin(PaymentToken tokenChoice) external view returns (uint256) {
         TokenConfig memory config = paymentsContract.getTokenConfig(tokenChoice);
@@ -260,18 +295,13 @@ contract AjoCore is IAjoCore, ReentrancyGuard, Ownable, Initializable {
 
     
     function distributePayout() external override nonReentrant {
-        // For the first payout, advance the cycle immediately without a time check.
         if (!isFirstCycleComplete) {
-            // Attempt to distribute the payout via the payments contract.
-            // This contract will have its own checks to ensure a payout is ready for the current cycle.
             paymentsContract.distributePayout();
             _advanceCycle();
-            isFirstCycleComplete = true; // Mark the first cycle as complete.
+            isFirstCycleComplete = true;
         } else {
-            // For all subsequent payouts, check if the 30-day cycle duration has passed.
-            if (block.timestamp >= lastCycleTimestamp + CYCLE_DURATION) {
-                // Attempt to distribute the payout via the payments contract.
-                // This contract will have its own checks to ensure a payout is ready for the current cycle.
+            // Use state variable instead of constant
+            if (block.timestamp >= lastCycleTimestamp + cycleDuration) {
                 paymentsContract.distributePayout();
                 _advanceCycle();
             }
@@ -440,12 +470,17 @@ contract AjoCore is IAjoCore, ReentrancyGuard, Ownable, Initializable {
         paymentsContract.emergencyWithdraw(token);
     }
     
+    // Update the updateCycleDuration function to actually work:
     function updateCycleDuration(uint256 newDuration) external override onlyOwner {
-        // For now, CYCLE_DURATION is a constant CYCLE_DURATION = 30 days;
-        // There a lots of checks that will be needed to change this in a live Ajo
-        // So we will leave this unimplemented for now.
-        // In future, we could make CYCLE_DURATION a state variable and allow updates here.
+        //require(newDuration >= 1 days, "Duration too short");
+        require(newDuration <= 365 days, "Duration too long");
+        
+        uint256 oldDuration = cycleDuration;
+        cycleDuration = newDuration;
+        
+        emit CycleDurationUpdated(oldDuration, newDuration);
     }
+
     
     /**
     * @dev Pauses the contract in case of an emergency.
@@ -537,7 +572,11 @@ contract AjoCore is IAjoCore, ReentrancyGuard, Ownable, Initializable {
     // function vote(uint256 proposalId, uint8 support) external {
     //     governanceContract.vote(proposalId, support);
     // }
-    
+
+    function getCycleDuration() external override view returns (uint256) {
+        return cycleDuration;
+    }
+        
     function executeProposal(uint256 proposalId) external {
         governanceContract.executeProposal(proposalId);
     }
