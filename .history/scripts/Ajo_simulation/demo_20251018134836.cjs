@@ -886,7 +886,7 @@ async function demonstrateGovernance(ajoFactory, ajoId, participants, ajoInfo) {
 }
 
 // ================================================================
-// MAIN DEMONSTRATION - UPDATED
+// MAIN DEMONSTRATION
 // ================================================================
 
 async function main() {
@@ -930,99 +930,12 @@ async function main() {
     
     await sleep(3000);
     
-    // ✅ FIXED: Call governance demo with proper parameters
-    let governanceResults = null;
-    try {
-      console.log(c.bgBlue("\n" + " ".repeat(22) + "PHASE 6: GOVERNANCE & HCS VOTING DEMONSTRATION" + " ".repeat(20)));
-      console.log(c.blue("═".repeat(88)));
-      console.log(c.bright("\n  🗳️  Hedera Consensus Service (HCS) + On-Chain Tally\n"));
-      
-      console.log(c.cyan("  📊 Governance System Overview:\n"));
-      console.log(c.dim("     ┌─────────────────────────────────────────────────────────────┐"));
-      console.log(c.dim("     │ HCS Topic:        " + (hcsTopicId || 'N/A').toString().slice(0, 40).padEnd(40) + " │"));
-      console.log(c.dim("     │ Governance:       " + ajoInfo.ajoGovernance.slice(0, 40).padEnd(40) + " │"));
-      console.log(c.dim("     │ Voting Type:      " + "Off-Chain HCS + On-Chain Tally".padEnd(40) + " │"));
-      console.log(c.dim("     │ Active Members:   " + participants.length.toString().padEnd(40) + " │"));
-      console.log(c.dim("     └─────────────────────────────────────────────────────────────┘\n"));
-      
-      // Get governance contract instance
-      const ajoGovernance = await ethers.getContractAt("AjoGovernance", ajoInfo.ajoGovernance);
-      
-      console.log(c.cyan("  🔍 Verifying Governance Setup...\n"));
-      
-      await retryOperation(async () => {
-        const isValid = await ajoGovernance.verifySetup();
-        if (!isValid[0]) {
-          throw new Error(`Governance not properly initialized: ${isValid[1]}`);
-        }
-        console.log(c.green(`     ✅ Governance properly initialized`));
-        console.log(c.dim(`        Reason: ${isValid[1]}\n`));
-        return isValid;
-      }, "Verify Governance Setup");
-      
-      const settings = await retryOperation(async () => {
-        return await ajoGovernance.getGovernanceSettings();
-      }, "Get Governance Settings");
-      
-      console.log(c.cyan("  ⚙️  Governance Parameters:\n"));
-      console.log(c.dim("     ┌──────────────────────────────┬──────────────┐"));
-      console.log(c.dim(`     │ Voting Period                │ ${(settings._votingPeriod.toNumber() / 86400).toFixed(0).padStart(10)} days │`));
-      console.log(c.dim(`     │ Quorum Required              │ ${settings._quorumPercentage.toString().padStart(11)}% │`));
-      console.log(c.dim(`     │ Proposal Threshold           │ ${settings._proposalThreshold.toString().padStart(12)} │`));
-      console.log(c.dim(`     │ Current Penalty Rate         │ ${settings.currentPenaltyRate.toString().padStart(11)}% │`));
-      console.log(c.dim(`     │ Total Proposals              │ ${settings.totalProposals.toString().padStart(12)} │`));
-      console.log(c.dim("     └──────────────────────────────┴──────────────┘\n"));
-      
-      await sleep(2000);
-      
-      console.log(c.yellow("  🚀 Starting Full Governance Demo...\n"));
-      
-      // ✅ CALL THE FIXED GOVERNANCE DEMO
-      governanceResults = await retryOperation(async () => {
-        return await runGovernanceDemo(
-          ajoGovernance,
-          participants, // Pass participants array directly
-          {
-            hcsTopicId: hcsTopicId,
-            ajoCore: ajoInfo.ajoCore,
-            totalMembers: participants.length,
-            name: ajoInfo.name
-          }
-        );
-      }, "Run Governance Demo", 5);
-      
-      await sleep(2000);
-      
-      // Display summary
-      console.log(c.bgGreen("\n" + " ".repeat(24) + "📊 GOVERNANCE DEMO SUMMARY 📊" + " ".repeat(31)));
-      console.log(c.green("═".repeat(88) + "\n"));
-      
-      if (governanceResults) {
-        console.log(c.bright("  Results:\n"));
-        console.log(c.dim("     ┌──────────────────────────────┬──────────────┐"));
-        console.log(c.dim(`     │ Proposals Created            │ ${(governanceResults.proposals?.length || 0).toString().padStart(12)} │`));
-        console.log(c.dim(`     │ Votes Cast (HCS)             │ ${(governanceResults.votes?.length || 0).toString().padStart(12)} │`));
-        console.log(c.dim(`     │ Tally Gas Cost               │ ${(governanceResults.tallyResult?.gasUsed?.toString() || 'N/A').padStart(12)} │`));
-        
-        const execStatus = governanceResults.execResult?.success ? c.green('✅ Success') : c.red('❌ Failed');
-        console.log(c.dim(`     │ Execution Status             │ ${execStatus.padEnd(20)} │`));
-        console.log(c.dim("     └──────────────────────────────┴──────────────┘\n"));
-        
-        console.log(c.yellow("  💡 Key Insights:\n"));
-        console.log(c.dim("     • HCS voting costs ~$0.0001 per vote"));
-        console.log(c.dim("     • 90%+ cost reduction vs pure on-chain voting"));
-        console.log(c.dim("     • Anyone can tally votes (no trusted intermediaries)"));
-        console.log(c.dim("     • Signature verification ensures vote integrity"));
-        console.log(c.dim("     • Perfect for 10-100 member DAOs\n"));
-      }
-      
-      console.log(c.green("═".repeat(88) + "\n"));
-      
-    } catch (error) {
-      console.log(c.red(`\n  ❌ Governance demonstration failed: ${error.message.slice(0, 150)}\n`));
-      console.log(c.yellow("     ⚠️ Continuing with remaining demo phases...\n"));
-      console.log(c.blue("═".repeat(88) + "\n"));
-    }
+    const governanceResults = await demonstrateGovernance(
+      ajoFactory,
+      ajoId,
+      participants,
+      ajoInfo
+    );
     
     await sleep(3000);
     
