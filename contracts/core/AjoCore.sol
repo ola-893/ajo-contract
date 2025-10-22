@@ -283,11 +283,11 @@ contract AjoCore is IAjoCore, ReentrancyGuard, Ownable, Initializable {
         );
     }
     
-    function processPayment() external override nonReentrant {
+    function processPayment(uint256 amount, PaymentToken token) external  override nonReentrant {
         uint256 currentCycle = paymentsContract.getCurrentCycle();
         
         // Process payment through payments contract
-        paymentsContract.processPayment(msg.sender, 50e6, PaymentToken.USDC);
+        paymentsContract.processPayment(msg.sender, amount, token);
         
         // Update member's last payment cycle
         membersContract.updateLastPaymentCycle(msg.sender, currentCycle);

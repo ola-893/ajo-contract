@@ -62,8 +62,8 @@ const c = {
 const DEMO_CONFIG = {
   MAX_RETRIES: 3,
   RETRY_DELAY: 2000,
-  MONTHLY_PAYMENT_USDC: ethers.utils.parseUnits("50", 6), // $50 USDC
-  MONTHLY_PAYMENT_HBAR: ethers.utils.parseUnits("1000", 8), // 1000 HBAR
+  MONTHLY_PAYMENT_USDC: ethers.utils.parseUnits("5", 6), // $50 USDC
+  MONTHLY_PAYMENT_HBAR: ethers.utils.parseUnits("10", 8), // 1000 HBAR
   CYCLE_DURATION: 30, // 30 seconds for testing (pass 0 to use default 30 days)
   TOTAL_PARTICIPANTS: 10,
   MIN_HBAR_FOR_HTS: ethers.utils.parseEther("50"),
@@ -747,8 +747,8 @@ async function demonstrateFullCycles(ajo, ajoPayments, participants, cycleDurati
       try {
         const paymentAmount = DEMO_CONFIG.MONTHLY_PAYMENT_USDC;
         
-        const tx = await ajoPayments.connect(participant.signer).processPayment(
-          participant.address,
+        const tx = await ajo.connect(participant.signer).processPayment(
+          // participant.address,
           paymentAmount,
           0, // USDC token
           { gasLimit: DEMO_CONFIG.GAS_LIMIT.PROCESS_PAYMENT }
