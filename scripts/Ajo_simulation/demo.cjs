@@ -65,7 +65,7 @@ const DEMO_CONFIG = {
   MONTHLY_PAYMENT_USDC: ethers.utils.parseUnits("5", 6), // $50 USDC
   MONTHLY_PAYMENT_HBAR: ethers.utils.parseUnits("10", 8), // 1000 HBAR
   CYCLE_DURATION: 30, // 30 seconds for testing (pass 0 to use default 30 days)
-  TOTAL_PARTICIPANTS: 10,
+  TOTAL_PARTICIPANTS: 15,
   MIN_HBAR_FOR_HTS: ethers.utils.parseEther("50"),
   GAS_LIMIT: {
     DEPLOY_MASTER: 6000000,
