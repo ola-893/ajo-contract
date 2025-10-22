@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 const { ethers } = require("hardhat");
-const console = require("console"); // Ensure console is available for debugging
+const console = require("console");
 
 // Color utilities
 const c = {
@@ -13,32 +13,36 @@ const c = {
 };
 
 // ================================================================
-// 🔧 CONFIGURATION - UPDATE THESE AFTER DEPLOYMENT
+// 🔧 CONFIGURATION - DEPLOYED ADDRESSES
 // ================================================================
 
-const FACTORY_ADDRESS = "0xB00C80281A3292dD789102543b1164A9bcfb5040"; // Updated
+const FACTORY_ADDRESS = "0xA527Cf04806054DF6f38B61Ee7b9E994caf352F0";
 const TOKEN_ADDRESSES = {
-  USDC: "0x66DeB5Ea7c371Ea0F45C8349c195469809eA67c9", // Updated
-  WHBAR: "0x14d5F049fF28b1EE81EF63A3B8D96Cc4f29df11a" // Updated
+  USDC: "0x00000000000000000000000000000000006c459A",
+  WHBAR: "0x00000000000000000000000000000000006C459b"
 };
  
 // ================================================================
 
 const DEMO_CONFIG = {
-  MONTHLY_PAYMENT: ethers.utils.parseUnits("50", 6),
-  TOTAL_PARTICIPANTS: 2,
+  TOTAL_PARTICIPANTS: 9,
   MAX_RETRIES: 3,
   RETRY_DELAY: 2000,
   GAS_LIMIT: {
-    CREATE_AJO: 1500000,
-    INIT_PHASE_2: 1200000,
+    CREATE_AJO: 2000000,
+    INIT_PHASE_2: 1500000,
     INIT_PHASE_3: 1500000,
     INIT_PHASE_4: 1800000,
-    FINALIZE: 2500000,
+    INIT_PHASE_5: 2000000,
+    JOIN_AJO: 1000000,
+    FUND_USER: 1500000,
+    HTS_APPROVE: 800000,
+    PROCESS_PAYMENT: 1000000,
   }
 };
 
 const formatUSDC = (amount) => ethers.utils.formatUnits(amount, 6);
+const formatHBAR = (amount) => ethers.utils.formatUnits(amount, 8);
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function retryOperation(operation, operationName, maxRetries = DEMO_CONFIG.MAX_RETRIES) {
@@ -63,28 +67,15 @@ async function validateAjoHealth(ajoFactory, ajoId, expectedPhase, operationName
   console.log(c.dim(`    🔍 Validating ${operationName}...`));
   
   try {
-    // Get initialization status
     const status = await ajoFactory.getAjoInitializationStatus(ajoId);
     
     if (status.phase < expectedPhase) {
       throw new Error(`Phase ${expectedPhase} not reached. Current: ${status.phase}`);
     }
     
-    // Get health report
-    const healthReport = await ajoFactory.getAjoHealthReport(ajoId);
+    console.log(c.green(`    ✅ Health Check: Phase ${status.phase}, Ready: ${status.isReady}, Finalized: ${status.isFullyFinalized}`));
     
-    // Check critical components
-    if (!healthReport.ajoCore.isDeployed) {
-      throw new Error("AjoCore not deployed");
-    }
-    
-    if (expectedPhase >= 4 && !healthReport.isReady) {
-      throw new Error("Ajo not ready for use");
-    }
-    
-    console.log(c.green(`    ✅ Health Check: Phase ${status.phase}, Ready: ${status.isReady}`));
-    
-    // Show operational status if ready
+    // Show operational status if ready (phase 4+)
     if (status.isReady) {
       try {
         const operationalStatus = await ajoFactory.getAjoOperationalStatus(ajoId);
@@ -114,25 +105,57 @@ async function connectToFactoryAndEnsureHealthyAjo() {
   const AjoFactory = await ethers.getContractFactory("AjoFactory");
   const ajoFactory = AjoFactory.attach(FACTORY_ADDRESS);
   
-  const factoryStats = await ajoFactory.getFactoryStats();
-  console.log(c.green(`  ✅ Factory connected! Total: ${factoryStats.totalCreated}, Active: ${factoryStats.activeCount}`));
+  const totalAjos = await ajoFactory.totalAjos();
+  console.log(c.green(`  ✅ Factory connected! Total Ajos: ${totalAjos}`));
+  
+  // Connect to HTS tokens
+  console.log(c.cyan("\n  🪙 Connecting to HTS Tokens..."));
+  console.log(c.dim(`     USDC: ${TOKEN_ADDRESSES.USDC}`));
+  console.log(c.dim(`     WHBAR: ${TOKEN_ADDRESSES.WHBAR}`));
+  
+  const usdc = new ethers.Contract(
+    TOKEN_ADDRESSES.USDC,
+    [
+      "function balanceOf(address) view returns (uint256)",
+      "function allowance(address,address) view returns (uint256)",
+      "function approve(address,uint256) returns (bool)"
+    ],
+    ethers.provider
+  );
+  
+  const whbar = new ethers.Contract(
+    TOKEN_ADDRESSES.WHBAR,
+    [
+      "function balanceOf(address) view returns (uint256)",
+      "function allowance(address,address) view returns (uint256)",
+      "function approve(address,uint256) returns (bool)"
+    ],
+    ethers.provider
+  );
+  
+  // Verify factory has tokens
+  const factoryUsdcBalance = await usdc.balanceOf(ajoFactory.address);
+  const factoryWhbarBalance = await whbar.balanceOf(ajoFactory.address);
+  
+  console.log(c.green(`  ✅ Factory USDC: ${formatUSDC(factoryUsdcBalance)}`));
+  console.log(c.green(`  ✅ Factory WHBAR: ${formatHBAR(factoryWhbarBalance)}`));
   
   let ajoId, ajoInfo;
   
   // Try to use existing Ajo or create new one
-  if (factoryStats.totalCreated.gt(0)) {
+  if (totalAjos.gt(0)) {
     console.log(c.dim("\n  🔄 Checking existing Ajos..."));
     
     // Check first few Ajos for a healthy one
-    for (let id = 1; id <= Math.min(3, factoryStats.totalCreated.toNumber()); id++) {
+    for (let id = 1; id <= Math.min(3, totalAjos.toNumber()); id++) {
       try {
         const status = await ajoFactory.getAjoInitializationStatus(id);
         
         if (status.isReady) {
           console.log(c.green(`  ✅ Found healthy Ajo ID: ${id}`));
           ajoId = id;
-          ajoInfo = await ajoFactory.getAjo(4);
-          console.log(c.dim(`     Ajo ${ajoInfo}: Phase (not ready)`));
+          ajoInfo = await ajoFactory.getAjo(2);
+          console.log(c.dim(`     Phase ${status.phase}, Ready: ${status.isReady}`));
           break;
         } else {
           console.log(c.dim(`     Ajo ${id}: Phase ${status.phase} (not ready)`));
@@ -149,29 +172,44 @@ async function connectToFactoryAndEnsureHealthyAjo() {
     
     // Phase 1: Create
     const ajoName = `Health Test ${Date.now()}`;
-    const creationTx = await ajoFactory.connect(deployer).createAjo(ajoName, {
-      gasLimit: DEMO_CONFIG.GAS_LIMIT.CREATE_AJO
-    });
+    const useHtsTokens = true; // CHANGED: Use HTS tokens
+    const useScheduledPayments = false;
+    
+    const creationTx = await ajoFactory.connect(deployer).createAjo(
+      ajoName,
+      useHtsTokens,
+      useScheduledPayments,
+      {
+        gasLimit: DEMO_CONFIG.GAS_LIMIT.CREATE_AJO
+      }
+    );
     const receipt = await creationTx.wait();
     
     const createEvent = receipt.events?.find(event => event.event === 'AjoCreated');
     ajoId = createEvent.args.ajoId.toNumber();
     console.log(c.green(`    ✅ Phase 1: Ajo ${ajoId} created`));
     
-    // if (!await validateAjoHealth(ajoFactory, ajoId, 1, "Phase 1")) {
-    //   throw new Error("Phase 1 health check failed");
-    // }
+    if (!await validateAjoHealth(ajoFactory, ajoId, 1, "Phase 1")) {
+      throw new Error("Phase 1 health check failed");
+    }
     
-    // Phase 2: Basic initialization
+    // Phase 2: Basic initialization (HCS topic generated internally)
     const phase2Tx = await ajoFactory.connect(deployer).initializeAjoPhase2(ajoId, {
       gasLimit: DEMO_CONFIG.GAS_LIMIT.INIT_PHASE_2
     });
-    await phase2Tx.wait();
+    const phase2Receipt = await phase2Tx.wait();
+    
+    // Get HCS topic ID from event
+    const phase2Event = phase2Receipt.events?.find(e => e.event === 'AjoInitializedPhase2');
+    if (phase2Event) {
+      console.log(c.dim(`       HCS Topic: ${phase2Event.args.hcsTopicId}`));
+    }
+    
     console.log(c.green(`    ✅ Phase 2: Basic contracts initialized`));
     
-    // if (!await validateAjoHealth(ajoFactory, ajoId, 2, "Phase 2")) {
-    //   throw new Error("Phase 2 health check failed");
-    // }
+    if (!await validateAjoHealth(ajoFactory, ajoId, 2, "Phase 2")) {
+      throw new Error("Phase 2 health check failed");
+    }
     
     // Phase 3: Advanced initialization
     const phase3Tx = await ajoFactory.connect(deployer).initializeAjoPhase3(ajoId, {
@@ -180,9 +218,9 @@ async function connectToFactoryAndEnsureHealthyAjo() {
     await phase3Tx.wait();
     console.log(c.green(`    ✅ Phase 3: Collateral & payments initialized`));
     
-    // if (!await validateAjoHealth(ajoFactory, ajoId, 3, "Phase 3")) {
-    //   throw new Error("Phase 3 health check failed");
-    // }
+    if (!await validateAjoHealth(ajoFactory, ajoId, 3, "Phase 3")) {
+      throw new Error("Phase 3 health check failed");
+    }
     
     // Phase 4: Core activation
     const phase4Tx = await ajoFactory.connect(deployer).initializeAjoPhase4(ajoId, {
@@ -197,10 +235,10 @@ async function connectToFactoryAndEnsureHealthyAjo() {
     
     // Optional Phase 5: Full finalization
     try {
-      const finalizeTx = await ajoFactory.connect(deployer).finalizeAjoSetup(ajoId, {
-        gasLimit: DEMO_CONFIG.GAS_LIMIT.FINALIZE
+      const phase5Tx = await ajoFactory.connect(deployer).initializeAjoPhase5(ajoId, {
+        gasLimit: DEMO_CONFIG.GAS_LIMIT.INIT_PHASE_5
       });
-      await finalizeTx.wait();
+      await phase5Tx.wait();
       console.log(c.green(`    ✅ Phase 5: Fully finalized`));
     } catch (error) {
       console.log(c.yellow(`    ⚠️ Phase 5 optional finalization failed: ${error.message}`));
@@ -219,14 +257,11 @@ async function connectToFactoryAndEnsureHealthyAjo() {
   const ajoMembers = await ethers.getContractAt("AjoMembers", ajoInfo.ajoMembers);
   const ajoCollateral = await ethers.getContractAt("AjoCollateral", ajoInfo.ajoCollateral);
   const ajoPayments = await ethers.getContractAt("AjoPayments", ajoInfo.ajoPayments);
-  const usdc = await ethers.getContractAt("MockERC20", TOKEN_ADDRESSES.USDC);
-  const whbar = await ethers.getContractAt("MockERC20", TOKEN_ADDRESSES.WHBAR);
   
   // Final functionality test
   console.log(c.dim(`\n  🔧 Testing core functionality...`));
   try {
     const tokenConfig = await ajo.getTokenConfig(0);
-    const stats = await ajo.getContractStats();
     console.log(c.green(`  ✅ Core functions working: ${formatUSDC(tokenConfig.monthlyPayment || tokenConfig[0])} USDC monthly`));
   } catch (error) {
     console.log(c.yellow(`  ⚠️ Core function test failed: ${error.message}`));
@@ -241,13 +276,15 @@ async function connectToFactoryAndEnsureHealthyAjo() {
   };
 }
 
-async function setupParticipants(ajo, usdc, ajoCollateral, ajoPayments, signers) {
+async function setupParticipants(ajo, usdc, ajoCollateral, ajoPayments, ajoFactory, deployer, signers) {
   console.log(c.blue("\n👥 Setting up participants..."));
   
   const participants = [];
   const participantNames = ["Emeka", "Funke", "Gbenga", "Halima", "Ifeanyi", "Jide"];
   
   const actualCount = Math.min(DEMO_CONFIG.TOTAL_PARTICIPANTS, signers.length - 1);
+  
+  console.log(c.yellow("  ℹ️  Using HTS tokens with auto-association via factory\n"));
   
   for (let i = 0; i < actualCount; i++) {
     const participant = {
@@ -260,30 +297,71 @@ async function setupParticipants(ajo, usdc, ajoCollateral, ajoPayments, signers)
     try {
       console.log(c.dim(`  👤 Setting up ${participant.name}...`));
       
-      // Get tokens from faucet
-      await retryOperation(async () => {
-        const tx = await usdc.connect(participant.signer).faucet({ gasLimit: 200000 });
-        await tx.wait();
-        return tx;
-      }, `${participant.name} getting USDC`);
+      // Fund user with HTS tokens via factory (auto-association)
+      const usdcAmount = ethers.utils.parseUnits("1000", 6); // 1000 USDC
+      const hbarAmount = ethers.utils.parseUnits("1000", 8); // 1000 WHBAR
       
+      await retryOperation(async () => {
+        const tx = await ajoFactory.connect(deployer).fundUserWithHtsTokens(
+          participant.address,
+          usdcAmount,
+          hbarAmount,
+          { gasLimit: DEMO_CONFIG.GAS_LIMIT.FUND_USER }
+        );
+        
+        const receipt = await tx.wait();
+        
+        const fundEvent = receipt.events?.find(e => e.event === 'UserHtsFunded');
+        if (fundEvent) {
+          console.log(c.dim(`       USDC Response: ${fundEvent.args.usdcResponse}`));
+          console.log(c.dim(`       HBAR Response: ${fundEvent.args.hbarResponse}`));
+        }
+        
+        return tx;
+      }, `${participant.name} getting HTS tokens`);
+      
+      await sleep(500);
+      
+      // Verify balance
       const balance = await usdc.balanceOf(participant.address);
       if (balance.eq(0)) {
-        throw new Error("Faucet failed");
+        throw new Error("Zero balance after funding");
       }
       
-      // Approve contracts
-      const allowanceAmount = balance.div(2);
+      console.log(c.dim(`       Balance: ${formatUSDC(balance)} USDC`));
+      
+      // Approve contracts for HTS tokens
+      const approvalAmount = balance.div(2);
+      
+      console.log(c.dim(`     → Approving ${formatUSDC(approvalAmount)} for contracts...`));
+      
+      const htsToken = new ethers.Contract(
+        TOKEN_ADDRESSES.USDC,
+        ["function approve(address,uint256) returns (bool)"],
+        participant.signer
+      );
       
       await retryOperation(async () => {
-        const tx = await usdc.connect(participant.signer).approve(ajoCollateral.address, allowanceAmount, { gasLimit: 150000 });
+        const tx = await htsToken.approve(
+          ajoCollateral.address,
+          approvalAmount,
+          { gasLimit: DEMO_CONFIG.GAS_LIMIT.HTS_APPROVE }
+        );
         await tx.wait();
+        console.log(c.dim(`        ✓ Collateral approved`));
         return tx;
       }, `${participant.name} approving CollateralContract`);
       
+      await sleep(500);
+      
       await retryOperation(async () => {
-        const tx = await usdc.connect(participant.signer).approve(ajoPayments.address, allowanceAmount, { gasLimit: 150000 });
+        const tx = await htsToken.approve(
+          ajoPayments.address,
+          approvalAmount,
+          { gasLimit: DEMO_CONFIG.GAS_LIMIT.HTS_APPROVE }
+        );
         await tx.wait();
+        console.log(c.dim(`        ✓ Payments approved`));
         return tx;
       }, `${participant.name} approving PaymentsContract`);
       
@@ -302,7 +380,7 @@ async function setupParticipants(ajo, usdc, ajoCollateral, ajoPayments, signers)
 }
 
 async function demonstrateJoining(ajo, ajoFactory, ajoId, participants) {
-  console.log(c.blue("\n🎯 LIVE: Participants Joining Ajo with Enhanced Debugging..."));
+  console.log(c.blue("\n🎯 LIVE: Participants Joining Ajo..."));
   
   const joinResults = [];
   
@@ -315,50 +393,39 @@ async function demonstrateJoining(ajo, ajoFactory, ajoId, participants) {
       // Pre-join diagnostics
       console.log(c.dim(`    🔍 Pre-join diagnostics for ${participant.name}:`));
       
-      // Check balance and approvals
-      const usdc = await ethers.getContractAt("MockERC20", TOKEN_ADDRESSES.USDC);
+      const usdc = new ethers.Contract(
+        TOKEN_ADDRESSES.USDC,
+        ["function balanceOf(address) view returns (uint256)", "function allowance(address,address) view returns (uint256)"],
+        ethers.provider
+      );
+      
       const balance = await usdc.balanceOf(participant.address);
       const collateralApproval = await usdc.allowance(participant.address, (await ajo.collateralContract()));
       const paymentsApproval = await usdc.allowance(participant.address, (await ajo.paymentsContract()));
       
-      console.log(c.dim(`       Balance: ${ethers.utils.formatUnits(balance, 6)} USDC`));
-      console.log(c.dim(`       Collateral approval: ${ethers.utils.formatUnits(collateralApproval, 6)} USDC`));
-      console.log(c.dim(`       Payments approval: ${ethers.utils.formatUnits(paymentsApproval, 6)} USDC`));
+      console.log(c.dim(`       Balance: ${formatUSDC(balance)} USDC`));
+      console.log(c.dim(`       Collateral approval: ${formatUSDC(collateralApproval)} USDC`));
+      console.log(c.dim(`       Payments approval: ${formatUSDC(paymentsApproval)} USDC`));
       
-      // Check expected collateral
+      // Get expected collateral
       let expectedCollateral;
       try {
         expectedCollateral = await ajo.getRequiredCollateralForJoin(0);
-        console.log(c.dim(`       Expected collateral: ${ethers.utils.formatUnits(expectedCollateral, 6)} USDC`));
+        console.log(c.dim(`       Expected collateral: ${formatUSDC(expectedCollateral)} USDC`));
       } catch (error) {
         console.log(c.dim(`       Could not get expected collateral: ${error.message}`));
-        const demo = await ajo.getCollateralDemo(10, ethers.utils.parseUnits("50", 6));
-        expectedCollateral = demo[1][i];
-        console.log(c.dim(`       Expected collateral (fallback): ${ethers.utils.formatUnits(expectedCollateral, 6)} USDC`));
-      }
-      
-      // Check if balance and approvals are sufficient
-      if (balance.lt(expectedCollateral)) {
-        console.log(c.red(`       ❌ Insufficient balance: need ${ethers.utils.formatUnits(expectedCollateral, 6)}, have ${ethers.utils.formatUnits(balance, 6)}`));
-      }
-      if (collateralApproval.lt(expectedCollateral)) {
-        console.log(c.red(`       ❌ Insufficient collateral approval: need ${ethers.utils.formatUnits(expectedCollateral, 6)}, approved ${ethers.utils.formatUnits(collateralApproval, 6)}`));
       }
       
       console.log(c.dim(`    🚀 Executing joinAjo transaction...`));
       
-      // Execute join with enhanced error handling
       const joinTx = await ajo.connect(participant.signer).joinAjo(0, { 
-        gasLimit: 800000 // Increased gas limit for debugging
+        gasLimit: DEMO_CONFIG.GAS_LIMIT.JOIN_AJO
       });
       
       console.log(c.dim(`       Transaction hash: ${joinTx.hash}`));
-      console.log(c.dim(`       Waiting for confirmation...`));
-      
       const receipt = await joinTx.wait();
       
       if (receipt.status === 0) {
-        console.log(c.red(`       ❌ Transaction reverted but no explicit error`));
         throw new Error("Transaction reverted without specific error");
       }
       
@@ -375,53 +442,18 @@ async function demonstrateJoining(ajo, ajoFactory, ajoId, participants) {
         success: true
       });
       
-      console.log(c.green(`    ✅ SUCCESS! Locked: ${ethers.utils.formatUnits(actualCollateral, 6)} USDC | Gas: ${receipt.gasUsed.toString()}`));
+      console.log(c.green(`    ✅ SUCCESS! Locked: ${formatUSDC(actualCollateral)} USDC | Gas: ${receipt.gasUsed.toString()}`));
       
-      // Quick health check after join
       await validateAjoHealth(ajoFactory, ajoId, 4, `After ${participant.name} joined`);
       
     } catch (error) {
-      console.log(c.red(`    ❌ ${participant.name} failed with detailed error analysis:`));
+      console.log(c.red(`    ❌ ${participant.name} failed: ${error.reason || error.message}`));
       
-      // Enhanced error analysis
-      if (error.transaction && error.receipt) {
-        console.log(c.red(`       Transaction hash: ${error.transaction.hash}`));
-        console.log(c.red(`       Gas used: ${error.receipt.gasUsed.toString()} / ${error.transaction.gasLimit.toString()}`));
-        console.log(c.red(`       Status: ${error.receipt.status}`));
-        
-        if (error.receipt.status === 0) {
-          console.log(c.red(`       Transaction reverted on-chain`));
-        }
-      }
-      
-      // Try to decode the revert reason
-      if (error.reason) {
-        console.log(c.red(`       Revert reason: ${error.reason}`));
-      } else if (error.message.includes('revert')) {
-        const revertMatch = error.message.match(/revert (.+?)"/);
-        if (revertMatch) {
-          console.log(c.red(`       Extracted revert reason: ${revertMatch[1]}`));
-        }
-      }
-      
-      // Try to call the function statically to get a better error
+      // Try static call for better error
       try {
-        console.log(c.dim(`       🔍 Attempting static call for better error...`));
         await ajo.connect(participant.signer).callStatic.joinAjo(0);
-        console.log(c.yellow(`       Static call succeeded - timing issue?`));
       } catch (staticError) {
         console.log(c.red(`       Static call error: ${staticError.reason || staticError.message}`));
-        
-        // Check specific common issues
-        if (staticError.message.includes('CollateralNotTransferred')) {
-          console.log(c.red(`       🎯 ISSUE IDENTIFIED: User didn't approve collateral contract properly`));
-        } else if (staticError.message.includes('InsufficientCollateralBalance')) {
-          console.log(c.red(`       🎯 ISSUE IDENTIFIED: User has insufficient balance for collateral`));
-        } else if (staticError.message.includes('TokenNotSupported')) {
-          console.log(c.red(`       🎯 ISSUE IDENTIFIED: Token configuration issue`));
-        } else if (staticError.message.includes('MemberAlreadyExists')) {
-          console.log(c.red(`       🎯 ISSUE IDENTIFIED: Member already exists in system`));
-        }
       }
       
       joinResults.push({
@@ -432,17 +464,17 @@ async function demonstrateJoining(ajo, ajoFactory, ajoId, participants) {
       });
     }
     
-    await sleep(3000); // Longer delay for debugging
+    await sleep(3000);
   }
   
-  // Show detailed results
-  console.log(c.cyan("\n📊 DETAILED JOIN RESULTS:"));
+  // Show results
+  console.log(c.cyan("\n📊 JOIN RESULTS:"));
   const successful = joinResults.filter(r => r.success);
   console.log(c.dim(`  Success Rate: ${successful.length}/${participants.length}`));
   
   for (const result of joinResults) {
     if (result.success) {
-      console.log(c.green(`  ✅ ${result.name}: ${ethers.utils.formatUnits(result.actualCollateral, 6)} USDC locked`));
+      console.log(c.green(`  ✅ ${result.name}: ${formatUSDC(result.actualCollateral)} USDC locked`));
     } else {
       console.log(c.red(`  ❌ ${result.name}: ${result.error}`));
     }
@@ -456,7 +488,6 @@ async function demonstratePaymentCycle(ajo, ajoFactory, ajoId, participants) {
   
   const paymentResults = [];
   
-  // Monthly payments
   console.log(c.cyan("  Phase 1: Monthly Payments"));
   for (let i = 0; i < participants.length; i++) {
     const participant = participants[i];
@@ -464,7 +495,7 @@ async function demonstratePaymentCycle(ajo, ajoFactory, ajoId, participants) {
     try {
       console.log(c.dim(`    ${participant.name} making payment...`));
       
-      const paymentTx = await ajo.connect(participant.signer).processPayment({ gasLimit: 900000 });
+      const paymentTx = await ajo.connect(participant.signer).processPayment({ gasLimit: DEMO_CONFIG.GAS_LIMIT.PROCESS_PAYMENT });
       const receipt = await paymentTx.wait();
       
       paymentResults.push({
@@ -487,20 +518,6 @@ async function demonstratePaymentCycle(ajo, ajoFactory, ajoId, participants) {
     await sleep(1500);
   }
   
-  // Distribute payout
-  console.log(c.cyan("  Phase 2: Payout Distribution"));
-  // try {
-  //   const payoutTx = await ajo.distributePayout({ gasLimit: 400000 });
-  //   const receipt = await payoutTx.wait();
-  //   console.log(c.green(`    ✅ Payout distributed | Gas: ${receipt.gasUsed.toString()}`));
-    
-  //   // Final health check after cycle
-  //   await validateAjoHealth(ajoFactory, ajoId, 4, "After payment cycle");
-    
-  // } catch (error) {
-  //   console.log(c.red(`    ❌ Payout failed: ${error.message}`));
-  // }
-  
   const successfulPayments = paymentResults.filter(r => r.success).length;
   console.log(c.green(`  ✅ Cycle complete: ${successfulPayments}/${participants.length} payments`));
   
@@ -511,27 +528,21 @@ async function showFinalSummary(ajoFactory, ajoId, participants, joinResults, cy
   console.log(c.blue("\n📋 FINAL SUMMARY"));
   
   try {
-    // Get comprehensive health report
-    const healthReport = await ajoFactory.getAjoHealthReport(ajoId);
+    const status = await ajoFactory.getAjoInitializationStatus(ajoId);
     const operationalStatus = await ajoFactory.getAjoOperationalStatus(ajoId);
-    const factoryHealth = await ajoFactory.getFactoryHealthSummary();
     
     console.log(c.cyan("🏥 HEALTH REPORT:"));
     console.log(c.dim(`  Ajo ID: ${ajoId}`));
-    console.log(c.dim(`  Phase: ${healthReport.initializationPhase}/5`));
-    console.log(c.dim(`  Ready: ${healthReport.isReady}`));
-    console.log(c.dim(`  Core Health: ${healthReport.ajoCore.isResponsive ? 'Responsive' : 'Issues'}`));
+    console.log(c.dim(`  Phase: ${status.phase}/5`));
+    console.log(c.dim(`  Ready: ${status.isReady}`));
+    console.log(c.dim(`  Fully Finalized: ${status.isFullyFinalized}`));
     
     console.log(c.cyan("📊 OPERATIONAL STATUS:"));
     console.log(c.dim(`  Total Members: ${operationalStatus.totalMembers}`));
-    console.log(c.dim(`  Active Members: ${operationalStatus.activeMembers}`));
-    console.log(c.dim(`  Total Collateral: ${formatUSDC(operationalStatus.totalCollateralUSDC)} USDC`));
+    console.log(c.dim(`  Current Cycle: ${operationalStatus.currentCycle}`));
     console.log(c.dim(`  Can Accept Members: ${operationalStatus.canAcceptMembers}`));
-    console.log(c.dim(`  Can Process Payments: ${operationalStatus.canProcessPayments}`));
-    
-    console.log(c.cyan("🏭 FACTORY HEALTH:"));
-    console.log(c.dim(`  Phase 4 (Ready) Ajos: ${factoryHealth.phase4Count}`));
-    console.log(c.dim(`  Phase 5 (Finalized) Ajos: ${factoryHealth.phase5Count}`));
+    console.log(c.dim(`  Has Active Governance: ${operationalStatus.hasActiveGovernance}`));
+    console.log(c.dim(`  Has Active Scheduling: ${operationalStatus.hasActiveScheduling}`));
     
     const successfulJoins = joinResults.filter(r => r.success).length;
     const successfulPayments = cycleResults ? cycleResults.filter(r => r.success).length : 0;
@@ -540,7 +551,7 @@ async function showFinalSummary(ajoFactory, ajoId, participants, joinResults, cy
     console.log(c.dim(`  Participants: ${participants.length}`));
     console.log(c.dim(`  Successful Joins: ${successfulJoins}`));
     console.log(c.dim(`  Successful Payments: ${successfulPayments}`));
-    console.log(c.dim(`  Overall Health: ${healthReport.isReady ? 'Excellent' : 'Needs attention'}`));
+    console.log(c.dim(`  Overall Health: ${status.isReady ? 'Excellent' : 'Needs attention'}`));
     
   } catch (error) {
     console.log(c.yellow(`  ⚠️ Summary generation failed: ${error.message}`));
@@ -548,32 +559,21 @@ async function showFinalSummary(ajoFactory, ajoId, participants, joinResults, cy
 }
 
 async function main() {
-  console.log(c.cyan("🌟 4-Phase Factory: Core Functions Test with Health Diagnostics 🌟\n"));
-  
-  // Validate configuration
-  // if (!FACTORY_ADDRESS || FACTORY_ADDRESS === "0x44D75A793B9733Ff395a3eEC7A6E02c1fFE7c0c0") {
-  //   console.log(c.red("❌ CONFIGURATION ERROR: Update FACTORY_ADDRESS first"));
-  //   console.log(c.yellow("1. Run: npx hardhat run scripts/deploy-4-phase-factory.js --network hedera"));
-  //   console.log(c.yellow("2. Update FACTORY_ADDRESS with deployed factory address"));
-  //   console.log(c.yellow("3. Update TOKEN_ADDRESSES with USDC and WHBAR addresses"));
-  //   process.exit(1);
-  // }
+  console.log(c.cyan("🌟 5-Phase Factory: HTS Core Functions Test 🌟\n"));
+  console.log(c.yellow("  Using deployed HTS tokens with auto-association\n"));
   
   try {
-    // Connect and ensure healthy Ajo
     const {
       ajo, usdc, whbar, ajoMembers, ajoCollateral, ajoPayments,
       ajoFactory, ajoId, ajoInfo, deployer, signers
     } = await connectToFactoryAndEnsureHealthyAjo();
     
-    // Setup participants
-    const participants = await setupParticipants(ajo, usdc, ajoCollateral, ajoPayments, signers);
+    const participants = await setupParticipants(ajo, usdc, ajoCollateral, ajoPayments, ajoFactory, deployer, signers);
     
     if (participants.length === 0) {
       throw new Error("No participants successfully set up");
     }
     
-    // Live demonstrations
     const joinResults = await demonstrateJoining(ajo, ajoFactory, ajoId, participants);
     
     const successfulJoins = joinResults.filter(r => r.success);
@@ -585,10 +585,11 @@ async function main() {
       await showFinalSummary(ajoFactory, ajoId, participants, joinResults, null);
     }
     
-    console.log(c.green("\n🎉 Health-validated testing completed!"));
+    console.log(c.green("\n🎉 Testing completed!"));
     
     return {
       factoryAddress: FACTORY_ADDRESS,
+      tokenAddresses: TOKEN_ADDRESSES,
       ajoId,
       healthStatus: "validated",
       successfulParticipants: successfulJoins.length
@@ -596,14 +597,6 @@ async function main() {
     
   } catch (error) {
     console.error(c.red("\n💥 Test failed:"), error.message);
-    
-    if (error.message.includes('health check failed')) {
-      console.log(c.yellow("🏥 Health Check Issues:"));
-      console.log(c.dim("• Check that all 4 phases completed successfully"));
-      console.log(c.dim("• Verify contracts are properly initialized"));
-      console.log(c.dim("• Use diagnostic functions to identify specific issues"));
-    }
-    
     throw error;
   }
 }
@@ -611,7 +604,7 @@ async function main() {
 if (require.main === module) {
   main()
     .then(() => {
-      console.log(c.green("\n🚀 Health-validated 4-phase system ready!"));
+      console.log(c.green("\n🚀 HTS system ready!"));
       process.exit(0);
     })
     .catch((error) => {

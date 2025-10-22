@@ -283,14 +283,43 @@ contract AjoCore is IAjoCore, ReentrancyGuard, Ownable, Initializable {
         );
     }
     
-    function processPayment(uint256 amount, PaymentToken token) external  override nonReentrant {
+    function processPayment() external override nonReentrant {
+        // Get member info to determine their preferred token
+        Member memory member = membersContract.getMember(msg.sender);
+        
+        // Ensure member exists and is active
+        if (!member.isActive) revert MemberNotFound();
+        
+        // Get the current cycle
         uint256 currentCycle = paymentsContract.getCurrentCycle();
         
-        // Process payment through payments contract
-        paymentsContract.processPayment(msg.sender, amount, token);
+        // Get the configured monthly payment for the member's preferred token
+        TokenConfig memory config = paymentsContract.getTokenConfig(member.preferredToken);
+        
+        // Validate token is still active
+        if (!config.isActive) revert TokenNotSupported();
+        
+        // Validate payment amount exists
+        if (config.monthlyPayment == 0) revert InvalidTokenConfiguration();
+        
+        // Check if member needs to pay this cycle
+        if (!paymentsContract.needsToPayThisCycle(msg.sender)) {
+            revert PaymentAlreadyMade();
+        }
+        
+        // Process payment with the FIXED monthly amount and member's preferred token
+        // The paymentsContract will handle token transfer validation
+        paymentsContract.processPayment(
+            msg.sender, 
+            config.monthlyPayment,  
+            member.preferredToken  
+        );
         
         // Update member's last payment cycle
         membersContract.updateLastPaymentCycle(msg.sender, currentCycle);
+        
+        // Update reputation positively for on-time payment
+        governanceContract.updateReputationAndVotingPower(msg.sender, true);
     }
 
     

@@ -93,6 +93,65 @@ const formatHBAR = (amount) => ethers.utils.formatUnits(amount, 8);
 // ================================================================
 // ENHANCED BANNER
 // ================================================================
+/**
+ * Enhanced sleep with progress indicator
+ */
+async function sleepWithProgress(seconds, label = "Waiting") {
+  const steps = 5;
+  const interval = seconds * 1000 / steps;
+  
+  for (let i = 1; i <= steps; i++) {
+    await sleep(interval);
+    const progress = '█'.repeat(i) + '░'.repeat(steps - i);
+    process.stdout.write(`\r     ${label}: [${progress}] ${Math.round(i/steps * 100)}%`);
+  }
+  console.log(); // New line after completion
+}
+
+/**
+ * Enhanced retry with exponential backoff and network reset
+ */
+async function retryWithBackoff(operation, operationName, maxRetries = 5) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(c.dim(`    ⏳ Attempt ${attempt}/${maxRetries}: ${operationName}`));
+      const result = await operation();
+      console.log(c.green(`    ✅ ${operationName} succeeded`));
+      return result;
+    } catch (error) {
+      const isNetworkError = 
+        error.message.includes('could not detect network') ||
+        error.message.includes('other-side closed') || 
+        error.message.includes('SocketError') ||
+        error.message.includes('network') ||
+        error.message.includes('timeout') ||
+        error.message.includes('502') ||
+        error.message.includes('NETWORK_ERROR');
+      
+      if (isNetworkError && attempt < maxRetries) {
+        const backoffTime = DEMO_CONFIG.RETRY_DELAY * Math.pow(2, attempt - 1);
+        console.log(c.yellow(`    ⚠️ Network error on attempt ${attempt}: ${error.message.slice(0, 100)}`));
+        console.log(c.dim(`    🔄 Retrying in ${backoffTime/1000} seconds with exponential backoff...`));
+        
+        // Try to recover provider connection
+        try {
+          await ethers.provider.getNetwork();
+        } catch (e) {
+          console.log(c.yellow(`    ⚠️ Provider reconnection failed, continuing...`));
+        }
+        
+        await sleep(backoffTime);
+        continue;
+      }
+      
+      console.log(c.red(`    ❌ ${operationName} failed: ${error.message.slice(0, 150)}`));
+      
+      if (attempt === maxRetries) {
+        throw error;
+      }
+    }
+  }
+}
 
 function printEnhancedBanner() {
   console.log(c.magenta("\n" + "═".repeat(88)));
@@ -147,6 +206,8 @@ async function retryOperation(operation, operationName, maxRetries = DEMO_CONFIG
     }
   }
 }
+
+
 
 // ================================================================
 // PHASE 1: HTS-ONLY DEPLOYMENT
@@ -723,44 +784,58 @@ async function demonstrateFullCycles(ajo, ajoPayments, participants, cycleDurati
       startTime: Date.now()
     };
     
-    // Get current cycle from contract
-    const currentCycle = await ajoPayments.getCurrentCycle();
-    console.log(c.dim(`     Contract Cycle: ${currentCycle.toString()}`));
-    
-    // Get next recipient
-    const nextRecipient = await ajoPayments.getNextRecipient();
-    console.log(c.bright(`     💰 Next Recipient: ${nextRecipient}\n`));
+    // Get current cycle from contract with retry
+    let currentCycle, nextRecipient;
+    try {
+      currentCycle = await retryWithBackoff(
+        async () => await ajoPayments.getCurrentCycle(),
+        "Get Current Cycle"
+      );
+      console.log(c.dim(`     Contract Cycle: ${currentCycle.toString()}`));
+      
+      nextRecipient = await retryWithBackoff(
+        async () => await ajoPayments.getNextRecipient(),
+        "Get Next Recipient"
+      );
+      console.log(c.bright(`     💰 Next Recipient: ${nextRecipient}\n`));
+    } catch (error) {
+      console.log(c.red(`\n  ❌ Failed to get cycle info: ${error.message}`));
+      console.log(c.yellow(`  ⏩ Skipping to next cycle...\n`));
+      continue;
+    }
     
     // Find recipient name
-    const recipientParticipant = participants.find(p => p.address.toLowerCase() === nextRecipient.toLowerCase());
+    const recipientParticipant = participants.find(p => 
+      p.address.toLowerCase() === nextRecipient.toLowerCase()
+    );
     const recipientName = recipientParticipant ? recipientParticipant.name : "Unknown";
+    
+    if (nextRecipient === "0x0000000000000000000000000000000000000000") {
+      console.log(c.red(`\n  ⚠️ WARNING: Next recipient is address(0) - getNextRecipient() issue!`));
+      console.log(c.yellow(`  This indicates a contract logic problem that needs fixing.\n`));
+    }
     
     console.log(c.cyan(`  💳 Step 1: Process Payments for Cycle ${cycle}\n`));
     console.log(c.dim("     ┌────┬─────────────┬──────────────┬──────────────┐"));
     console.log(c.dim("     │ #  │ Member      │ Amount       │ Status       │"));
     console.log(c.dim("     ├────┼─────────────┼──────────────┼──────────────┤"));
     
-    // All members make payments
+    // All members make payments with retry
     for (let i = 0; i < participants.length; i++) {
       const participant = participants[i];
       
       try {
         const paymentAmount = DEMO_CONFIG.MONTHLY_PAYMENT_USDC;
         
-        const tx = await ajo.connect(participant.signer).processPayment(
-          // participant.address,
-          paymentAmount,
-          0, // USDC token
-          { gasLimit: DEMO_CONFIG.GAS_LIMIT.PROCESS_PAYMENT }
-        );
-        
-        const receipt = await tx.wait();
+        await retryWithBackoff(async () => {
+          const tx = await ajo.connect(participant.signer).processPayment({ gasLimit: DEMO_CONFIG.GAS_LIMIT.PROCESS_PAYMENT });
+          return await tx.wait();
+        }, `${participant.name} - Payment`);
         
         cycleData.payments.push({
           member: participant.name,
           amount: paymentAmount,
-          success: true,
-          gasUsed: receipt.gasUsed
+          success: true
         });
         
         const status = c.green("✅ Paid");
@@ -777,7 +852,7 @@ async function demonstrateFullCycles(ajo, ajoPayments, participants, cycleDurati
         console.log(c.dim(`     │ ${(i+1).toString().padStart(2)} │ ${participant.name.padEnd(11)} │ ${'N/A'.padEnd(12)} │ ${status.padEnd(20)} │`));
       }
       
-      await sleep(500);
+      await sleep(1000); // Increased from 500ms to prevent rate limiting
     }
     
     console.log(c.dim("     └────┴─────────────┴──────────────┴──────────────┘\n"));
@@ -787,28 +862,32 @@ async function demonstrateFullCycles(ajo, ajoPayments, participants, cycleDurati
     
     await sleep(2000);
     
-    // Distribute payout
+    // Distribute payout with retry
     console.log(c.cyan(`  💰 Step 2: Distribute Payout to ${recipientName}\n`));
     
     try {
-      // Check if payout is ready
-      const isReady = await ajoPayments.isPayoutReady();
+      const isReady = await retryWithBackoff(
+        async () => await ajoPayments.isPayoutReady(),
+        "Check Payout Ready"
+      );
       console.log(c.dim(`     Payout Ready: ${isReady ? c.green('✅ Yes') : c.red('❌ No')}`));
       
       if (!isReady) {
-        throw new Error("Payout not ready - check member payments");
+        throw new Error("Payout not ready - check member payments or contract logic");
       }
       
-      // Calculate expected payout
-      const expectedPayout = await ajoPayments.calculatePayout();
+      const expectedPayout = await retryWithBackoff(
+        async () => await ajoPayments.calculatePayout(),
+        "Calculate Payout"
+      );
       console.log(c.bright(`     Expected Payout: ${formatUSDC(expectedPayout)}\n`));
       
-      // Distribute payout
-      const payoutTx = await ajo.connect(participants[0].signer).distributePayout({
-        gasLimit: DEMO_CONFIG.GAS_LIMIT.DISTRIBUTE_PAYOUT
-      });
-      
-      const payoutReceipt = await payoutTx.wait();
+      const payoutReceipt = await retryWithBackoff(async () => {
+        const payoutTx = await ajo.connect(participants[0].signer).distributePayout({
+          gasLimit: DEMO_CONFIG.GAS_LIMIT.DISTRIBUTE_PAYOUT
+        });
+        return await payoutTx.wait();
+      }, "Distribute Payout");
       
       cycleData.payout = {
         recipient: recipientName,
@@ -841,14 +920,15 @@ async function demonstrateFullCycles(ajo, ajoPayments, participants, cycleDurati
     console.log(c.bright(`  ✅ Cycle ${cycle} Complete`));
     console.log(c.dim(`     Duration: ${cycleData.duration.toFixed(2)} seconds\n`));
     
-    // Wait for next cycle (if not the last cycle)
+    // Wait for next cycle with progress indicator
     if (cycle < TOTAL_CYCLES) {
-      console.log(c.yellow(`  ⏳ Waiting ${cycleDuration} seconds for next cycle...\n`));
-      await sleep(cycleDuration * 1000);
+      await sleepWithProgress(cycleDuration, `Waiting for Cycle ${cycle + 1}`);
+      console.log();
     }
     
     console.log(c.blue("═".repeat(88) + "\n"));
   }
+  
   
   // Summary
   console.log(c.bgGreen("\n" + " ".repeat(28) + "📊 FULL CYCLE SUMMARY 📊" + " ".repeat(32)));

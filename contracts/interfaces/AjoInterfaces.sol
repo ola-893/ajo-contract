@@ -535,7 +535,7 @@ interface IAjoCore {
     
     // Core Ajo Functions
     function joinAjo(PaymentToken tokenChoice) external;
-    function processPayment(uint256 amount, PaymentToken token) external;
+    function processPayment() external;
     function distributePayout() external;
     function handleDefault(address defaulter) external;
     function exitAjo() external;
