@@ -81,7 +81,7 @@ const DEMO_CONFIG = {
     HTS_ASSOCIATE: 300000,
     HTS_FUND: 800000,
     HTS_APPROVE: 400000,
-    PROCESS_PAYMENT: 1000000,
+    PROCESS_PAYMENT: 15000000,
     DISTRIBUTE_PAYOUT: 1200000
   }
 };
@@ -821,39 +821,44 @@ async function demonstrateFullCycles(ajo, ajoPayments, participants, cycleDurati
     console.log(c.dim("     ├────┼─────────────┼──────────────┼──────────────┤"));
     
     // All members make payments with retry
-    for (let i = 0; i < participants.length; i++) {
-      const participant = participants[i];
-      
-      try {
-        const paymentAmount = DEMO_CONFIG.MONTHLY_PAYMENT_USDC;
-        
-        await retryWithBackoff(async () => {
-          const tx = await ajo.connect(participant.signer).processPayment({ gasLimit: DEMO_CONFIG.GAS_LIMIT.PROCESS_PAYMENT });
-          return await tx.wait();
-        }, `${participant.name} - Payment`);
-        
-        cycleData.payments.push({
-          member: participant.name,
-          amount: paymentAmount,
-          success: true
-        });
-        
-        const status = c.green("✅ Paid");
-        console.log(c.dim(`     │ ${(i+1).toString().padStart(2)} │ ${participant.name.padEnd(11)} │ ${formatUSDC(paymentAmount).padEnd(12)} │ ${status.padEnd(20)} │`));
-        
-      } catch (error) {
-        cycleData.payments.push({
-          member: participant.name,
-          error: error.message,
-          success: false
-        });
-        
-        const status = c.red("❌ Failed");
-        console.log(c.dim(`     │ ${(i+1).toString().padStart(2)} │ ${participant.name.padEnd(11)} │ ${'N/A'.padEnd(12)} │ ${status.padEnd(20)} │`));
+   for (let i = 0; i < participants.length; i++) {
+          const participant = participants[i];
+          
+          try {
+              // ✅ FIXED: Call AjoCore.processPayment() with NO parameters
+              await retryWithBackoff(async () => {
+                  const tx = await ajo.connect(participant.signer).processPayment({
+                      gasLimit: DEMO_CONFIG.GAS_LIMIT.PROCESS_PAYMENT
+                  });
+                  
+                  return await tx.wait();
+              }, `${participant.name} - Payment`);
+              
+              cycleData.payments.push({
+                  member: participant.name,
+                  amount: DEMO_CONFIG.MONTHLY_PAYMENT_USDC,  // For display only
+                  success: true
+              });
+              
+              const status = c.green("✅ Paid");
+              console.log(c.dim(`     │ ${(i+1).toString().padStart(2)} │ ${participant.name.padEnd(11)} │ ${formatUSDC(DEMO_CONFIG.MONTHLY_PAYMENT_USDC).padEnd(12)} │ ${status.padEnd(20)} │`));
+              
+          } catch (error) {
+              cycleData.payments.push({
+                  member: participant.name,
+                  error: error.message,
+                  success: false
+              });
+              
+              const status = c.red("❌ Failed");
+              console.log(c.dim(`     │ ${(i+1).toString().padStart(2)} │ ${participant.name.padEnd(11)} │ ${'N/A'.padEnd(12)} │ ${status.padEnd(20)} │`));
+              
+              // Log actual error for debugging
+              console.log(c.red(`        Error: ${error.message.slice(0, 150)}`));
+          }
+          
+          await sleep(2000); // Increased delay to prevent rate limiting
       }
-      
-      await sleep(1000); // Increased from 500ms to prevent rate limiting
-    }
     
     console.log(c.dim("     └────┴─────────────┴──────────────┴──────────────┘\n"));
     

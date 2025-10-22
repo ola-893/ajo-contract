@@ -150,45 +150,33 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
     * UPDATED: Verifies all OTHER members have paid (recipient can pay before/after)
     */
     function distributePayout() external override nonReentrant {
-        require(msg.sender == ajoCore, "Only AjoCore");
+    require(msg.sender == ajoCore, "Only AjoCore");
+    
+    address recipient = getNextRecipient();
+    require(recipient != address(0), "No eligible recipient");
+    
+    Member memory recipientMember = membersContract.getMember(recipient);
+    require(recipientMember.lastPaymentCycle >= currentCycle, "Recipient must pay first");
+    
+    address[] memory allMembers = membersContract.getActiveMembersList();
+    for (uint256 i = 0; i < allMembers.length; i++) {
+        address member = allMembers[i];
+        if (member == recipient) continue; // Already checked above
         
-        // Find next recipient
-        address recipient = getNextRecipient();
-        require(recipient != address(0), "No eligible recipient");
-        
-        Member memory recipientMember = membersContract.getMember(recipient);
-        
-        // ADDED: Verify all OTHER members have paid this cycle
-        uint256 totalMembers = membersContract.getTotalActiveMembers();
-        address[] memory allMembers = membersContract.getActiveMembersList();
-        
-        for (uint256 i = 0; i < allMembers.length; i++) {
-            address member = allMembers[i];
-            
-            // Skip the recipient - they can pay before or after receiving payout
-            if (member == recipient) continue;
-            
-            Member memory memberInfo = membersContract.getMember(member);
-            
-            // Check if this member has paid in current cycle
-            if (memberInfo.lastPaymentCycle < currentCycle) {
-                revert("Not all members have paid this cycle");
-            }
-        }
-        
-        // Calculate payout amount
-        uint256 payoutAmount = calculatePayout();
-        
-        // Distribute payout
-        _distributePayout(recipient, payoutAmount, recipientMember.preferredToken);
-        
-        // Update member status
-        membersContract.updateTotalPaid(recipient, payoutAmount);
-        membersContract.markPayoutReceived(recipient);
-        
-        // Move to next position
-        nextPayoutPosition++;
+        Member memory memberInfo = membersContract.getMember(member);
+        require(memberInfo.lastPaymentCycle >= currentCycle, "Not all members paid");
     }
+    
+    // Calculate and distribute payout
+    uint256 payoutAmount = calculatePayout();
+    _distributePayout(recipient, payoutAmount, recipientMember.preferredToken);
+    
+    // Update member status
+    membersContract.updateTotalPaid(recipient, payoutAmount);
+    membersContract.markPayoutReceived(recipient);
+    
+    nextPayoutPosition++;
+}
     
     function handleDefault(address defaulter) external override onlyAjoCore {
         Member memory member = membersContract.getMember(defaulter);

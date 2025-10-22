@@ -284,46 +284,34 @@ contract AjoCore is IAjoCore, ReentrancyGuard, Ownable, Initializable {
     }
     
     function processPayment() external override nonReentrant {
-        // Get member info to determine their preferred token
+        // Get member info
         Member memory member = membersContract.getMember(msg.sender);
+        require(member.isActive, "Member not active");
         
-        // Ensure member exists and is active
-        if (!member.isActive) revert MemberNotFound();
-        
-        // Get the current cycle
+        // Get current cycle
         uint256 currentCycle = paymentsContract.getCurrentCycle();
         
-        // Get the configured monthly payment for the member's preferred token
+        // Check if already paid this cycle
+        require(member.lastPaymentCycle < currentCycle, "Already paid this cycle");
+        
+        // Get configured payment amount for member's token
         TokenConfig memory config = paymentsContract.getTokenConfig(member.preferredToken);
+        require(config.isActive, "Token not supported");
+        require(config.monthlyPayment > 0, "Invalid payment config");
         
-        // Validate token is still active
-        if (!config.isActive) revert TokenNotSupported();
-        
-        // Validate payment amount exists
-        if (config.monthlyPayment == 0) revert InvalidTokenConfiguration();
-        
-        // Check if member needs to pay this cycle
-        if (!paymentsContract.needsToPayThisCycle(msg.sender)) {
-            revert PaymentAlreadyMade();
-        }
-        
-        // Process payment with the FIXED monthly amount and member's preferred token
-        // The paymentsContract will handle token transfer validation
+        // Process payment through payments contract with FIXED amount
         paymentsContract.processPayment(
-            msg.sender, 
-            config.monthlyPayment,  
-            member.preferredToken  
+            msg.sender,
+            config.monthlyPayment,  // ✅ Uses configured amount from factory
+            member.preferredToken
         );
         
         // Update member's last payment cycle
         membersContract.updateLastPaymentCycle(msg.sender, currentCycle);
-        
-        // Update reputation positively for on-time payment
-        governanceContract.updateReputationAndVotingPower(msg.sender, true);
     }
-
     
     function distributePayout() external override nonReentrant {
+    require(recipientMember.lastPaymentCycle >= currentCycle, "Recipient must pay first");
         if (!isFirstCycleComplete) {
             paymentsContract.distributePayout();
             _advanceCycle();
