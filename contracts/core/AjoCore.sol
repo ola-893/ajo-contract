@@ -311,7 +311,6 @@ contract AjoCore is IAjoCore, ReentrancyGuard, Ownable, Initializable {
     }
     
     function distributePayout() external override nonReentrant {
-    require(recipientMember.lastPaymentCycle >= currentCycle, "Recipient must pay first");
         if (!isFirstCycleComplete) {
             paymentsContract.distributePayout();
             _advanceCycle();
