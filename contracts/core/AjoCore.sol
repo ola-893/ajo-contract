@@ -43,6 +43,7 @@ contract AjoCore is IAjoCore, ReentrancyGuard, Ownable, Initializable {
     event AjoFull(address indexed ajoContract, uint256 timestamp);
     event CollateralTransferRequired(address indexed member, uint256 amount, PaymentToken token, address collateralContract);
     event CycleDurationUpdated(uint256 oldDuration, uint256 newDuration);
+    event MemberDefaulted(address indexed member, uint256 cycle, uint256 cyclesMissed);
     event Paused(address account);
     event Unpaused(address account);
 
@@ -310,18 +311,28 @@ contract AjoCore is IAjoCore, ReentrancyGuard, Ownable, Initializable {
         membersContract.updateLastPaymentCycle(msg.sender, currentCycle);
     }
     
+    /**
+     * @dev Distribute payout to next recipient
+     * CRITICAL FIX: Removed duplicate advanceCycle() call
+     * The cycle advancement now happens ONLY in AjoPayments.distributePayout()
+     */
     function distributePayout() external override nonReentrant {
-        if (!isFirstCycleComplete) {
-            paymentsContract.distributePayout();
-            _advanceCycle();
-            isFirstCycleComplete = true;
-        } else {
-            // Use state variable instead of constant
-            if (block.timestamp >= lastCycleTimestamp + cycleDuration) {
-                paymentsContract.distributePayout();
-                _advanceCycle();
-            }
-        }
+        // REMOVED: All cycle timing logic and _advanceCycle() calls
+        // The AjoPayments contract handles cycle advancement automatically after payout
+        
+        // Simply delegate to payments contract
+        // It will:
+        // 1. Verify all members paid
+        // 2. Distribute payout to recipient
+        // 3. Advance cycle (increment currentCycle)
+        // 4. Update nextPayoutPosition
+        paymentsContract.distributePayout();
+        
+        // Update local timestamp for tracking
+        lastCycleTimestamp = block.timestamp;
+        
+        // Emit event for frontend tracking
+        emit CycleAdvanced(paymentsContract.getCurrentCycle(), block.timestamp);
     }
     
     function handleDefault(address defaulter) external override onlyOwner {
@@ -332,32 +343,71 @@ contract AjoCore is IAjoCore, ReentrancyGuard, Ownable, Initializable {
         if (!member.isActive) revert MemberNotFound();
         
         // 1. Mark the member as defaulted in the payments contract.
-        // This will typically apply penalties and update their default status.
+        // This applies penalties and updates default status
         paymentsContract.handleDefault(defaulter);
         
         // 2. Update the defaulter's reputation negatively.
-        // The 'false' boolean indicates a negative reputation event.
         governanceContract.updateReputationAndVotingPower(defaulter, false);
         
-        // 3. Check for a severe default condition (e.g., missing 3 or more cycles).
+        // 3. Get current cycle to determine severity
         uint256 currentCycle = paymentsContract.getCurrentCycle();
-        uint256 cyclesMissed = currentCycle - member.lastPaymentCycle;
+        uint256 cyclesMissed = member.lastPaymentCycle > 0 
+            ? currentCycle - member.lastPaymentCycle 
+            : 1;
         
-        if (cyclesMissed >= 3) {
-            // --- Severe Default Protocol ---
+        // 4. IMMEDIATE SEIZURE PROTOCOL
+        // For testing: Use >= 1 (immediate)
+        // For production: Use >= 3 (grace period)
+        if (cyclesMissed >= 1) {
+            // --- Execute Full Seizure Protocol ---
             
-            // 3a. Execute the seizure of the defaulter's locked collateral.
+            // Step 1: Seize locked collateral from defaulter AND guarantor
+            // This executes the collateral seizure which includes:
+            // - Defaulter's locked collateral
+            // - Guarantor's locked collateral
             collateralContract.executeSeizure(defaulter);
             
-            // 3b. Forcibly remove the defaulter from the Ajo circle.
-            // We use `removeMember` as this is an administrative action.
+            // Step 2: BAN DEFAULTER FROM FUTURE PAYOUTS
+            // By removing them, they forfeit their right to receive future payouts
+            // This is the "past payment seizure" - their contributions stay in the pool
+            // but they lose the right to recoup them via payout
             membersContract.removeMember(defaulter);
             
-            // 3c. If the defaulter had a guarantor, remove the guarantor as well.
-            // This is the core of the social guarantee mechanism.
+            // Step 3: BAN GUARANTOR FROM FUTURE PAYOUTS
+            // The guarantor also loses their future payout rights
+            // Their past contributions are also seized (forfeited payout eligibility)
             if (member.guarantor != address(0)) {
+                // Remove guarantor - they forfeit future payout rights
                 membersContract.removeMember(member.guarantor);
+                
+                // Note: Their collateral was already seized in Step 1 via executeSeizure
+                // Now they also lose the right to reclaim their past contributions
             }
+            
+            emit MemberDefaulted(defaulter, currentCycle, cyclesMissed);
+            
+            // Step 4: Adjust payout queue
+            // Since we removed members, the next payout position needs adjustment
+            // This ensures the queue continues properly
+            _adjustPayoutQueue();
+        } else {
+            // Light penalty - just apply fees, don't remove members yet
+            emit MemberDefaulted(defaulter, currentCycle, cyclesMissed);
+        }
+    }
+
+    /**
+    * @dev Adjust payout queue after member removal
+    * Called internally after removing defaulted members
+    */
+    function _adjustPayoutQueue() internal {
+        uint256 totalActiveMembers = membersContract.getTotalActiveMembers();
+        uint256 currentPayoutPos = paymentsContract.getNextPayoutPosition();
+        
+        // If payout position exceeds active members, cycle is complete
+        if (currentPayoutPos > totalActiveMembers) {
+            // Advance to next cycle
+            paymentsContract.advanceCycle();
         }
     }
     
@@ -605,10 +655,15 @@ contract AjoCore is IAjoCore, ReentrancyGuard, Ownable, Initializable {
     
     // ============ INTERNAL FUNCTIONS ============
     
+    /**
+     * @dev Internal helper to advance cycle
+     * DEPRECATED: This function is no longer used
+     * Cycle advancement now happens automatically in AjoPayments.distributePayout()
+     */
     function _advanceCycle() internal {
-        paymentsContract.advanceCycle();
-        lastCycleTimestamp = block.timestamp;
-        emit CycleAdvanced(paymentsContract.getCurrentCycle(), block.timestamp);
+        // This function is kept for backwards compatibility but does nothing
+        // The actual cycle advancement happens in AjoPayments.advanceCycle()
+        // which is called automatically after payout distribution
     }
     
     function _calculateInitialReputation(uint256 collateral, uint256 monthlyPayment) 
@@ -623,5 +678,9 @@ contract AjoCore is IAjoCore, ReentrancyGuard, Ownable, Initializable {
         // Position 1 with $247.5 collateral and $50 monthly gets: 100 + (247.5/50 * 50) = ~347
         // Position 10 with $0 collateral gets: 100 + 0 = 100
         return 100 + ((collateral * 50) / monthlyPayment);
+    }
+
+    function paymentsContractAddress() external override view returns (IAjoPayments) {
+        return paymentsContract;
     }
 }

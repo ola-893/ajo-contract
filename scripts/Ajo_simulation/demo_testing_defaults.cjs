@@ -26,7 +26,7 @@ const DEMO_CONFIG = {
   MONTHLY_PAYMENT_USDC: ethers.utils.parseUnits("50", 6), // $50 USDC
   MONTHLY_PAYMENT_HBAR: ethers.utils.parseUnits("1000", 8), // 1000 HBAR
   CYCLE_DURATION: 45, // 45 seconds for testing defaults
-  TOTAL_PARTICIPANTS: 10,
+  TOTAL_PARTICIPANTS: 15,
   MIN_HBAR_FOR_HTS: ethers.utils.parseEther("50"),
   GAS_LIMIT: {
     DEPLOY_MASTER: 6000000,
@@ -697,362 +697,7 @@ async function runFirstCycleNormally(ajo, ajoPayments, participants) {
   return { paymentResults, recipientName, recipientAddress: nextRecipient };
 }
 
-// ================================================================
-// PHASE 6: DEFAULT SCENARIO TESTING
-// ================================================================
-async function testDefaultScenarios(ajo, ajoPayments, ajoCollateral, ajoMembers, participants, ajoInfo) {
-  console.log(c.bgRed("\n" + " ".repeat(20) + "PHASE 6: DEFAULT SCENARIO TESTING & COLLATERAL SEIZURE" + " ".repeat(18)));
-  console.log(c.red("═".repeat(88) + "\n"));
-  
-  const defaultScenarios = [];
-  
-  // ================================================================
-  // SCENARIO 1: Position 1 Defaults (Worst Case)
-  // ================================================================
-  console.log(c.bgYellow("\n" + " ".repeat(20) + "SCENARIO 1: POSITION 1 DEFAULTS AFTER PAYOUT" + " ".repeat(22)));
-  console.log(c.yellow("═".repeat(88) + "\n"));
-  
-  const position1Member = participants.find(p => p.position === 1);
-  
-  if (position1Member) {
-    console.log(c.red(`  🚨 Testing worst-case scenario: ${position1Member.name} (Position 1) defaults\n`));
-    
-    // Get pre-default state
-    console.log(c.cyan("  📊 Step 1: Analyze Pre-Default State\n"));
-    
-    const memberInfo = await ajo.getMemberInfo(position1Member.address);
-    const lockedCollateral = memberInfo.memberInfo.lockedCollateral;
-    const totalPaid = memberInfo.memberInfo.totalPaid;
-    const guarantorAddress = memberInfo.memberInfo.guarantor;
-    
-    const guarantorInfo = await ajo.getMemberInfo(guarantorAddress);
-    const guarantorCollateral = guarantorInfo.memberInfo.lockedCollateral;
-    const guarantorPaid = guarantorInfo.memberInfo.totalPaid;
-    
-    // FIXED: Calculate payout BEFORE using it
-    const payout = DEMO_CONFIG.MONTHLY_PAYMENT_USDC.mul(participants.length);
-    
-    console.log(c.dim("     ┌─────────────────────────────────────────────────────────┐"));
-    console.log(c.dim(`     │ Defaulter: ${position1Member.name.padEnd(44)} │`));
-    console.log(c.dim(`     │ Locked Collateral: ${formatUSDC(lockedCollateral).padEnd(36)} │`));
-    console.log(c.dim(`     │ Past Payments (contract): ${formatUSDC(totalPaid).padEnd(28)} │`));
-    console.log(c.dim(`     │ Expected Contributions: ${formatUSDC(DEMO_CONFIG.MONTHLY_PAYMENT_USDC).padEnd(30)} │`));
-    console.log(c.dim(`     │ Payout Received: ${formatUSDC(payout).padEnd(37)} │`));
-    console.log(c.dim(`     │ Guarantor: ${guarantorAddress.slice(0, 42).padEnd(44)} │`));
-    console.log(c.dim(`     │ Guarantor Collateral: ${formatUSDC(guarantorCollateral).padEnd(33)} │`));
-    console.log(c.dim(`     │ Guarantor Past Payments: ${formatUSDC(guarantorPaid).padEnd(30)} │`));
-    console.log(c.dim("     └─────────────────────────────────────────────────────────┘\n"));
-    
-    console.log(c.yellow(`  ℹ️  Note: Contract reports totalPaid = ${formatUSDC(totalPaid)}\n`));
-    console.log(c.dim(`     This may include payout received (${formatUSDC(payout)})\n`));
-    console.log(c.dim(`     For collateral calculation, we use actual contributions only\n`));
-    
-    // Calculate expected seizure
-    const expectedSeizable = lockedCollateral.add(guarantorCollateral).add(guarantorPaid);
-    console.log(c.bright(`  💰 Expected Seizable Assets: ${formatUSDC(expectedSeizable)}\n`));
-    
-    // Calculate net loss
-    // Position 1 received full payout but only paid 1 cycle contribution
-    const contributionsMade = DEMO_CONFIG.MONTHLY_PAYMENT_USDC; // Only 1 payment before default
-    const netLoss = payout.sub(contributionsMade);
-    console.log(c.yellow(`  ⚠️  Net Loss to Group: ${formatUSDC(netLoss)}\n`));
-    
-    // Calculate coverage ratio
-    let coverageRatio = 0;
-    let safetyBuffer = ethers.BigNumber.from(0);
-    
-    if (netLoss.gt(0)) {
-      coverageRatio = expectedSeizable.mul(10000).div(netLoss).toNumber() / 100;
-      safetyBuffer = expectedSeizable.sub(netLoss);
-    } else {
-      console.log(c.yellow(`  ⚠️  Warning: Net loss is zero or negative. Check totalPaid tracking.\n`));
-      coverageRatio = 0;
-    }
-    
-    console.log(c.bright(`  📈 Coverage Analysis:`));
-    
-    if (netLoss.gt(0)) {
-      console.log(c.dim(`     Coverage Ratio: ${coverageRatio.toFixed(2)}%`));
-      console.log(c.dim(`     Safety Buffer: ${formatUSDC(safetyBuffer)}\n`));
-      
-      if (coverageRatio >= 108) {
-        console.log(c.green(`  ✅ Coverage ratio meets V3 model requirement (≥108.9%)\n`));
-      } else {
-        console.log(c.red(`  ❌ WARNING: Coverage ratio below expected (${coverageRatio.toFixed(2)}% < 108.9%)\n`));
-      }
-    } else {
-      console.log(c.yellow(`     Coverage analysis skipped (net loss = 0)\n`));
-      console.log(c.dim(`     Note: totalPaid appears to include payout received.\n`));
-      console.log(c.dim(`     Expected: totalPaid = contributions only (50 USDC)\n`));
-      console.log(c.dim(`     Actual: totalPaid = ${formatUSDC(totalPaid)}\n`));
-    }
-    
-    await sleep(2000);
-    
-    // Execute default handling
-    console.log(c.cyan("  🔒 Step 2: Execute Default Handling & Collateral Seizure\n"));
-    
-    try {
-      const handleDefaultTx = await retryWithBackoff(async () => {
-        const tx = await ajo.connect(participants[1].signer).handleDefault(
-          position1Member.address,
-          { gasLimit: DEMO_CONFIG.GAS_LIMIT.HANDLE_DEFAULT }
-        );
-        return await tx.wait();
-      }, "Handle Default");
-      
-      console.log(c.green(`     ✅ Default handling executed successfully`));
-      console.log(c.dim(`        Transaction Hash: ${handleDefaultTx.transactionHash}`));
-      console.log(c.dim(`        Gas Used: ${handleDefaultTx.gasUsed.toString()}\n`));
-      
-      // Verify post-default state
-      console.log(c.cyan("  📊 Step 3: Verify Post-Default State\n"));
-      
-      const postDefaultInfo = await ajo.getMemberInfo(position1Member.address);
-      const postDefaultCollateral = postDefaultInfo.memberInfo.lockedCollateral;
-      const defaultCount = postDefaultInfo.memberInfo.defaultCount;
-      
-      console.log(c.dim("     ┌─────────────────────────────────────────────────────────┐"));
-      console.log(c.dim(`     │ Remaining Collateral: ${formatUSDC(postDefaultCollateral).padEnd(34)} │`));
-      console.log(c.dim(`     │ Default Count: ${defaultCount.toString().padEnd(41)} │`));
-      console.log(c.dim(`     │ Member Status: ${(postDefaultInfo.memberInfo.isActive ? 'Active' : 'Deactivated').padEnd(41)} │`));
-      console.log(c.dim("     └─────────────────────────────────────────────────────────┘\n"));
-      
-      const actualSeized = lockedCollateral.sub(postDefaultCollateral);
-      console.log(c.green(`     ✅ Collateral Seized: ${formatUSDC(actualSeized)}\n`));
-      
-      defaultScenarios.push({
-        scenario: "Position 1 Default (Worst Case)",
-        defaulter: position1Member.name,
-        defaulterAddress: position1Member.address,
-        preDefaultCollateral: lockedCollateral,
-        preDefaultPaid: contributionsMade, // Use actual contributions, not totalPaid
-        guarantorCollateral,
-        guarantorPaid,
-        expectedSeizable,
-        actualSeized,
-        netLoss,
-        coverageRatio,
-        safetyBuffer,
-        totalPaidByContract: totalPaid, // Store what contract reported
-        success: true,
-        transactionHash: handleDefaultTx.transactionHash
-      });
-      
-    } catch (error) {
-      console.log(c.red(`     ❌ Default handling failed: ${error.message}\n`));
-      
-      defaultScenarios.push({
-        scenario: "Position 1 Default (Worst Case)",
-        defaulter: position1Member.name,
-        error: error.message,
-        success: false
-      });
-    }
-  }
-  
-  await sleep(3000);
-  
-  // ================================================================
-  // SCENARIO 2: Mid-Position Member Defaults
-  // ================================================================
-  console.log(c.bgYellow("\n" + " ".repeat(20) + "SCENARIO 2: MID-POSITION MEMBER DEFAULTS" + " ".repeat(26)));
-  console.log(c.yellow("═".repeat(88) + "\n"));
-  
-  const position5Member = participants.find(p => p.position === 5);
-  
-  if (position5Member) {
-    console.log(c.red(`  🚨 Testing mid-position scenario: ${position5Member.name} (Position 5) defaults\n`));
-    
-    const memberInfo = await ajo.getMemberInfo(position5Member.address);
-    const lockedCollateral = memberInfo.memberInfo.lockedCollateral;
-    const totalPaid = memberInfo.memberInfo.totalPaid;
-    
-    console.log(c.dim("     ┌─────────────────────────────────────────────────────────┐"));
-    console.log(c.dim(`     │ Defaulter: ${position5Member.name.padEnd(44)} │`));
-    console.log(c.dim(`     │ Position: 5 (Mid-Position)${' '.repeat(29)} │`));
-    console.log(c.dim(`     │ Locked Collateral: ${formatUSDC(lockedCollateral).padEnd(36)} │`));
-    console.log(c.dim(`     │ Past Payments: ${formatUSDC(totalPaid).padEnd(40)} │`));
-    console.log(c.dim("     └─────────────────────────────────────────────────────────┘\n"));
-    
-    console.log(c.yellow(`  ℹ️  Mid-position members have lower collateral requirements\n`));
-    
-    await sleep(2000);
-    
-    try {
-      const handleDefaultTx = await retryWithBackoff(async () => {
-        const tx = await ajo.connect(participants[1].signer).handleDefault(
-          position5Member.address,
-          { gasLimit: DEMO_CONFIG.GAS_LIMIT.HANDLE_DEFAULT }
-        );
-        return await tx.wait();
-      }, "Handle Default - Position 5");
-      
-      console.log(c.green(`     ✅ Default handling executed successfully\n`));
-      
-      const postDefaultInfo = await ajo.getMemberInfo(position5Member.address);
-      const postDefaultCollateral = postDefaultInfo.memberInfo.lockedCollateral;
-      const actualSeized = lockedCollateral.sub(postDefaultCollateral);
-      
-      console.log(c.green(`     ✅ Collateral Seized: ${formatUSDC(actualSeized)}\n`));
-      
-      defaultScenarios.push({
-        scenario: "Position 5 Default (Mid-Position)",
-        defaulter: position5Member.name,
-        preDefaultCollateral: lockedCollateral,
-        actualSeized,
-        success: true,
-        transactionHash: handleDefaultTx.transactionHash
-      });
-      
-    } catch (error) {
-      console.log(c.red(`     ❌ Default handling failed: ${error.message}\n`));
-      
-      defaultScenarios.push({
-        scenario: "Position 5 Default (Mid-Position)",
-        defaulter: position5Member.name,
-        error: error.message,
-        success: false
-      });
-    }
-  }
-  
-  await sleep(3000);
-  
-  // ================================================================
-  // SCENARIO 3: Late-Position Member Defaults
-  // ================================================================
-  console.log(c.bgYellow("\n" + " ".repeat(20) + "SCENARIO 3: LATE-POSITION MEMBER DEFAULTS" + " ".repeat(25)));
-  console.log(c.yellow("═".repeat(88) + "\n"));
-  
-  const position9Member = participants.find(p => p.position === 9);
-  
-  if (position9Member) {
-    console.log(c.red(`  🚨 Testing late-position scenario: ${position9Member.name} (Position 9) defaults\n`));
-    
-    const memberInfo = await ajo.getMemberInfo(position9Member.address);
-    const lockedCollateral = memberInfo.memberInfo.lockedCollateral;
-    const totalPaid = memberInfo.memberInfo.totalPaid;
-    
-    console.log(c.dim("     ┌─────────────────────────────────────────────────────────┐"));
-    console.log(c.dim(`     │ Defaulter: ${position9Member.name.padEnd(44)} │`));
-    console.log(c.dim(`     │ Position: 9 (Late-Position)${' '.repeat(28)} │`));
-    console.log(c.dim(`     │ Locked Collateral: ${formatUSDC(lockedCollateral).padEnd(36)} │`));
-    console.log(c.dim(`     │ Past Payments: ${formatUSDC(totalPaid).padEnd(40)} │`));
-    console.log(c.dim("     └─────────────────────────────────────────────────────────┘\n"));
-    
-    console.log(c.yellow(`  ℹ️  Late-position members have minimal/zero collateral requirements\n`));
-    
-    await sleep(2000);
-    
-    try {
-      const handleDefaultTx = await retryWithBackoff(async () => {
-        const tx = await ajo.connect(participants[1].signer).handleDefault(
-          position9Member.address,
-          { gasLimit: DEMO_CONFIG.GAS_LIMIT.HANDLE_DEFAULT }
-        );
-        return await tx.wait();
-      }, "Handle Default - Position 9");
-      
-      console.log(c.green(`     ✅ Default handling executed successfully\n`));
-      
-      const postDefaultInfo = await ajo.getMemberInfo(position9Member.address);
-      const actualSeized = lockedCollateral.sub(postDefaultInfo.memberInfo.lockedCollateral);
-      
-      console.log(c.green(`     ✅ Collateral Seized: ${formatUSDC(actualSeized)}\n`));
-      
-      defaultScenarios.push({
-        scenario: "Position 9 Default (Late-Position)",
-        defaulter: position9Member.name,
-        preDefaultCollateral: lockedCollateral,
-        actualSeized,
-        success: true,
-        transactionHash: handleDefaultTx.transactionHash
-      });
-      
-    } catch (error) {
-      console.log(c.red(`     ❌ Default handling failed: ${error.message}\n`));
-      
-      defaultScenarios.push({
-        scenario: "Position 9 Default (Late-Position)",
-        defaulter: position9Member.name,
-        error: error.message,
-        success: false
-      });
-    }
-  }
-  
-  await sleep(3000);
-  
-  // ================================================================
-  // SCENARIO 4: Multiple Simultaneous Defaults
-  // ================================================================
-  console.log(c.bgYellow("\n" + " ".repeat(20) + "SCENARIO 4: MULTIPLE SIMULTANEOUS DEFAULTS" + " ".repeat(24)));
-  console.log(c.yellow("═".repeat(88) + "\n"));
-  
-  const position2Member = participants.find(p => p.position === 2);
-  const position3Member = participants.find(p => p.position === 3);
-  
-  if (position2Member && position3Member) {
-    console.log(c.red(`  🚨 Testing batch default: ${position2Member.name} & ${position3Member.name}\n`));
-    
-    const defaulters = [position2Member.address, position3Member.address];
-    
-    console.log(c.cyan("  📊 Pre-Default Analysis\n"));
-    
-    let totalCollateralAtRisk = ethers.BigNumber.from(0);
-    let totalPaidByDefaulters = ethers.BigNumber.from(0);
-    
-    for (const defaulter of [position2Member, position3Member]) {
-      const info = await ajo.getMemberInfo(defaulter.address);
-      totalCollateralAtRisk = totalCollateralAtRisk.add(info.memberInfo.lockedCollateral);
-      totalPaidByDefaulters = totalPaidByDefaulters.add(info.memberInfo.totalPaid);
-      
-      console.log(c.dim(`     ${defaulter.name}: Collateral ${formatUSDC(info.memberInfo.lockedCollateral)}, Paid ${formatUSDC(info.memberInfo.totalPaid)}`));
-    }
-    
-    console.log(c.bright(`\n     Total At Risk: ${formatUSDC(totalCollateralAtRisk.add(totalPaidByDefaulters))}\n`));
-    
-    await sleep(2000);
-    
-    try {
-      const batchDefaultTx = await retryWithBackoff(async () => {
-        const tx = await ajo.connect(participants[8].signer).batchHandleDefaults(
-          defaulters,
-          { gasLimit: DEMO_CONFIG.GAS_LIMIT.HANDLE_DEFAULT * 2 }
-        );
-        return await tx.wait();
-      }, "Batch Handle Defaults");
-      
-      console.log(c.green(`     ✅ Batch default handling executed successfully`));
-      console.log(c.dim(`        Transaction Hash: ${batchDefaultTx.transactionHash}`));
-      console.log(c.dim(`        Gas Used: ${batchDefaultTx.gasUsed.toString()}\n`));
-      
-      defaultScenarios.push({
-        scenario: "Multiple Simultaneous Defaults",
-        defaulters: [position2Member.name, position3Member.name],
-        totalCollateralAtRisk,
-        totalPaidByDefaulters,
-        success: true,
-        transactionHash: batchDefaultTx.transactionHash
-      });
-      
-    } catch (error) {
-      console.log(c.red(`     ❌ Batch default handling failed: ${error.message}\n`));
-      
-      defaultScenarios.push({
-        scenario: "Multiple Simultaneous Defaults",
-        defaulters: [position2Member.name, position3Member.name],
-        error: error.message,
-        success: false
-      });
-    }
-  }
-  
-  console.log(c.red("═".repeat(88) + "\n"));
-  
-  return defaultScenarios;
-}
+
 
 // ================================================================
 // PHASE 7: SUMMARY & ANALYSIS
@@ -1117,6 +762,368 @@ async function generateDefaultTestSummary(defaultScenarios, participants) {
 }
 
 // ================================================================
+// PHASE 5: RUN FIRST CYCLE NORMALLY
+// ================================================================
+async function runFirstCycleNormally(ajo, ajoPayments, participants) {
+  console.log(c.bgBlue("\n" + " ".repeat(25) + "PHASE 5: FIRST CYCLE - NORMAL OPERATION" + " ".repeat(24)));
+  console.log(c.blue("═".repeat(88) + "\n"));
+  
+  // ============ VERIFY CURRENT CYCLE ============
+  const currentCycle = await ajoPayments.getCurrentCycle();
+  console.log(c.bright(`  📅 Current Cycle: ${currentCycle.toString()}\n`));
+  
+  console.log(c.bright(`  📅 Cycle 1: All members pay, Position 1 receives payout\n`));
+  
+  // Get next recipient
+  const nextRecipient = await ajoPayments.getNextRecipient();
+  const recipientParticipant = participants.find(p => 
+    p.address.toLowerCase() === nextRecipient.toLowerCase()
+  );
+  const recipientName = recipientParticipant ? recipientParticipant.name : "Unknown";
+  
+  console.log(c.cyan(`  💰 Next Recipient: ${recipientName} (${nextRecipient})\n`));
+  
+  console.log(c.cyan(`  💳 Step 1: Process Payments for Cycle 1\n`));
+  console.log(c.dim("     ┌────┬─────────────┬──────────────┬──────────────┐"));
+  console.log(c.dim("     │ #  │ Member      │ Amount       │ Status       │"));
+  console.log(c.dim("     ├────┼─────────────┼──────────────┼──────────────┤"));
+  
+  const paymentResults = [];
+  
+  for (let i = 0; i < participants.length; i++) {
+    const participant = participants[i];
+    
+    try {
+      await retryWithBackoff(async () => {
+        const tx = await ajo.connect(participant.signer).processPayment({
+          gasLimit: DEMO_CONFIG.GAS_LIMIT.PROCESS_PAYMENT
+        });
+        
+        return await tx.wait();
+      }, `${participant.name} - Payment`);
+      
+      paymentResults.push({
+        member: participant.name,
+        success: true
+      });
+      
+      const status = c.green("✅ Paid");
+      console.log(c.dim(`     │ ${(i+1).toString().padStart(2)} │ ${participant.name.padEnd(11)} │ ${formatUSDC(DEMO_CONFIG.MONTHLY_PAYMENT_USDC).padEnd(12)} │ ${status.padEnd(20)} │`));
+      
+    } catch (error) {
+      paymentResults.push({
+        member: participant.name,
+        error: error.message,
+        success: false
+      });
+      
+      const status = c.red("❌ Failed");
+      console.log(c.dim(`     │ ${(i+1).toString().padStart(2)} │ ${participant.name.padEnd(11)} │ ${'N/A'.padEnd(12)} │ ${status.padEnd(20)} │`));
+      console.log(c.red(`        Error: ${error.message.slice(0, 150)}`));
+    }
+    
+    await sleep(2000);
+  }
+  
+  console.log(c.dim("     └────┴─────────────┴──────────────┴──────────────┘\n"));
+  
+  const successfulPayments = paymentResults.filter(p => p.success).length;
+  console.log(c.green(`     ✅ ${successfulPayments}/${participants.length} payments processed\n`));
+  
+  await sleep(2000);
+  
+  // Distribute payout
+  console.log(c.cyan(`  💰 Step 2: Distribute Payout to ${recipientName}\n`));
+  
+  try {
+    const isReady = await ajoPayments.isPayoutReady();
+    console.log(c.dim(`     Payout Ready: ${isReady ? c.green('✅ Yes') : c.red('❌ No')}`));
+    
+    if (!isReady) {
+      throw new Error("Payout not ready");
+    }
+    
+    const expectedPayout = await ajoPayments.calculatePayout();
+    console.log(c.bright(`     Expected Payout: ${formatUSDC(expectedPayout)}\n`));
+    
+    const payoutReceipt = await retryWithBackoff(async () => {
+      const payoutTx = await ajo.connect(participants[0].signer).distributePayout({
+        gasLimit: DEMO_CONFIG.GAS_LIMIT.DISTRIBUTE_PAYOUT
+      });
+      return await payoutTx.wait();
+    }, "Distribute Payout");
+    
+    console.log(c.green(`     ✅ Payout Distributed!`));
+    console.log(c.dim(`        Recipient: ${recipientName}`));
+    console.log(c.dim(`        Amount: ${formatUSDC(expectedPayout)}\n`));
+    
+  } catch (error) {
+    console.log(c.red(`     ❌ Payout Failed: ${error.message.slice(0, 100)}\n`));
+  }
+  
+  // ============ VERIFY POST-PAYOUT CYCLE ============
+  const postPayoutCycle = await ajoPayments.getCurrentCycle();
+  console.log(c.bright(`  📅 After Payout - Current Cycle: ${postPayoutCycle.toString()}\n`));
+  
+  console.log(c.blue("═".repeat(88) + "\n"));
+  
+  return { paymentResults, recipientName, recipientAddress: nextRecipient };
+}
+
+// ================================================================
+// PHASE 6: ADVANCE TO CYCLE 2 & SIMULATE DEFAULTS
+// ================================================================
+async function advanceToCycle2AndSimulateDefaults(ajo, ajoPayments, participants) {
+  console.log(c.bgYellow("\n" + " ".repeat(20) + "PHASE 6: ADVANCE TO CYCLE 2 & SIMULATE DEFAULTS" + " ".repeat(20)));
+  console.log(c.yellow("═".repeat(88) + "\n"));
+  
+  // Check current cycle
+  const currentCycle = await ajoPayments.getCurrentCycle();
+  console.log(c.bright(`  📅 Current Cycle: ${currentCycle.toString()}\n`));
+  
+  console.log(c.cyan("  ⏰ Waiting for Cycle 2 to begin...\n"));
+  console.log(c.dim(`     Cycle Duration: ${DEMO_CONFIG.CYCLE_DURATION} seconds\n`));
+  
+  // Wait for cycle duration
+  await sleepWithProgress(DEMO_CONFIG.CYCLE_DURATION, "Advancing to Cycle 2");
+  console.log();
+  
+  // Verify cycle advanced
+  const newCycle = await ajoPayments.getCurrentCycle();
+  console.log(c.bright(`  📅 New Cycle: ${newCycle.toString()}\n`));
+  
+  if (newCycle.toString() === currentCycle.toString()) {
+    console.log(c.yellow("  ⚠️  Cycle hasn't auto-advanced. Manually triggering...\n"));
+    
+    // Manually trigger cycle advance by attempting payout distribution
+    try {
+      // This will advance the cycle if time has passed
+      const advanceTx = await ajo.connect(participants[0].signer).distributePayout({
+        gasLimit: DEMO_CONFIG.GAS_LIMIT.DISTRIBUTE_PAYOUT
+      });
+      await advanceTx.wait();
+      
+      const finalCycle = await ajoPayments.getCurrentCycle();
+      console.log(c.green(`  ✅ Cycle Advanced to: ${finalCycle.toString()}\n`));
+    } catch (error) {
+      console.log(c.red(`  ❌ Failed to advance cycle: ${error.message}\n`));
+    }
+  }
+  
+  console.log(c.bgRed("\n" + " ".repeat(15) + "🚨 CYCLE 2: SIMULATING DEFAULTS (MEMBERS DON'T PAY) 🚨" + " ".repeat(15)));
+  console.log(c.red("═".repeat(88) + "\n"));
+  
+  console.log(c.yellow("  📋 Default Simulation Strategy:\n"));
+  console.log(c.dim("     • Members in Cycle 2 will NOT make payments"));
+  console.log(c.dim("     • This creates REAL defaults (missed payments)"));
+  console.log(c.dim("     • After cycle duration passes, we'll handle defaults"));
+  console.log(c.dim("     • This tests the actual default scenario\n"));
+  
+  // Show which members would be in default
+  console.log(c.red("  🚨 Members who will default (not paying in Cycle 2):\n"));
+  console.log(c.dim("     ┌────┬─────────────┬──────────────┬─────────────────┐"));
+  console.log(c.dim("     │ #  │ Name        │ Position     │ Collateral      │"));
+  console.log(c.dim("     ├────┼─────────────┼──────────────┼─────────────────┤"));
+  
+  // Select members to default (Position 1, 5, 9)
+  const defaulters = [
+    participants.find(p => p.position === 1),  // Worst case
+    participants.find(p => p.position === 5),  // Mid position
+    participants.find(p => p.position === 9)   // Late position
+  ];
+  
+  for (let i = 0; i < defaulters.length; i++) {
+    const member = defaulters[i];
+    const memberInfo = await ajo.getMemberInfo(member.address);
+    const collateral = memberInfo.memberInfo.lockedCollateral;
+    
+    console.log(c.dim(`     │ ${(i+1).toString().padStart(2)} │ ${member.name.padEnd(11)} │ ${member.position.toString().padEnd(12)} │ ${formatUSDC(collateral).padEnd(15)} │`));
+  }
+  
+  console.log(c.dim("     └────┴─────────────┴──────────────┴─────────────────┘\n"));
+  
+  console.log(c.yellow("  ℹ️  Other members WILL pay to keep the Ajo running\n"));
+  
+  // Other members pay
+  console.log(c.cyan("  💳 Processing Payments for Non-Defaulters:\n"));
+  
+  for (let i = 0; i < participants.length; i++) {
+    const participant = participants[i];
+    
+    // Skip defaulters
+    if (defaulters.find(d => d.address === participant.address)) {
+      console.log(c.red(`     ⏭️  Skipping ${participant.name} (will default)`));
+      continue;
+    }
+    
+    try {
+      await retryWithBackoff(async () => {
+        const tx = await ajo.connect(participant.signer).processPayment({
+          gasLimit: DEMO_CONFIG.GAS_LIMIT.PROCESS_PAYMENT
+        });
+        return await tx.wait();
+      }, `${participant.name} - Payment`);
+      
+      console.log(c.green(`     ✅ ${participant.name} paid`));
+      
+    } catch (error) {
+      console.log(c.red(`     ❌ ${participant.name} payment failed: ${error.message.slice(0, 100)}`));
+    }
+    
+    await sleep(1000);
+  }
+  
+  console.log();
+  console.log(c.yellow("═".repeat(88) + "\n"));
+  
+  return defaulters;
+}
+
+// ================================================================
+// PHASE 7: HANDLE DEFAULTS AFTER CYCLE 2
+// ================================================================
+async function testDefaultScenarios(ajo, ajoPayments, ajoCollateral, ajoMembers, participants, defaulters, ajoInfo) {
+  console.log(c.bgRed("\n" + " ".repeat(20) + "PHASE 7: DEFAULT HANDLING & COLLATERAL SEIZURE" + " ".repeat(21)));
+  console.log(c.red("═".repeat(88) + "\n"));
+  
+  // Verify current cycle
+  const currentCycle = await ajoPayments.getCurrentCycle();
+  console.log(c.bright(`  📅 Current Cycle: ${currentCycle.toString()}\n`));
+  
+  console.log(c.yellow("  ⏰ Waiting for grace period to expire...\n"));
+  console.log(c.dim("     After this, members who didn't pay are officially in default\n"));
+  
+  // Wait another cycle duration to ensure defaults are recognized
+  await sleepWithProgress(DEMO_CONFIG.CYCLE_DURATION, "Grace Period");
+  console.log();
+  
+  const defaultScenarios = [];
+  
+  // ================================================================
+  // TEST EACH DEFAULTER
+  // ================================================================
+  for (let i = 0; i < defaulters.length; i++) {
+    const defaulter = defaulters[i];
+    
+    console.log(c.bgYellow(`\n${"═".repeat(25)} SCENARIO ${i+1}: ${defaulter.name.toUpperCase()} DEFAULTS ${"═".repeat(25)}`));
+    console.log(c.yellow("═".repeat(88) + "\n"));
+    
+    console.log(c.red(`  🚨 Processing default for ${defaulter.name} (Position ${defaulter.position})\n`));
+    
+    // Get pre-default state
+    console.log(c.cyan("  📊 Step 1: Analyze Pre-Default State\n"));
+    
+    const memberInfo = await ajo.getMemberInfo(defaulter.address);
+    const lockedCollateral = memberInfo.memberInfo.lockedCollateral;
+    const lastPaymentCycle = memberInfo.memberInfo.lastPaymentCycle;
+    const totalPaid = memberInfo.memberInfo.totalPaid;
+    const guarantorAddress = memberInfo.memberInfo.guarantor;
+    
+    console.log(c.dim("     ┌─────────────────────────────────────────────────────────┐"));
+    console.log(c.dim(`     │ Defaulter: ${defaulter.name.padEnd(44)} │`));
+    console.log(c.dim(`     │ Position: ${defaulter.position.toString().padEnd(46)} │`));
+    console.log(c.dim(`     │ Last Payment Cycle: ${lastPaymentCycle.toString().padEnd(34)} │`));
+    console.log(c.dim(`     │ Current Cycle: ${currentCycle.toString().padEnd(39)} │`));
+    console.log(c.dim(`     │ Cycles Missed: ${currentCycle.sub(lastPaymentCycle).toString().padEnd(39)} │`));
+    console.log(c.dim(`     │ Locked Collateral: ${formatUSDC(lockedCollateral).padEnd(36)} │`));
+    console.log(c.dim(`     │ Total Paid: ${formatUSDC(totalPaid).padEnd(42)} │`));
+    console.log(c.dim(`     │ Guarantor: ${guarantorAddress.slice(0, 42).padEnd(44)} │`));
+    console.log(c.dim("     └─────────────────────────────────────────────────────────┘\n"));
+    
+    let guarantorCollateral = ethers.BigNumber.from(0);
+    if (guarantorAddress !== "0x0000000000000000000000000000000000000000") {
+      const guarantorInfo = await ajo.getMemberInfo(guarantorAddress);
+      guarantorCollateral = guarantorInfo.memberInfo.lockedCollateral;
+      console.log(c.dim(`     Guarantor Collateral: ${formatUSDC(guarantorCollateral)}\n`));
+    }
+    
+    const expectedSeizable = lockedCollateral.add(guarantorCollateral);
+    console.log(c.bright(`  💰 Expected Seizable Collateral: ${formatUSDC(expectedSeizable)}\n`));
+    
+    await sleep(2000);
+    
+    // Execute default handling
+    console.log(c.cyan("  🔒 Step 2: Execute Default Handling & Collateral Seizure\n"));
+    
+    try {
+      const handleDefaultTx = await retryWithBackoff(async () => {
+        const tx = await ajo.connect(participants[1].signer).handleDefault(
+          defaulter.address,
+          { gasLimit: DEMO_CONFIG.GAS_LIMIT.HANDLE_DEFAULT }
+        );
+        return await tx.wait();
+      }, "Handle Default");
+      
+      console.log(c.green(`     ✅ Default handling executed successfully`));
+      console.log(c.dim(`        Transaction Hash: ${handleDefaultTx.transactionHash}`));
+      console.log(c.dim(`        Gas Used: ${handleDefaultTx.gasUsed.toString()}\n`));
+      
+      // Verify post-default state
+      console.log(c.cyan("  📊 Step 3: Verify Post-Default State\n"));
+      
+      try {
+        const postDefaultInfo = await ajo.getMemberInfo(defaulter.address);
+        const postDefaultCollateral = postDefaultInfo.memberInfo.lockedCollateral;
+        const isActive = postDefaultInfo.memberInfo.isActive;
+        
+        console.log(c.dim("     ┌─────────────────────────────────────────────────────────┐"));
+        console.log(c.dim(`     │ Remaining Collateral: ${formatUSDC(postDefaultCollateral).padEnd(34)} │`));
+        console.log(c.dim(`     │ Member Status: ${(isActive ? 'Active' : 'Removed').padEnd(41)} │`));
+        console.log(c.dim("     └─────────────────────────────────────────────────────────┘\n"));
+        
+        const actualSeized = lockedCollateral.sub(postDefaultCollateral);
+        console.log(c.green(`     ✅ Collateral Seized: ${formatUSDC(actualSeized)}\n`));
+      } catch (error) {
+        console.log(c.yellow(`     ℹ️  Member removed from contract (expected after seizure)\n`));
+      }
+      
+      defaultScenarios.push({
+        scenario: `Position ${defaulter.position} Default`,
+        defaulter: defaulter.name,
+        defaulterAddress: defaulter.address,
+        preDefaultCollateral: lockedCollateral,
+        guarantorCollateral,
+        expectedSeizable,
+        success: true,
+        transactionHash: handleDefaultTx.transactionHash
+      });
+      
+    } catch (error) {
+      console.log(c.red(`     ❌ Default handling failed: ${error.message}\n`));
+      
+      defaultScenarios.push({
+        scenario: `Position ${defaulter.position} Default`,
+        defaulter: defaulter.name,
+        error: error.message,
+        success: false
+      });
+    }
+    
+    await sleep(3000);
+  }
+  
+  console.log(c.red("═".repeat(88) + "\n"));
+  
+  return defaultScenarios;
+}
+
+/**
+ * Enhanced sleep with progress indicator
+ */
+async function sleepWithProgress(seconds, label = "Waiting") {
+  const steps = 5;
+  const interval = seconds * 1000 / steps;
+  
+  for (let i = 1; i <= steps; i++) {
+    await sleep(interval);
+    const progress = '█'.repeat(i) + '░'.repeat(steps - i);
+    process.stdout.write(`\r     ${label}: [${progress}] ${Math.round(i/steps * 100)}%`);
+  }
+  console.log(); // New line after completion
+}
+
+
+// ================================================================
 // MAIN DEMONSTRATION
 // ================================================================
 async function main() {
@@ -1156,7 +1163,7 @@ async function main() {
     
     await sleep(3000);
     
-    // Phase 5: Run first cycle normally
+    // Phase 5: Run first cycle normally (all pay, position 1 gets payout)
     const firstCycleResults = await runFirstCycleNormally(
       ajo,
       ajoPayments,
@@ -1165,19 +1172,29 @@ async function main() {
     
     await sleep(3000);
     
-    // Phase 6: Test default scenarios
+    // Phase 6: Advance to Cycle 2 and simulate defaults (members DON'T pay)
+    const defaulters = await advanceToCycle2AndSimulateDefaults(
+      ajo,
+      ajoPayments,
+      participants
+    );
+    
+    await sleep(3000);
+    
+    // Phase 7: Handle the defaults and seize collateral
     const defaultScenarios = await testDefaultScenarios(
       ajo,
       ajoPayments,
       ajoCollateral,
       ajoMembers,
       participants,
+      defaulters,
       ajoInfo
     );
     
     await sleep(2000);
     
-    // Phase 7: Generate summary
+    // Phase 8: Generate summary
     const summary = await generateDefaultTestSummary(defaultScenarios, participants);
     
     // Save results

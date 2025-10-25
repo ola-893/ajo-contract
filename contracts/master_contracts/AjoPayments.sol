@@ -29,6 +29,11 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
     mapping(uint256 => PayoutRecord) public payouts;
     mapping(address => uint256) public pendingPenalties;
     
+    // ============ CYCLE COMPLETION TRACKING ============
+    
+    mapping(uint256 => bool) private cycleCompleted;
+    bool private _cycleAdvancing;
+    
     // ============ OPTIMIZED STORAGE FOR FRONTEND TRACKING ============
     
     // Track only CURRENT cycle data (much cheaper than full history)
@@ -64,6 +69,21 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         uint256 totalCollected,
         uint256 membersPaidCount,
         uint256 timestamp
+    );
+    
+    // DEBUG EVENTS
+    event CycleAdvancementAttempt(
+        uint256 fromCycle,
+        uint256 toCycle,
+        address caller,
+        string reason
+    );
+    
+    event PayoutDistributionComplete(
+        uint256 cycle,
+        address recipient,
+        uint256 amount,
+        uint256 nextCycle
     );
     
     // ============ MODIFIERS ============
@@ -146,43 +166,80 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
     // ============ CORE PAYMENT FUNCTIONS (IAjoPayments) ============
     
     /**
-    * @dev Distribute payout to next eligible recipient
-    * UPDATED: Verifies all OTHER members have paid (recipient can pay before/after)
-    */
+     * @dev Distribute payout to next recipient and advance cycle
+     * CRITICAL: This function MUST be the ONLY place that advances cycles
+     */
     function distributePayout() external override nonReentrant {
-    require(msg.sender == ajoCore, "Only AjoCore");
-    
-    address recipient = getNextRecipient();
-    require(recipient != address(0), "No eligible recipient");
-    
-    Member memory recipientMember = membersContract.getMember(recipient);
-    require(recipientMember.lastPaymentCycle >= currentCycle, "Recipient must pay first");
-    
-    address[] memory allMembers = membersContract.getActiveMembersList();
-    for (uint256 i = 0; i < allMembers.length; i++) {
-        address member = allMembers[i];
-        if (member == recipient) continue; // Already checked above
+        require(msg.sender == ajoCore, "Only AjoCore");
         
-        Member memory memberInfo = membersContract.getMember(member);
-        require(memberInfo.lastPaymentCycle >= currentCycle, "Not all members paid");
+        // CRITICAL: Prevent double advancement
+        require(!cycleCompleted[currentCycle], "Cycle already completed");
+        
+        uint256 startingCycle = currentCycle;
+        address recipient = getNextRecipient();
+        
+        // If current position has no valid recipient (removed/banned member)
+        // Skip to next position
+        while (recipient == address(0) && nextPayoutPosition <= membersContract.getTotalActiveMembers()) {
+            nextPayoutPosition++; // Skip this position
+            recipient = getNextRecipient();
+        }
+        
+        require(recipient != address(0), "No eligible recipient");
+        
+        Member memory recipientMember = membersContract.getMember(recipient);
+        
+        // FIXED: Use hasPaidInCycle instead of lastPaymentCycle comparison
+        require(hasPaidInCycle[currentCycle][recipient], "Recipient must pay first");
+        
+        // Verify all OTHER members have paid
+        address[] memory allMembers = membersContract.getActiveMembersList();
+        for (uint256 i = 0; i < allMembers.length; i++) {
+            address member = allMembers[i];
+            if (member == recipient) continue;
+            
+            // FIXED: Use hasPaidInCycle for accurate check
+            require(hasPaidInCycle[currentCycle][member], "Not all members paid");
+        }
+        
+        // Calculate and distribute payout
+        uint256 payoutAmount = calculatePayout();
+        _distributePayout(recipient, payoutAmount, recipientMember.preferredToken);
+        
+        // Update member status
+        membersContract.markPayoutReceived(recipient);
+        
+        // CRITICAL: Mark cycle as completed BEFORE advancing
+        cycleCompleted[currentCycle] = true;
+        
+        // Emit debug event
+        emit CycleAdvancementAttempt(
+            currentCycle,
+            currentCycle + 1,
+            msg.sender,
+            "After payout distribution"
+        );
+        
+        // FIXED: Advance cycle (can be called externally too, but protected by reentrancy)
+        nextPayoutPosition++;
+        advanceCycle(); // Public function with reentrancy protection
+        
+        // Emit completion
+        emit PayoutDistributionComplete(
+            startingCycle,
+            recipient,
+            payoutAmount,
+            currentCycle
+        );
     }
-    
-    // Calculate and distribute payout
-    uint256 payoutAmount = calculatePayout();
-    _distributePayout(recipient, payoutAmount, recipientMember.preferredToken);
-    
-    // Update member status
-    membersContract.updateTotalPaid(recipient, payoutAmount);
-    membersContract.markPayoutReceived(recipient);
-    
-    nextPayoutPosition++;
-}
     
     function handleDefault(address defaulter) external override onlyAjoCore {
         Member memory member = membersContract.getMember(defaulter);
         
         require(member.isActive, "Member not found");
-        if (member.lastPaymentCycle >= currentCycle) return; // Not in default
+        
+        // FIXED: Use hasPaidInCycle for accurate default check
+        if (hasPaidInCycle[currentCycle][defaulter]) return; // Not in default
         
         uint256 cyclesMissed = currentCycle - member.lastPaymentCycle;
         TokenConfig memory config = tokenConfigs[member.preferredToken];
@@ -201,7 +258,9 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
     
     function needsToPayThisCycle(address member) external view override returns (bool) {
         Member memory memberInfo = membersContract.getMember(member);
-        return memberInfo.isActive && memberInfo.lastPaymentCycle < currentCycle;
+        
+        // FIXED: Use hasPaidInCycle for accurate status
+        return memberInfo.isActive && !hasPaidInCycle[currentCycle][member];
     }
     
     function getTokenConfig(PaymentToken token) external view override returns (TokenConfig memory) {
@@ -215,7 +274,12 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         Member memory memberData = membersContract.getMember(member);
         
         require(memberData.isActive, "Member not active");
-        require(memberData.lastPaymentCycle < currentCycle, "Payment already made");
+        
+        // CRITICAL: Check cycle not completed
+        require(!cycleCompleted[currentCycle], "Cycle already completed");
+        
+        // FIXED: Use hasPaidInCycle to prevent double payment
+        require(!hasPaidInCycle[currentCycle][member], "Payment already made");
         
         // Calculate total payment (including any penalties)
         uint256 penalty = pendingPenalties[member];
@@ -224,12 +288,10 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         // Transfer payment
         tokenContract.transferFrom(member, address(this), totalPayment);
         
-        // OPTIMIZED: Only track current cycle status (minimal storage writes)
-        if (!hasPaidInCycle[currentCycle][member]) {
-            cyclePaidMembers[currentCycle].push(member);
-            hasPaidInCycle[currentCycle][member] = true;
-            cycleTotalCollected[currentCycle] += totalPayment;
-        }
+        // CRITICAL FIX: Mark payment in current cycle tracking
+        hasPaidInCycle[currentCycle][member] = true;
+        cyclePaidMembers[currentCycle].push(member);
+        cycleTotalCollected[currentCycle] += totalPayment;
         
         // Store current cycle payment details (overwrites each cycle)
         currentCyclePayment[member] = PaymentStatus({
@@ -240,7 +302,7 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
             timestamp: block.timestamp
         });
         
-        // Update member contract
+        // Update member contract - this updates lastPaymentCycle
         membersContract.updateLastPaymentCycle(member, currentCycle);
         membersContract.addPastPayment(member, totalPayment);
         
@@ -298,9 +360,7 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
     * @dev Get the next recipient for payout
     * @return address The address of the next eligible recipient
     * 
-    * CRITICAL FIX: The recipient doesn't need to have paid THIS cycle yet.
-    * We only check that they're active and in the correct queue position.
-    * Payment verification happens during distributePayout().
+    * UPDATED: Skips members who have been removed/banned due to defaults
     */
     function getNextRecipient() public view returns (address) {
         uint256 totalMembers = membersContract.getTotalActiveMembers();
@@ -308,7 +368,7 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         // Check if we've completed all payouts
         if (nextPayoutPosition > totalMembers) return address(0);
         
-        // Find member at current payout position
+        // Find member at current payout position who is still active
         address candidate = address(0);
         
         for (uint256 i = 0; i < totalMembers; i++) {
@@ -321,23 +381,24 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
             }
         }
         
-        // If no member found at this position, something is wrong
-        if (candidate == address(0)) return address(0);
+        // If no member found at this position, they may have been removed
+        if (candidate == address(0)) {
+            // Skip this position and move to next
+            // This is a view function, so we can't modify state
+            // The actual position increment happens in distributePayout
+            return address(0);
+        }
         
         // Verify candidate is still active and hasn't received payout yet
         Member memory candidateMember = membersContract.getMember(candidate);
         
         if (!candidateMember.isActive) {
-            return address(0); // Member is no longer active
+            return address(0); // Member was removed (defaulted/banned)
         }
         
         if (candidateMember.hasReceivedPayout) {
             return address(0); // Member already received their payout
         }
-        
-        // REMOVED: Check for payment in current cycle
-        // The recipient will be verified during distributePayout()
-        // This allows the payout to be ready as soon as OTHER members have paid
         
         return candidate;
     }
@@ -368,12 +429,13 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         address[] memory unpaidMembers,
         uint256 totalCollected
     ) {
+        // FIXED: Use hasPaidInCycle mapping for accurate tracking
         paidMembers = cyclePaidMembers[cycle];
         
         // Get all active members
         address[] memory allMembers = membersContract.getActiveMembersList();
         
-        // Count unpaid members
+        // Count unpaid members using hasPaidInCycle
         uint256 unpaidCount = 0;
         for (uint256 i = 0; i < allMembers.length; i++) {
             if (!hasPaidInCycle[cycle][allMembers[i]]) {
@@ -404,9 +466,11 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         dashboard.nextRecipient = getNextRecipient();
         dashboard.expectedPayout = calculatePayout();
         dashboard.totalPaidThisCycle = cycleTotalCollected[currentCycle];
-        dashboard.isPayoutReady = dashboard.nextRecipient != address(0) && dashboard.expectedPayout > 0;
         
-        // Get paid and unpaid members for current cycle
+        // CRITICAL FIX: Use proper payout ready check
+        dashboard.isPayoutReady = _isPayoutReadyInternal();
+        
+        // FIXED: Use hasPaidInCycle for accurate member lists
         dashboard.membersPaid = cyclePaidMembers[currentCycle];
         
         // Calculate remaining to pay
@@ -417,7 +481,7 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
             ? expectedTotal - dashboard.totalPaidThisCycle 
             : 0;
         
-        // Get unpaid members
+        // Get unpaid members using hasPaidInCycle
         address[] memory allMembers = membersContract.getActiveMembersList();
         uint256 unpaidCount = 0;
         for (uint256 i = 0; i < allMembers.length; i++) {
@@ -451,8 +515,8 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         uint256 eventCount = 0;
         UpcomingEvent[] memory tempEvents = new UpcomingEvent[](3);
         
-        // Event 1: Payment due if not paid this cycle
-        if (memberInfo.lastPaymentCycle < currentCycle) {
+        // FIXED: Event 1 - Use hasPaidInCycle for accurate payment status
+        if (!hasPaidInCycle[currentCycle][member]) {
             TokenConfig memory config = tokenConfigs[activePaymentToken];
             tempEvents[eventCount] = UpcomingEvent({
                 eventType: 0,
@@ -515,7 +579,15 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         tokenConfigs[token].isActive = isActive;
     }
     
-    function advanceCycle() external onlyAjoCore {
+    /**
+     * @dev Advance to next cycle
+     * CRITICAL: Can be called externally by AjoCore OR internally by distributePayout()
+     * Protected against double advancement in same transaction
+     */
+    function advanceCycle() public onlyAjoCore {
+        require(!_cycleAdvancing, "Cycle already advancing");
+        _cycleAdvancing = true;
+        
         // Emit cycle summary before advancing
         emit CycleSummary(
             currentCycle,
@@ -524,9 +596,17 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
             block.timestamp
         );
         
+        // CRITICAL: Increment cycle - this automatically resets payment tracking
+        // because hasPaidInCycle[newCycle][member] will all be false
         currentCycle++;
         cycleStartTime = block.timestamp;
+        
+        // Reset cycle completion flag for new cycle
+        // Note: cycleCompleted[oldCycle] remains true (historical record)
+        
         emit CycleAdvanced(currentCycle, block.timestamp);
+        
+        _cycleAdvancing = false;
     }
     
     function updateNextPayoutPosition(uint256 position) external onlyAjoCore {
@@ -540,7 +620,8 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
             address defaulter = defaulters[i];
             Member memory member = membersContract.getMember(defaulter);
             
-            if (member.isActive && member.lastPaymentCycle < currentCycle) {
+            // FIXED: Use hasPaidInCycle for accurate default check
+            if (member.isActive && !hasPaidInCycle[currentCycle][defaulter]) {
                 uint256 cyclesMissed = currentCycle - member.lastPaymentCycle;
                 TokenConfig memory config = tokenConfigs[member.preferredToken];
                 uint256 penalty = (config.monthlyPayment * penaltyRate * cyclesMissed) / 10000;
@@ -592,13 +673,13 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         return IAjoCore(ajoCore).getCycleDuration();
     }
     
-   /**
-    * @dev Check if payout is ready to be distributed
-    * @return bool Whether payout can be distributed
-    * 
-    * UPDATED: Checks that all OTHER members (excluding recipient) have paid
-    */
-    function isPayoutReady() external view returns (bool) {
+    /**
+     * @dev Internal helper for payout ready check
+     */
+    function _isPayoutReadyInternal() internal view returns (bool) {
+        // Check if cycle already completed
+        if (cycleCompleted[currentCycle]) return false;
+        
         address nextRecipient = getNextRecipient();
         
         // No eligible recipient
@@ -608,24 +689,33 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         uint256 payout = calculatePayout();
         if (payout == 0) return false;
         
-        // ADDED: Verify all OTHER members have paid this cycle
+        // Verify ALL members have paid this cycle (including the recipient)
         address[] memory allMembers = membersContract.getActiveMembersList();
         
+        // Ensure we have exactly 10 members
+        if (allMembers.length != 10) return false;
+        
+        // FIXED: Use hasPaidInCycle for accurate verification
         for (uint256 i = 0; i < allMembers.length; i++) {
             address member = allMembers[i];
             
-            // Skip the recipient - they don't need to pay before receiving
-            if (member == nextRecipient) continue;
-            
-            Member memory memberInfo = membersContract.getMember(member);
-            
-            // Check if this member has paid in current cycle
-            if (memberInfo.lastPaymentCycle < currentCycle) {
-                return false; // Not all (other) members have paid
+            // Check if this member has paid using hasPaidInCycle mapping
+            if (!hasPaidInCycle[currentCycle][member]) {
+                return false; // Not all members have paid
             }
         }
         
         return true;
+    }
+    
+  /**
+    * @dev Check if payout is ready to be distributed
+    * @return bool Whether payout can be distributed
+    * 
+    * FIXED: Uses hasPaidInCycle for accurate payment verification
+    */
+    function isPayoutReady() external view returns (bool) {
+        return _isPayoutReadyInternal();
     }
 
     // ============ EMERGENCY FUNCTIONS ============

@@ -216,21 +216,27 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable, LockableContract {
     
     /**
      * @dev Get detailed information for all members - CRITICAL for frontend member tables
+     * FIXED: Uses hasPaidInCycle check via AjoPayments
      * @return Array of MemberDetails structs containing essential member info
      */
     function getAllMembersDetails() external view override returns (MemberDetails[] memory) {
         uint256 memberCount = activeAjoMembersList.length;
         MemberDetails[] memory details = new MemberDetails[](memberCount);
         
+        uint256 currentCycle = _getCurrentCycle();
+        
         for (uint256 i = 0; i < memberCount; i++) {
             address memberAddr = activeAjoMembersList[i];
             Member memory member = members[memberAddr];
+            
+            // FIXED: Use _checkHasPaidInCycle for accurate status
+            bool hasPaid = _checkHasPaidInCycle(memberAddr, currentCycle);
             
             details[i] = MemberDetails({
                 userAddress: memberAddr,
                 hasReceivedPayout: member.hasReceivedPayout,
                 queuePosition: member.queueNumber,
-                hasPaidThisCycle: member.lastPaymentCycle >= _getCurrentCycle(),
+                hasPaidThisCycle: hasPaid,
                 collateralLocked: member.lockedCollateral,
                 guarantorAddress: member.guarantor,
                 guarantorQueuePosition: member.guarantor != address(0) 
@@ -275,15 +281,20 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable, LockableContract {
         uint256 resultCount = end - offset;
         details = new MemberDetails[](resultCount);
         
+        uint256 currentCycle = _getCurrentCycle();
+        
         for (uint256 i = 0; i < resultCount; i++) {
             address memberAddr = activeAjoMembersList[offset + i];
             Member memory member = members[memberAddr];
+            
+            // FIXED: Use _checkHasPaidInCycle for accurate status
+            bool hasPaid = _checkHasPaidInCycle(memberAddr, currentCycle);
             
             details[i] = MemberDetails({
                 userAddress: memberAddr,
                 hasReceivedPayout: member.hasReceivedPayout,
                 queuePosition: member.queueNumber,
-                hasPaidThisCycle: member.lastPaymentCycle >= _getCurrentCycle(),
+                hasPaidThisCycle: hasPaid,
                 collateralLocked: member.lockedCollateral,
                 guarantorAddress: member.guarantor,
                 guarantorQueuePosition: member.guarantor != address(0) 
@@ -377,6 +388,7 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable, LockableContract {
     
     /**
      * @dev Get members who need to make payment this cycle
+     * FIXED: Uses AjoPayments.needsToPayThisCycle for accurate status
      * @return Array of member addresses who haven't paid yet
      */
     function getMembersNeedingPayment() external view override returns (address[] memory) {
@@ -387,7 +399,9 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable, LockableContract {
         for (uint256 i = 0; i < activeAjoMembersList.length; i++) {
             address memberAddr = activeAjoMembersList[i];
             Member memory member = members[memberAddr];
-            if (member.isActive && member.lastPaymentCycle < currentCycle) {
+            
+            // FIXED: Use _checkHasPaidInCycle
+            if (member.isActive && !_checkHasPaidInCycle(memberAddr, currentCycle)) {
                 count++;
             }
         }
@@ -398,7 +412,9 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable, LockableContract {
         for (uint256 i = 0; i < activeAjoMembersList.length; i++) {
             address memberAddr = activeAjoMembersList[i];
             Member memory member = members[memberAddr];
-            if (member.isActive && member.lastPaymentCycle < currentCycle) {
+            
+            // FIXED: Use _checkHasPaidInCycle
+            if (member.isActive && !_checkHasPaidInCycle(memberAddr, currentCycle)) {
                 needingPayment[index] = memberAddr;
                 index++;
             }
@@ -638,6 +654,34 @@ contract AjoMembers is IAjoMembers, Ownable, Initializable, LockableContract {
         } catch {
             return 1;
         }
+    }
+    
+    /**
+     * @dev Internal helper to check if member has paid in a specific cycle
+     * CRITICAL: This calls AjoPayments.needsToPayThisCycle to get accurate status
+     * @param member Address of the member
+     * @param cycle Cycle number to check
+     * @return bool Whether member has paid in the cycle
+     */
+    function _checkHasPaidInCycle(address member, uint256 cycle) internal view returns (bool) {
+        if (ajoPayments == address(0)) {
+            // Fallback to lastPaymentCycle comparison if AjoPayments not set
+            return members[member].lastPaymentCycle >= cycle;
+        }
+        
+        // If checking current cycle, use needsToPayThisCycle
+        uint256 currentCycle = _getCurrentCycle();
+        if (cycle == currentCycle) {
+            try IAjoPayments(ajoPayments).needsToPayThisCycle(member) returns (bool needsToPay) {
+                return !needsToPay; // Invert: if needs to pay = hasn't paid
+            } catch {
+                // Fallback to lastPaymentCycle
+                return members[member].lastPaymentCycle >= cycle;
+            }
+        }
+        
+        // For historical cycles, use lastPaymentCycle
+        return members[member].lastPaymentCycle >= cycle;
     }
     
     // ============ EVENTS ============

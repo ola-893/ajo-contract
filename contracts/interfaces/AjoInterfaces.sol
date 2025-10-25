@@ -552,6 +552,7 @@ interface IAjoCore {
     );
     function getCycleDuration() external view returns (uint256);
     function needsToPayThisCycle(address member) external view returns (bool);
+    function paymentsContractAddress() external view returns (IAjoPayments);
     
     // View Functions - Contract Statistics
     function getContractStats() external view returns (
@@ -772,6 +773,12 @@ interface IAjoCollateral {
     event PaymentSeized(address indexed member, uint256 amount, string reason);
     event GuarantorAssigned(address indexed member, address indexed guarantor, uint256 memberPosition, uint256 guarantorPosition);
     event CollateralCalculated(address indexed member, uint256 requiredAmount, uint256 actualAmount);
+    event CollateralSeized(
+       address indexed defaulter, 
+       address indexed guarantor, 
+       uint256 totalAmount, 
+       PaymentToken token
+   );
 }
 
 

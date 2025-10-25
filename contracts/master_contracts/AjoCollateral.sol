@@ -241,14 +241,15 @@ contract AjoCollateral is IAjoCollateral, Ownable, Initializable, LockableContra
     }
     
     /**
-     * @dev Execute seizure of defaulter and guarantor assets
-     * @param defaulter Address of the defaulting member
-     * 
-     * Seizes:
-     * 1. All locked collateral (both tokens, both parties)
-     * 2. All past payments (recorded but not physically moved)
-     * 3. Emits events for tracking
-     */
+    * @dev Execute seizure of defaulter and guarantor assets
+    * @param defaulter Address of the defaulting member
+    * 
+    * Seizes:
+    * 1. All locked collateral (both tokens, both parties)
+    * 2. Transfers seized collateral to AjoPayments to fund future payouts
+    * 3. All past payments (recorded but not physically moved - just accounting)
+    * 4. Emits events for tracking
+    */
     function executeSeizure(address defaulter) external override onlyAjoCore {
         Member memory defaulterMember = membersContract.getMember(defaulter);
         address guarantorAddr = defaulterMember.guarantor;
@@ -257,21 +258,28 @@ contract AjoCollateral is IAjoCollateral, Ownable, Initializable, LockableContra
         
         Member memory guarantorMember = membersContract.getMember(guarantorAddr);
         
-        // 1. Seize defaulter's collateral
-        uint256 defaulterCollateralUSDC = tokenBalances[PaymentToken.USDC][defaulter];
-        uint256 defaulterCollateralHBAR = tokenBalances[PaymentToken.HBAR][defaulter];
+        // Determine which token is being used (both members use same token)
+        PaymentToken activeToken = defaulterMember.preferredToken;
+        IERC20 tokenContract = activeToken == PaymentToken.USDC ? USDC : HBAR;
         
-        tokenBalances[PaymentToken.USDC][defaulter] = 0;
-        tokenBalances[PaymentToken.HBAR][defaulter] = 0;
+        // 1. Seize defaulter's collateral
+        uint256 defaulterCollateral = tokenBalances[activeToken][defaulter];
+        tokenBalances[activeToken][defaulter] = 0;
         
         // 2. Seize guarantor's collateral  
-        uint256 guarantorCollateralUSDC = tokenBalances[PaymentToken.USDC][guarantorAddr];
-        uint256 guarantorCollateralHBAR = tokenBalances[PaymentToken.HBAR][guarantorAddr];
+        uint256 guarantorCollateral = tokenBalances[activeToken][guarantorAddr];
+        tokenBalances[activeToken][guarantorAddr] = 0;
         
-        tokenBalances[PaymentToken.USDC][guarantorAddr] = 0;
-        tokenBalances[PaymentToken.HBAR][guarantorAddr] = 0;
+        // 3. Calculate total seized collateral
+        uint256 totalSeizedCollateral = defaulterCollateral + guarantorCollateral;
         
-        // 3. Calculate seized payments (for accounting/events)
+        // 4. Transfer seized collateral to AjoPayments contract
+        if (totalSeizedCollateral > 0) {
+            address paymentsContract = address(IAjoCore(ajoCore).paymentsContractAddress());
+            tokenContract.transfer(paymentsContract, totalSeizedCollateral);
+        }
+        
+        // 5. Calculate seized payments (for accounting/events only - no transfer)
         uint256 defaulterPayments = 0;
         uint256 guarantorPayments = 0;
         
@@ -285,25 +293,22 @@ contract AjoCollateral is IAjoCollateral, Ownable, Initializable, LockableContra
             guarantorPayments += guarantorMember.pastPayments[i];
         }
         
-        // Platform keeps seized assets as compensation
-        // Emit liquidation events
-        if (defaulterCollateralUSDC > 0) {
-            emit CollateralLiquidated(defaulter, defaulterCollateralUSDC, PaymentToken.USDC);
+        // 6. Emit liquidation events
+        if (defaulterCollateral > 0) {
+            emit CollateralLiquidated(defaulter, defaulterCollateral, activeToken);
         }
-        if (defaulterCollateralHBAR > 0) {
-            emit CollateralLiquidated(defaulter, defaulterCollateralHBAR, PaymentToken.HBAR);
-        }
-        if (guarantorCollateralUSDC > 0) {
-            emit CollateralLiquidated(guarantorAddr, guarantorCollateralUSDC, PaymentToken.USDC);
-        }
-        if (guarantorCollateralHBAR > 0) {
-            emit CollateralLiquidated(guarantorAddr, guarantorCollateralHBAR, PaymentToken.HBAR);
+        if (guarantorCollateral > 0) {
+            emit CollateralLiquidated(guarantorAddr, guarantorCollateral, activeToken);
         }
         
+        // Emit payment seizure events (accounting only)
         emit PaymentSeized(defaulter, defaulterPayments, "Defaulter past payments seized");
         emit PaymentSeized(guarantorAddr, guarantorPayments, "Guarantor past payments seized");
+        
+        // Optional: Emit total seizure summary event
+        emit CollateralSeized(defaulter, guarantorAddr, totalSeizedCollateral, activeToken);
     }
-    
+
     // ============ VIEW FUNCTIONS ============
     
     /**
