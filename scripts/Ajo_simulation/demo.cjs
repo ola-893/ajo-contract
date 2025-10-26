@@ -800,7 +800,7 @@ async function demonstrateMemberJoining(ajo, ajoCollateral, ajoMembers, particip
 // PHASE 5: FULL 10-CYCLE DEMONSTRATION WITH PAYMENT STATUS
 // ================================================================
 
-async function demonstrateFullCycles(ajo, ajoPayments, participants, cycleDuration) {
+async function demonstrateFullCycles(ajo, ajoMembers, ajoPayments, ajoCollateral, ajoFactory, ajoId,  participants, cycleDuration) {
   console.log(c.bgBlue("\n" + " ".repeat(20) + "PHASE 5: FULL 10-CYCLE PAYMENT & PAYOUT DEMONSTRATION" + " ".repeat(18)));
   console.log(c.blue("═".repeat(88) + "\n"));
   
@@ -962,7 +962,39 @@ async function demonstrateFullCycles(ajo, ajoPayments, participants, cycleDurati
     
     // ============ DISTRIBUTE PAYOUT ============
     console.log(c.cyan(`  💰 Step 2: Distribute Payout to ${recipientName}\n`));
+
+    // DEBUG: Test batch payment status
+console.log(c.yellow("\n🔍 DEBUG: Testing Batch Payment Status...\n"));
+
+try {
+    const activeMembers = await ajoMembers.getActiveMembersList();
+    console.log(c.dim(`   Active members count: ${activeMembers.length}`));
+    console.log(c.dim(`   Sample addresses: ${activeMembers.slice(0, 3).map(a => a.slice(0, 10)).join(', ')}...\n`));
     
+    // Test the batch call directly
+    const debugResult = await ajoPayments.batchCheckPaymentStatus(activeMembers);
+    console.log(c.green(`   ✅ Batch call succeeded!`));
+    console.log(c.dim(`   Current Cycle: ${debugResult.currentCycleValue}`));
+    console.log(c.dim(`   Members Checked: ${debugResult.memberCount}`));
+    console.log(c.dim(`   Statuses: ${debugResult.statuses.map(s => s ? '✓' : '✗').join(', ')}\n`));
+    
+} catch (error) {
+    console.log(c.red(`   ❌ Batch call FAILED!`));
+    console.log(c.red(`   Error: ${error.message}\n`));
+}
+
+
+
+
+     const postStateInspection = await inspectAjoState(
+      ajo,
+      ajoMembers, 
+      ajoPayments, 
+      ajoCollateral, 
+      ajoFactory, 
+      ajoId
+    );
+
     try {
       const isReady = await retryWithBackoff(
         async () => await ajoPayments.isPayoutReady(),
@@ -1025,6 +1057,15 @@ async function demonstrateFullCycles(ajo, ajoPayments, participants, cycleDurati
     }
     
     console.log(c.blue("═".repeat(88) + "\n"));
+
+    const preStateInspection = await inspectAjoState(
+      ajo,
+      ajoMembers, 
+      ajoPayments, 
+      ajoCollateral, 
+      ajoFactory, 
+      ajoId
+    );
   }
   
   // ============ ENHANCED SUMMARY WITH PAYMENT STATUS ============
@@ -1360,7 +1401,11 @@ async function main() {
     // Run full 10 cycles
     const cycleResults = await demonstrateFullCycles(
       ajo,
-      ajoPayments,
+      ajoMembers, 
+      ajoPayments, 
+      ajoCollateral, 
+      ajoFactory, 
+      ajoId,
       participants,
       cycleDuration
     );

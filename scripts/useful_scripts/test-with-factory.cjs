@@ -9,18 +9,17 @@ const c = {
   blue: (text) => `\x1b[34m${text}\x1b[0m`,
   yellow: (text) => `\x1b[33m${text}\x1b[0m`,
   cyan: (text) => `\x1b[36m${text}\x1b[0m`,
-  dim: (text) => `\x1b[2m${text}\x1b[0m`,
-  bright: (text) => `\x1b[1m${text}\x1b[0m`
+  dim: (text) => `\x1b[2m${text}\x1b[0m`
 };
 
 // ================================================================
 // 🔧 CONFIGURATION - DEPLOYED ADDRESSES
 // ================================================================
 
-const FACTORY_ADDRESS = "0xC15F943E88b111569B63686684097f50Ed85AD0D";
+const FACTORY_ADDRESS = "0x7F55125919C0AB25c10e06334499aE4Ce9041aDD";
 const TOKEN_ADDRESSES = {
-  USDC: "0x00000000000000000000000000000000006cBf55",
-  WHBAR: "0x00000000000000000000000000000000006CbF56"
+  USDC: "0x00000000000000000000000000000000006CcB58",
+  WHBAR: "0x00000000000000000000000000000000006CCB59"
 };
  
 // ================================================================
@@ -138,173 +137,6 @@ async function validateAjoHealth(ajoFactory, ajoId, expectedPhase, operationName
   }
 }
 
-// ================================================================
-// NEW: COMPREHENSIVE AJO STATE INSPECTION
-// ================================================================
-async function inspectAjoState(ajo, ajoMembers, ajoPayments, ajoCollateral, ajoFactory, ajoId) {
-  console.log(c.cyan("\n📊 INSPECTING AJO STATE BEFORE OPERATIONS...\n"));
-  
-  try {
-    // 1. Get Contract Stats from AjoMembers
-    console.log(c.bright("  1️⃣ Contract Statistics (from AjoMembers):"));
-    const stats = await ajoMembers.getContractStats();
-    console.log(c.dim(`     Total Members: ${stats.totalMembers}`));
-    console.log(c.dim(`     Active Members: ${stats.activeMembers}`));
-    console.log(c.dim(`     Total Collateral USDC: ${formatUSDC(stats.totalCollateralUSDC)}`));
-    console.log(c.dim(`     Total Collateral HBAR: ${formatHBAR(stats.totalCollateralHBAR)}`));
-    console.log(c.dim(`     Contract Balance USDC: ${formatUSDC(stats.contractBalanceUSDC)}`));
-    console.log(c.dim(`     Contract Balance HBAR: ${formatHBAR(stats.contractBalanceHBAR)}`));
-    console.log(c.dim(`     Current Queue Position: ${stats.currentQueuePosition}`));
-    console.log(c.dim(`     Active Token: ${stats.activeToken === 0 ? 'USDC' : 'HBAR'}\n`));
-    
-    // 2. Get Payment Cycle Information
-    console.log(c.bright("  2️⃣ Payment Cycle Information (from AjoPayments):"));
-    const currentCycle = await ajoPayments.getCurrentCycle();
-    const nextPayoutPosition = await ajoPayments.getNextPayoutPosition();
-    const activeToken = await ajoPayments.getActivePaymentToken();
-    const tokenConfig = await ajoPayments.getTokenConfig(activeToken);
-    const isPayoutReady = await ajoPayments.isPayoutReady();
-    
-    console.log(c.dim(`     Current Cycle: ${currentCycle}`));
-    console.log(c.dim(`     Next Payout Position: ${nextPayoutPosition}`));
-    console.log(c.dim(`     Active Payment Token: ${activeToken === 0 ? 'USDC' : 'HBAR'}`));
-    console.log(c.dim(`     Monthly Payment: ${activeToken === 0 ? formatUSDC(tokenConfig.monthlyPayment) : formatHBAR(tokenConfig.monthlyPayment)}`));
-    console.log(c.dim(`     Token Active: ${tokenConfig.isActive}`));
-    console.log(c.dim(`     Is Payout Ready: ${isPayoutReady}\n`));
-    
-    // 3. Get Next Recipient Info
-    console.log(c.bright("  3️⃣ Next Recipient Information:"));
-    try {
-      const nextRecipient = await ajoPayments.getNextRecipient();
-      console.log(c.dim(`     Next Recipient Address: ${nextRecipient}`));
-      
-      if (nextRecipient !== ethers.constants.AddressZero) {
-        const memberInfo = await ajoMembers.getMemberInfo(nextRecipient);
-        console.log(c.dim(`     Queue Position: ${memberInfo.memberInfo.queueNumber}`));
-        console.log(c.dim(`     Has Received Payout: ${memberInfo.memberInfo.hasReceivedPayout}`));
-        console.log(c.dim(`     Is Active: ${memberInfo.memberInfo.isActive}\n`));
-      }
-    } catch (error) {
-      console.log(c.yellow(`     ⚠️ Could not get next recipient: ${error.message}\n`));
-    }
-    
-    // 4. Get Active Members List with Detailed Information
-    console.log(c.bright("  4️⃣ Active Members Details (getAllMembersDetails):"));
-    try {
-      const allMembersDetails = await ajoMembers.getAllMembersDetails();
-      console.log(c.dim(`     Total Active: ${allMembersDetails.length}`));
-      
-      if (allMembersDetails.length > 0) {
-        console.log(c.dim(`\n     📋 Member Details Table:\n`));
-        console.log(c.bright(`     ${'#'.padEnd(3)} | ${'Address'.padEnd(12)} | ${'Queue'.padEnd(5)} | ${'Paid?'.padEnd(5)} | ${'Collateral'.padEnd(12)} | ${'Payout?'.padEnd(7)} | ${'Defaults'.padEnd(8)} | ${'Rep'.padEnd(4)}`));
-        console.log(c.dim(`     ${'-'.repeat(80)}`));
-        
-        for (let i = 0; i < allMembersDetails.length; i++) {
-          const detail = allMembersDetails[i];
-          const num = (i + 1).toString().padEnd(3);
-          const addr = detail.userAddress.slice(0, 10) + '..';
-          const queue = detail.queuePosition.toString().padEnd(5);
-          const paid = (detail.hasPaidThisCycle ? '✓' : '✗').padEnd(5);
-          const collateral = formatUSDC(detail.collateralLocked).padEnd(12);
-          const payout = (detail.hasReceivedPayout ? '✓' : '✗').padEnd(7);
-          const defaults = detail.defaultCount.toString().padEnd(8);
-          const rep = detail.reputationScore.toString().padEnd(4);
-          
-          const color = detail.hasPaidThisCycle ? c.green : c.yellow;
-          console.log(color(`     ${num} | ${addr} | ${queue} | ${paid} | ${collateral} | ${payout} | ${defaults} | ${rep}`));
-          
-          // Show guarantor if exists
-          if (detail.guarantorAddress !== ethers.constants.AddressZero) {
-            console.log(c.dim(`          └─ Guarantor: ${detail.guarantorAddress.slice(0, 8)}... (Queue: ${detail.guarantorQueuePosition})`));
-          }
-        }
-        console.log();
-        
-        // Summary statistics
-        const paidMembers = allMembersDetails.filter(d => d.hasPaidThisCycle).length;
-        const receivedPayout = allMembersDetails.filter(d => d.hasReceivedPayout).length;
-        const totalCollateral = allMembersDetails.reduce((sum, d) => sum.add(d.collateralLocked), ethers.BigNumber.from(0));
-        const avgReputation = allMembersDetails.reduce((sum, d) => sum + d.reputationScore.toNumber(), 0) / allMembersDetails.length;
-        
-        console.log(c.bright(`     📊 Member Statistics:`));
-        console.log(c.dim(`        Members Paid This Cycle: ${paidMembers}/${allMembersDetails.length}`));
-        console.log(c.dim(`        Members Received Payout: ${receivedPayout}/${allMembersDetails.length}`));
-        console.log(c.dim(`        Total Collateral Locked: ${formatUSDC(totalCollateral)} USDC`));
-        console.log(c.dim(`        Average Reputation: ${avgReputation.toFixed(2)}\n`));
-      }
-    } catch (error) {
-      console.log(c.yellow(`     ⚠️ Could not get detailed members: ${error.message}`));
-      
-      // Fallback to simple list
-      console.log(c.dim(`\n     Falling back to simple member list...\n`));
-      let activeMembersList = [];
-      activeMembersList = await ajoMembers.getActiveMembersList();
-      console.log(c.dim(`     Total Active: ${activeMembersList.length}`));
-      
-      if (activeMembersList.length > 0) {
-        console.log(c.dim(`     Members:`));
-        for (let i = 0; i < Math.min(5, activeMembersList.length); i++) {
-          const addr = activeMembersList[i];
-          const member = await ajoMembers.getMember(addr);
-          console.log(c.dim(`       ${i + 1}. ${addr.slice(0, 8)}... (Queue: ${member.queueNumber}, Paid: ${member.hasReceivedPayout})`));
-        }
-        if (activeMembersList.length > 5) {
-          console.log(c.dim(`       ... and ${activeMembersList.length - 5} more\n`));
-        } else {
-          console.log();
-        }
-      }
-    }
-    
-    // 5. Get Current Cycle Dashboard
-    console.log(c.bright("  5️⃣ Current Cycle Dashboard:"));
-    try {
-      const dashboard = await ajoPayments.getCurrentCycleDashboard();
-      console.log(c.dim(`     Current Cycle: ${dashboard.currentCycle}`));
-      console.log(c.dim(`     Next Payout Position: ${dashboard.nextPayoutPosition}`));
-      console.log(c.dim(`     Next Recipient: ${dashboard.nextRecipient}`));
-      console.log(c.dim(`     Expected Payout: ${formatUSDC(dashboard.expectedPayout)}`));
-      console.log(c.dim(`     Total Paid This Cycle: ${formatUSDC(dashboard.totalPaidThisCycle)}`));
-      console.log(c.dim(`     Remaining To Pay: ${formatUSDC(dashboard.remainingToPay)}`));
-      console.log(c.dim(`     Members Paid Count: ${dashboard.membersPaid.length}`));
-      console.log(c.dim(`     Members Unpaid Count: ${dashboard.membersUnpaid.length}`));
-      console.log(c.dim(`     Is Payout Ready: ${dashboard.isPayoutReady}\n`));
-    } catch (error) {
-      console.log(c.yellow(`     ⚠️ Could not get cycle dashboard: ${error.message}\n`));
-    }
-    
-    // 6. Factory Health Status
-    console.log(c.bright("  6️⃣ Factory Health Status:"));
-    const initStatus = await ajoFactory.getAjoInitializationStatus(ajoId);
-    const operationalStatus = await ajoFactory.getAjoOperationalStatus(ajoId);
-    
-    console.log(c.dim(`     Initialization Phase: ${initStatus.phase}/5`));
-    console.log(c.dim(`     Is Ready: ${initStatus.isReady}`));
-    console.log(c.dim(`     Is Fully Finalized: ${initStatus.isFullyFinalized}`));
-    console.log(c.dim(`     Total Members: ${operationalStatus.totalMembers}`));
-    console.log(c.dim(`     Current Cycle: ${operationalStatus.currentCycle}`));
-    console.log(c.dim(`     Can Accept Members: ${operationalStatus.canAcceptMembers}\n`));
-    
-    console.log(c.green("✅ State inspection complete!\n"));
-    
-    return {
-      stats,
-      currentCycle,
-      nextPayoutPosition,
-      activeToken,
-      tokenConfig,
-      isPayoutReady,
-      activeMembersList,
-      initStatus,
-      operationalStatus
-    };
-    
-  } catch (error) {
-    console.log(c.red(`❌ State inspection failed: ${error.message}\n`));
-    return null;
-  }
-}
-
 async function connectToFactoryAndEnsureHealthyAjo() {
   console.log(c.blue("\n🏭 Connecting to Factory & Ensuring Healthy Ajo..."));
   
@@ -367,7 +199,7 @@ async function connectToFactoryAndEnsureHealthyAjo() {
         if (status.isReady) {
           console.log(c.green(`  ✅ Found healthy Ajo ID: ${id}`));
           ajoId = id;
-          ajoInfo = await ajoFactory.getAjo(2); // Fixed: Use id instead of hardcoded 4
+          ajoInfo = await ajoFactory.getAjo(3);
           console.log(c.dim(`     Phase ${status.phase}, Ready: ${status.isReady}`));
           break;
         } else {
@@ -385,7 +217,7 @@ async function connectToFactoryAndEnsureHealthyAjo() {
     
     // Phase 1: Create
     const ajoName = `Health Test ${Date.now()}`;
-    const useHtsTokens = true;
+    const useHtsTokens = true; // CHANGED: Use HTS tokens
     const useScheduledPayments = false;
     
     const creationTx = await ajoFactory.connect(deployer).createAjo(
@@ -412,6 +244,7 @@ async function connectToFactoryAndEnsureHealthyAjo() {
     });
     const phase2Receipt = await phase2Tx.wait();
     
+    // Get HCS topic ID from event
     const phase2Event = phase2Receipt.events?.find(e => e.event === 'AjoInitializedPhase2');
     if (phase2Event) {
       console.log(c.dim(`       HCS Topic: ${phase2Event.args.hcsTopicId}`));
@@ -456,7 +289,7 @@ async function connectToFactoryAndEnsureHealthyAjo() {
       console.log(c.yellow(`    ⚠️ Phase 5 optional finalization failed: ${error.message}`));
     }
     
-    ajoInfo = await ajoFactory.getAjo(2);
+    ajoInfo = await ajoFactory.getAjo(ajoId);
   }
   
   // Final validation
@@ -492,7 +325,7 @@ async function setupParticipants(ajo, usdc, ajoCollateral, ajoPayments, ajoFacto
   console.log(c.blue("\n👥 Setting up participants..."));
   
   const participants = [];
-  const participantNames = ["Emeka", "Funke", "Gbenga", "Halima", "Ifeanyi", "Jide"];
+  const participantNames = ["Emeka", "Funke", "Gbenga", "Halima", "Ifeanyi", "Jide", "Kemi", "Lekan", "Mojisola", "Nkechi", "Ola", "Peter", "Queen"];
   
   const actualCount = Math.min(DEMO_CONFIG.TOTAL_PARTICIPANTS, signers.length - 1);
   
@@ -501,7 +334,7 @@ async function setupParticipants(ajo, usdc, ajoCollateral, ajoPayments, ajoFacto
   for (let i = 0; i < actualCount; i++) {
     const participant = {
       signer: signers[i + 1],
-      name: participantNames[i] || `Participant-${i + 1}`,
+      name: participantNames[i],
       address: signers[i + 1].address,
       position: i + 1
     };
@@ -733,23 +566,20 @@ async function demonstratePaymentCycle(ajo, ajoFactory, ajoId, participants, ajo
   const successfulPayments = paymentResults.filter(r => r.success).length;
   console.log(c.green(`  ✅ Cycle complete: ${successfulPayments}/${participants.length} payments`));
   
-  // ============ GET CYCLE PAYMENT STATUS (FIXED) ============
-  console.log(c.cyan(`\n  📊 Phase 2: Verify Cycle Payment Status\n`));
+  // ============ NEW: GET CYCLE PAYMENT STATUS ============
+  console.log(c.cyan(`\n  📊 Step 1.5: Verify Cycle Payment Status\n`));
   
   const cycleData = { paymentResults };
   
   try {
-    const currentCycle = await ajoPayments.getCurrentCycle();
+    const currentCycle = 1;
     
     const paymentStatus = await retryWithBackoff(
       async () => await ajoPayments.getCyclePaymentStatus(currentCycle),
       "Get Cycle Payment Status"
     );
     
-    // Destructure the returned tuple
-    const paidMembers = paymentStatus[0];
-    const unpaidMembers = paymentStatus[1];
-    const totalCollected = paymentStatus[2];
+    const [paidMembers, unpaidMembers, totalCollected] = paymentStatus;
     
     console.log(c.bright(`     Payment Status for Cycle ${currentCycle}:\n`));
     console.log(c.dim(`     Total Collected: ${formatUSDC(totalCollected)}`));
@@ -818,8 +648,8 @@ async function showFinalSummary(ajoFactory, ajoId, participants, joinResults, cy
     console.log(c.dim(`  Total Members: ${operationalStatus.totalMembers}`));
     console.log(c.dim(`  Current Cycle: ${operationalStatus.currentCycle}`));
     console.log(c.dim(`  Can Accept Members: ${operationalStatus.canAcceptMembers}`));
-    console.log(c.dim(`  Has Active Governance: ${operationalStatus.hasActiveGovernance || 'N/A'}`));
-    console.log(c.dim(`  Has Active Scheduling: ${operationalStatus.hasActiveScheduling || 'N/A'}`));
+    console.log(c.dim(`  Has Active Governance: ${operationalStatus.hasActiveGovernance}`));
+    console.log(c.dim(`  Has Active Scheduling: ${operationalStatus.hasActiveScheduling}`));
     
     const successfulJoins = joinResults.filter(r => r.success).length;
     const successfulPayments = cycleResults ? cycleResults.filter(r => r.success).length : 0;
@@ -835,6 +665,10 @@ async function showFinalSummary(ajoFactory, ajoId, participants, joinResults, cy
   }
 }
 
+
+
+
+
 async function main() {
   console.log(c.cyan("🌟 5-Phase Factory: HTS Core Functions Test 🌟\n"));
   console.log(c.yellow("  Using deployed HTS tokens with auto-association\n"));
@@ -845,36 +679,24 @@ async function main() {
       ajoFactory, ajoId, ajoInfo, deployer, signers
     } = await connectToFactoryAndEnsureHealthyAjo();
     
-    // ============ NEW: INSPECT AJO STATE BEFORE OPERATIONS ============
-    const ajoState = await inspectAjoState(ajo, ajoMembers, ajoPayments, ajoCollateral, ajoFactory, ajoId);
-    
-    // if (!ajoState) {
-    //   throw new Error("Failed to inspect Ajo state");
-    // }
-    
-    // ============ SETUP PARTICIPANTS ============
     const participants = await setupParticipants(ajo, usdc, ajoCollateral, ajoPayments, ajoFactory, deployer, signers);
     
     if (participants.length === 0) {
       throw new Error("No participants successfully set up");
     }
     
-    // ============ DEMONSTRATE JOINING (OPTIONAL - COMMENTED OUT FOR NOW) ============
-    // Uncomment the line below to enable joining
-    // const joinResults = await demonstrateJoining(ajo, ajoFactory, ajoId, participants);
-    const joinResults = []; // Empty array since joining is skipped
+    const joinResults = await demonstrateJoining(ajo, ajoFactory, ajoId, participants);
     
-    // ============ DEMONSTRATE PAYMENT CYCLE ============
-    const cycleResults = await demonstratePaymentCycle(ajo, ajoFactory, ajoId, participants, ajoPayments);
-    
-    // ============ FINAL SUMMARY ============
     const successfulJoins = joinResults.filter(r => r.success);
-    if (successfulJoins.length > 0 || cycleResults.length > 0) {
+    if (successfulJoins.length > 0) {
+      const cycleResults = await demonstratePaymentCycle(ajo, ajoFactory, ajoId, participants.slice(0, successfulJoins.length));
       await showFinalSummary(ajoFactory, ajoId, participants, joinResults, cycleResults);
     } else {
-      console.log(c.yellow("⚠️ No successful operations - showing summary anyway"));
-      await showFinalSummary(ajoFactory, ajoId, participants, joinResults, cycleResults);
+      console.log(c.yellow("⚠️ No successful joins - skipping payment cycle"));
+      await showFinalSummary(ajoFactory, ajoId, participants, joinResults, null);
     }
+    
+    console.log(c.green("\n🎉 Testing completed!"));
     
     console.log(c.green("\n🎉 Testing completed!"));
     
@@ -883,8 +705,7 @@ async function main() {
       tokenAddresses: TOKEN_ADDRESSES,
       ajoId,
       healthStatus: "validated",
-      successfulParticipants: successfulJoins.length,
-      ajoState
+      successfulParticipants: successfulJoins.length
     };
     
   } catch (error) {

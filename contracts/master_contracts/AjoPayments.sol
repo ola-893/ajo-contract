@@ -256,11 +256,19 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
     
     // ============ VIEW FUNCTIONS (IAjoPayments) ============
     
+    /**
+     * @dev Check if member needs to pay this cycle
+     * FIXED: Directly check hasPaidInCycle mapping for accuracy
+     */
     function needsToPayThisCycle(address member) external view override returns (bool) {
         Member memory memberInfo = membersContract.getMember(member);
         
-        // FIXED: Use hasPaidInCycle for accurate status
-        return memberInfo.isActive && !hasPaidInCycle[currentCycle][member];
+        if (!memberInfo.isActive) {
+            return false;
+        }
+        
+        // FIXED: Direct check of hasPaidInCycle - most reliable
+        return !hasPaidInCycle[currentCycle][member];
     }
     
     function getTokenConfig(PaymentToken token) external view override returns (TokenConfig memory) {
@@ -269,6 +277,11 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
     
     // ============ PAYMENT PROCESSING FUNCTIONS (GAS OPTIMIZED) ============
     
+    /**
+     * @dev Process payment from member
+     * CRITICAL FIX: State updates happen AFTER successful token transfer
+     * This ensures failed transactions don't mark members as paid
+     */
     function processPayment(address member, uint256 amount, PaymentToken token) external onlyAjoCore nonReentrant {
         IERC20 tokenContract = token == PaymentToken.USDC ? USDC : HBAR;
         Member memory memberData = membersContract.getMember(member);
@@ -285,10 +298,14 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         uint256 penalty = pendingPenalties[member];
         uint256 totalPayment = amount + penalty;
 
-        // Transfer payment
-        tokenContract.transferFrom(member, address(this), totalPayment);
+        // ============ CRITICAL FIX: TRANSFER FIRST, THEN UPDATE STATE ============
+        // This ensures that if the transfer fails, no state is changed
+        bool transferSuccess = tokenContract.transferFrom(member, address(this), totalPayment);
+        require(transferSuccess, "Token transfer failed");
         
-        // CRITICAL FIX: Mark payment in current cycle tracking
+        // ============ ONLY AFTER SUCCESSFUL TRANSFER: UPDATE STATE ============
+        
+        // Mark payment in current cycle tracking
         hasPaidInCycle[currentCycle][member] = true;
         cyclePaidMembers[currentCycle].push(member);
         cycleTotalCollected[currentCycle] += totalPayment;
@@ -419,6 +436,7 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
     
     /**
      * @dev Get payment status for a specific cycle
+     * FIXED: Directly uses hasPaidInCycle mapping for accurate results
      * @param cycle Cycle number to query
      * @return paidMembers Array of members who paid
      * @return unpaidMembers Array of members who didn't pay
@@ -429,7 +447,7 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         address[] memory unpaidMembers,
         uint256 totalCollected
     ) {
-        // FIXED: Use hasPaidInCycle mapping for accurate tracking
+        // Return paid members from storage
         paidMembers = cyclePaidMembers[cycle];
         
         // Get all active members
@@ -458,6 +476,7 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
     
     /**
      * @dev Get comprehensive dashboard data for current cycle (SINGLE CALL OPTIMIZATION)
+     * FIXED: Uses accurate payment status checks
      * @return dashboard Complete cycle dashboard information
      */
     function getCurrentCycleDashboard() external view override returns (CycleDashboard memory dashboard) {
@@ -470,7 +489,7 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         // CRITICAL FIX: Use proper payout ready check
         dashboard.isPayoutReady = _isPayoutReadyInternal();
         
-        // FIXED: Use hasPaidInCycle for accurate member lists
+        // Use cyclePaidMembers directly - it's accurate
         dashboard.membersPaid = cyclePaidMembers[currentCycle];
         
         // Calculate remaining to pay
@@ -502,6 +521,7 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
     
     /**
      * @dev Get upcoming events for a member (payments due, payouts, etc.)
+     * FIXED: Uses hasPaidInCycle for accurate payment status
      * @param member Address of the member
      * @return events Array of upcoming events
      */
@@ -515,12 +535,12 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         uint256 eventCount = 0;
         UpcomingEvent[] memory tempEvents = new UpcomingEvent[](3);
         
-        // FIXED: Event 1 - Use hasPaidInCycle for accurate payment status
+        // Event 1 - Payment due (if not paid yet)
         if (!hasPaidInCycle[currentCycle][member]) {
             TokenConfig memory config = tokenConfigs[activePaymentToken];
             tempEvents[eventCount] = UpcomingEvent({
                 eventType: 0,
-                timestamp: cycleStartTime + duration, // Use dynamic duration
+                timestamp: cycleStartTime + duration,
                 affectedMember: member,
                 amount: config.monthlyPayment + pendingPenalties[member]
             });
@@ -541,7 +561,7 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         // Event 3: Cycle end
         tempEvents[eventCount] = UpcomingEvent({
             eventType: 2,
-            timestamp: cycleStartTime + duration, // Use dynamic duration
+            timestamp: cycleStartTime + duration,
             affectedMember: address(0),
             amount: 0
         });
@@ -674,7 +694,18 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
     }
     
     /**
+     * @dev NEW GETTER: Check if a member has paid in the current cycle
+     * This exposes the same hasPaidInCycle mapping used by getCurrentCycleDashboard
+     * @param member Address of the member to check
+     * @return bool True if member has paid in current cycle
+     */
+    function hasMemberPaidInCycle(address member) external override view returns (bool) {
+        return hasPaidInCycle[currentCycle][member];
+    }
+    
+    /**
      * @dev Internal helper for payout ready check
+     * FIXED: Simplified logic, removed member count check
      */
     function _isPayoutReadyInternal() internal view returns (bool) {
         // Check if cycle already completed
@@ -689,13 +720,9 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         uint256 payout = calculatePayout();
         if (payout == 0) return false;
         
-        // Verify ALL members have paid this cycle (including the recipient)
+        // FIXED: Verify ALL members have paid this cycle using hasPaidInCycle
         address[] memory allMembers = membersContract.getActiveMembersList();
         
-        // Ensure we have exactly 10 members
-        if (allMembers.length != 10) return false;
-        
-        // FIXED: Use hasPaidInCycle for accurate verification
         for (uint256 i = 0; i < allMembers.length; i++) {
             address member = allMembers[i];
             
@@ -716,6 +743,41 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
     */
     function isPayoutReady() external view returns (bool) {
         return _isPayoutReadyInternal();
+    }
+
+    /**
+    * @dev Get payment status for multiple members in current cycle (BATCH OPTIMIZATION)
+    * @param members Array of member addresses to check
+    * @return statuses Array of booleans indicating payment status
+    */
+    function batchCheckPaymentStatus(address[] calldata members) 
+        external 
+        view 
+        returns (bool[] memory statuses) 
+    {
+        statuses = new bool[](members.length);
+        
+        for (uint256 i = 0; i < members.length; i++) {
+            statuses[i] = hasPaidInCycle[currentCycle][members[i]];
+        }
+    }
+
+    /**
+    * @dev Get payment status for ALL active members (SINGLE CALL)
+    * @return members Array of member addresses
+    * @return statuses Array of payment statuses
+    */
+    function getAllMembersPaymentStatus() 
+        external 
+        view 
+        returns (address[] memory members, bool[] memory statuses) 
+    {
+        members = membersContract.getActiveMembersList();
+        statuses = new bool[](members.length);
+        
+        for (uint256 i = 0; i < members.length; i++) {
+            statuses[i] = hasPaidInCycle[currentCycle][members[i]];
+        }
     }
 
     // ============ EMERGENCY FUNCTIONS ============

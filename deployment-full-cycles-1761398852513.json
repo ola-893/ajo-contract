@@ -1,0 +1,1362 @@
+{
+  "network": "unknown",
+  "chainId": 296,
+  "deployedAt": "2025-10-25T13:27:32.511Z",
+  "htsOnly": true,
+  "contracts": {
+    "AjoFactory": "0x2185aa4E0C71E1D6be01F1B29671a26A01DA0961",
+    "USDC_HTS": "0x00000000000000000000000000000000006Cc799",
+    "WHBAR_HTS": "0x00000000000000000000000000000000006cC79a"
+  },
+  "masterCopies": {
+    "AjoCore": "0x264dE8412d2A6AfC7eCd44bAA6bbce4d3a0E1a11",
+    "AjoMembers": "0xEe66071e9C60d3CE3629c86eda462AB66FA21d42",
+    "AjoCollateral": "0x8d2968060B227c849A3acf616b77e7E74fD0B60b",
+    "AjoPayments": "0xa0aeDADfaC5782Aa136eb6CF7553574Dfa050604",
+    "AjoGovernance": "0x864752fcb131Bc30c6393c2271f7283505D45C27",
+    "AjoSchedule": "0x85c2e205CFD7Fa7Bf82BEBF3352abBc2b09ecd3E"
+  },
+  "testAjo": {
+    "id": 1,
+    "name": "Hedera Hackathon 2025 - 10 Cycle Demo",
+    "core": "0x45f7cF5d6286B58F43458dFea9993C19Ab18ab50",
+    "cycleDuration": 30,
+    "monthlyPaymentUSDC": "5.0",
+    "monthlyPaymentHBAR": "10.0",
+    "hcsTopicId": "0.0.7128997",
+    "hcsTopicIdBytes32": "0x00000000000000000000000000000000000000000000000000000000006cc7a5",
+    "hcsTopicSimulated": false
+  },
+  "participants": [
+    {
+      "name": "Adunni",
+      "address": "0x2A675b180b91cF37E7439e8df7D896e0f648A87a",
+      "position": 1
+    },
+    {
+      "name": "Babatunde",
+      "address": "0xD6BFf29dc91208cbd21253567923604f48054370",
+      "position": 2
+    },
+    {
+      "name": "Chinwe",
+      "address": "0x50Ac7731e6bf5631BA31F993D744ED5992C9D325",
+      "position": 3
+    },
+    {
+      "name": "Damilola",
+      "address": "0x922464Fc39f2E0F85A2EF03FA64DBDBC649351f7",
+      "position": 4
+    },
+    {
+      "name": "Emeka",
+      "address": "0x49196d181ba31388Fb74d9C95be17C22fFe57122",
+      "position": 5
+    },
+    {
+      "name": "Funmilayo",
+      "address": "0xA2cfDbcE8b15eeb51f874D0F3a1bC5C95778606B",
+      "position": 6
+    },
+    {
+      "name": "Gbenga",
+      "address": "0x33e2C844EA1C094dA3F9BC36956ac053675A4E94",
+      "position": 7
+    },
+    {
+      "name": "Halima",
+      "address": "0x169EBda2b992e5Afe9Ca221c8Cf912fFa24b5Db9",
+      "position": 8
+    },
+    {
+      "name": "Ifeanyi",
+      "address": "0x40a10D328Ae3a307a8830C4b3455e8bE521A675f",
+      "position": 9
+    },
+    {
+      "name": "Joke",
+      "address": "0xA9E5BBe7743f51E1980ED73f92B1d742305f92e1",
+      "position": 10
+    }
+  ],
+  "statistics": {
+    "totalParticipants": 10,
+    "successfulJoins": 10,
+    "totalCycles": 10,
+    "totalPayments": 99,
+    "totalPayouts": 10
+  },
+  "stateInspections": {
+    "preState": {
+      "stats": [
+        {
+          "type": "BigNumber",
+          "hex": "0x0a"
+        },
+        {
+          "type": "BigNumber",
+          "hex": "0x0a"
+        },
+        {
+          "type": "BigNumber",
+          "hex": "0x080befc0"
+        },
+        {
+          "type": "BigNumber",
+          "hex": "0x00"
+        },
+        {
+          "type": "BigNumber",
+          "hex": "0x00"
+        },
+        {
+          "type": "BigNumber",
+          "hex": "0x00"
+        },
+        {
+          "type": "BigNumber",
+          "hex": "0x0a"
+        },
+        0
+      ],
+      "currentCycle": {
+        "type": "BigNumber",
+        "hex": "0x01"
+      },
+      "nextPayoutPosition": {
+        "type": "BigNumber",
+        "hex": "0x01"
+      },
+      "activeToken": 0,
+      "tokenConfig": [
+        {
+          "type": "BigNumber",
+          "hex": "0x4c4b40"
+        },
+        true
+      ],
+      "isPayoutReady": false,
+      "activeMembersList": [
+        "0x2A675b180b91cF37E7439e8df7D896e0f648A87a",
+        "0xD6BFf29dc91208cbd21253567923604f48054370",
+        "0x50Ac7731e6bf5631BA31F993D744ED5992C9D325",
+        "0x922464Fc39f2E0F85A2EF03FA64DBDBC649351f7",
+        "0x49196d181ba31388Fb74d9C95be17C22fFe57122",
+        "0xA2cfDbcE8b15eeb51f874D0F3a1bC5C95778606B",
+        "0x33e2C844EA1C094dA3F9BC36956ac053675A4E94",
+        "0x169EBda2b992e5Afe9Ca221c8Cf912fFa24b5Db9",
+        "0x40a10D328Ae3a307a8830C4b3455e8bE521A675f",
+        "0xA9E5BBe7743f51E1980ED73f92B1d742305f92e1"
+      ],
+      "initStatus": [
+        5,
+        true,
+        true
+      ],
+      "operationalStatus": [
+        {
+          "type": "BigNumber",
+          "hex": "0x0a"
+        },
+        {
+          "type": "BigNumber",
+          "hex": "0x0a"
+        },
+        {
+          "type": "BigNumber",
+          "hex": "0x080befc0"
+        },
+        {
+          "type": "BigNumber",
+          "hex": "0x00"
+        },
+        {
+          "type": "BigNumber",
+          "hex": "0x00"
+        },
+        {
+          "type": "BigNumber",
+          "hex": "0x00"
+        },
+        {
+          "type": "BigNumber",
+          "hex": "0x01"
+        },
+        0,
+        true,
+        true,
+        false
+      ]
+    },
+    "postState": {
+      "stats": [
+        {
+          "type": "BigNumber",
+          "hex": "0x0a"
+        },
+        {
+          "type": "BigNumber",
+          "hex": "0x0a"
+        },
+        {
+          "type": "BigNumber",
+          "hex": "0x080befc0"
+        },
+        {
+          "type": "BigNumber",
+          "hex": "0x00"
+        },
+        {
+          "type": "BigNumber",
+          "hex": "0x00"
+        },
+        {
+          "type": "BigNumber",
+          "hex": "0x00"
+        },
+        {
+          "type": "BigNumber",
+          "hex": "0x0a"
+        },
+        0
+      ],
+      "currentCycle": {
+        "type": "BigNumber",
+        "hex": "0x0b"
+      },
+      "nextPayoutPosition": {
+        "type": "BigNumber",
+        "hex": "0x0b"
+      },
+      "activeToken": 0,
+      "tokenConfig": [
+        {
+          "type": "BigNumber",
+          "hex": "0x4c4b40"
+        },
+        true
+      ],
+      "isPayoutReady": false,
+      "activeMembersList": [
+        "0x2A675b180b91cF37E7439e8df7D896e0f648A87a",
+        "0xD6BFf29dc91208cbd21253567923604f48054370",
+        "0x50Ac7731e6bf5631BA31F993D744ED5992C9D325",
+        "0x922464Fc39f2E0F85A2EF03FA64DBDBC649351f7",
+        "0x49196d181ba31388Fb74d9C95be17C22fFe57122",
+        "0xA2cfDbcE8b15eeb51f874D0F3a1bC5C95778606B",
+        "0x33e2C844EA1C094dA3F9BC36956ac053675A4E94",
+        "0x169EBda2b992e5Afe9Ca221c8Cf912fFa24b5Db9",
+        "0x40a10D328Ae3a307a8830C4b3455e8bE521A675f",
+        "0xA9E5BBe7743f51E1980ED73f92B1d742305f92e1"
+      ],
+      "initStatus": [
+        5,
+        true,
+        true
+      ],
+      "operationalStatus": [
+        {
+          "type": "BigNumber",
+          "hex": "0x0a"
+        },
+        {
+          "type": "BigNumber",
+          "hex": "0x0a"
+        },
+        {
+          "type": "BigNumber",
+          "hex": "0x080befc0"
+        },
+        {
+          "type": "BigNumber",
+          "hex": "0x00"
+        },
+        {
+          "type": "BigNumber",
+          "hex": "0x00"
+        },
+        {
+          "type": "BigNumber",
+          "hex": "0x00"
+        },
+        {
+          "type": "BigNumber",
+          "hex": "0x0b"
+        },
+        0,
+        true,
+        true,
+        false
+      ]
+    }
+  },
+  "cycleResults": [
+    {
+      "cycle": 1,
+      "payments": [
+        {
+          "member": "Adunni",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Babatunde",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Chinwe",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Damilola",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Emeka",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Funmilayo",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Gbenga",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Halima",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Ifeanyi",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Joke",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        }
+      ],
+      "payout": {
+        "recipient": "Adunni",
+        "recipientAddress": "0x2A675b180b91cF37E7439e8df7D896e0f648A87a",
+        "amount": {
+          "type": "BigNumber",
+          "hex": "0x02faf080"
+        },
+        "success": true,
+        "gasUsed": {
+          "type": "BigNumber",
+          "hex": "0x06a4a7"
+        }
+      },
+      "startTime": 1761396450837,
+      "paymentStatus": {
+        "paidCount": 10,
+        "unpaidCount": 0,
+        "totalCollected": "50000000",
+        "allPaid": true
+      },
+      "endTime": 1761396593012,
+      "duration": 142.175
+    },
+    {
+      "cycle": 2,
+      "payments": [
+        {
+          "member": "Adunni",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Babatunde",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Chinwe",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Damilola",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Emeka",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Funmilayo",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Gbenga",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Halima",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Ifeanyi",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Joke",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        }
+      ],
+      "payout": {
+        "recipient": "Babatunde",
+        "recipientAddress": "0xD6BFf29dc91208cbd21253567923604f48054370",
+        "amount": {
+          "type": "BigNumber",
+          "hex": "0x02faf080"
+        },
+        "success": true,
+        "gasUsed": {
+          "type": "BigNumber",
+          "hex": "0x07472a"
+        }
+      },
+      "startTime": 1761396634629,
+      "paymentStatus": {
+        "paidCount": 10,
+        "unpaidCount": 0,
+        "totalCollected": "50000000",
+        "allPaid": true
+      },
+      "endTime": 1761396782150,
+      "duration": 147.521
+    },
+    {
+      "cycle": 3,
+      "payments": [
+        {
+          "member": "Adunni",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Babatunde",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Chinwe",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Damilola",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Emeka",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Funmilayo",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Gbenga",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Halima",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Ifeanyi",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Joke",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        }
+      ],
+      "payout": {
+        "recipient": "Chinwe",
+        "recipientAddress": "0x50Ac7731e6bf5631BA31F993D744ED5992C9D325",
+        "amount": {
+          "type": "BigNumber",
+          "hex": "0x02faf080"
+        },
+        "success": true,
+        "gasUsed": {
+          "type": "BigNumber",
+          "hex": "0x07fe03"
+        }
+      },
+      "startTime": 1761396824886,
+      "paymentStatus": {
+        "paidCount": 10,
+        "unpaidCount": 0,
+        "totalCollected": "50000000",
+        "allPaid": true
+      },
+      "endTime": 1761396971329,
+      "duration": 146.443
+    },
+    {
+      "cycle": 4,
+      "payments": [
+        {
+          "member": "Adunni",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Babatunde",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Chinwe",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Damilola",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Emeka",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Funmilayo",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Gbenga",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Halima",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Ifeanyi",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Joke",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        }
+      ],
+      "payout": {
+        "recipient": "Damilola",
+        "recipientAddress": "0x922464Fc39f2E0F85A2EF03FA64DBDBC649351f7",
+        "amount": {
+          "type": "BigNumber",
+          "hex": "0x02faf080"
+        },
+        "success": true,
+        "gasUsed": {
+          "type": "BigNumber",
+          "hex": "0x08c93b"
+        }
+      },
+      "startTime": 1761397013096,
+      "paymentStatus": {
+        "paidCount": 10,
+        "unpaidCount": 0,
+        "totalCollected": "50000000",
+        "allPaid": true
+      },
+      "endTime": 1761397151263,
+      "duration": 138.167
+    },
+    {
+      "cycle": 5,
+      "payments": [
+        {
+          "member": "Adunni",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Babatunde",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Chinwe",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Damilola",
+          "error": "transaction failed [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (transactionHash=\"0x06d97c90c06150bbcea8b06216e207e7edd5f37c705d0244f0541552818a976e\", transaction={\"hash\":\"0x06d97c90c06150bbcea8b06216e207e7edd5f37c705d0244f0541552818a976e\",\"type\":0,\"accessList\":null,\"blockHash\":\"0x2649de2009599263c880640db1a4ff5c40e7291e392d47d08b38c24e8bd82bcc\",\"blockNumber\":26675495,\"transactionIndex\":21,\"confirmations\":2,\"from\":\"0x922464Fc39f2E0F85A2EF03FA64DBDBC649351f7\",\"gasPrice\":{\"type\":\"BigNumber\",\"hex\":\"0x7b66763400\"},\"gasLimit\":{\"type\":\"BigNumber\",\"hex\":\"0xe4e1c0\"},\"to\":\"0x45f7cF5d6286B58F43458dFea9993C19Ab18ab50\",\"value\":{\"type\":\"BigNumber\",\"hex\":\"0x00\"},\"nonce\":121,\"data\":\"0x22081c12\",\"r\":\"0xe781ce43af6dab5d0319647281dc19b5eeb829aba08bbf75a8bd7d3dc4505583\",\"s\":\"0x758184d3e0561647ad14d8990a2fa58becafff4be2934b80516576890a138c30\",\"v\":628,\"creates\":null,\"chainId\":296}, receipt={\"to\":\"0x45f7cF5d6286B58F43458dFea9993C19Ab18ab50\",\"from\":\"0x922464Fc39f2E0F85A2EF03FA64DBDBC649351f7\",\"contractAddress\":\"0x45f7cF5d6286B58F43458dFea9993C19Ab18ab50\",\"transactionIndex\":21,\"root\":\"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421\",\"gasUsed\":{\"type\":\"BigNumber\",\"hex\":\"0x0169b5\"},\"logsBloom\":\"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000\",\"blockHash\":\"0x2649de2009599263c880640db1a4ff5c40e7291e392d47d08b38c24e8bd82bcc\",\"transactionHash\":\"0x06d97c90c06150bbcea8b06216e207e7edd5f37c705d0244f0541552818a976e\",\"logs\":[],\"blockNumber\":26675495,\"confirmations\":2,\"cumulativeGasUsed\":{\"type\":\"BigNumber\",\"hex\":\"0x0169b5\"},\"effectiveGasPrice\":{\"type\":\"BigNumber\",\"hex\":\"0x746a528800\"},\"status\":0,\"type\":0,\"byzantium\":true}, code=CALL_EXCEPTION, version=providers/5.8.0)",
+          "success": false
+        },
+        {
+          "member": "Emeka",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Funmilayo",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Gbenga",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Halima",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Ifeanyi",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Joke",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        }
+      ],
+      "payout": {
+        "recipient": "Emeka",
+        "recipientAddress": "0x49196d181ba31388Fb74d9C95be17C22fFe57122",
+        "amount": {
+          "type": "BigNumber",
+          "hex": "0x02faf080"
+        },
+        "success": true,
+        "gasUsed": {
+          "type": "BigNumber",
+          "hex": "0x09a8c8"
+        }
+      },
+      "startTime": 1761397193060,
+      "paymentStatus": {
+        "paidCount": 10,
+        "unpaidCount": 0,
+        "totalCollected": "50000000",
+        "allPaid": true
+      },
+      "endTime": 1761397364603,
+      "duration": 171.543
+    },
+    {
+      "cycle": 6,
+      "payments": [
+        {
+          "member": "Adunni",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Babatunde",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Chinwe",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Damilola",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Emeka",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Funmilayo",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Gbenga",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Halima",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Ifeanyi",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Joke",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        }
+      ],
+      "payout": {
+        "recipient": "Funmilayo",
+        "recipientAddress": "0xA2cfDbcE8b15eeb51f874D0F3a1bC5C95778606B",
+        "amount": {
+          "type": "BigNumber",
+          "hex": "0x02faf080"
+        },
+        "success": true,
+        "gasUsed": {
+          "type": "BigNumber",
+          "hex": "0x0a9cbc"
+        }
+      },
+      "startTime": 1761397405376,
+      "paymentStatus": {
+        "paidCount": 10,
+        "unpaidCount": 0,
+        "totalCollected": "50000000",
+        "allPaid": true
+      },
+      "endTime": 1761397541056,
+      "duration": 135.68
+    },
+    {
+      "cycle": 7,
+      "payments": [
+        {
+          "member": "Adunni",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Babatunde",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Chinwe",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Damilola",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Emeka",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Funmilayo",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Gbenga",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Halima",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Ifeanyi",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Joke",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        }
+      ],
+      "payout": {
+        "recipient": "Gbenga",
+        "recipientAddress": "0x33e2C844EA1C094dA3F9BC36956ac053675A4E94",
+        "amount": {
+          "type": "BigNumber",
+          "hex": "0x02faf080"
+        },
+        "success": true,
+        "gasUsed": {
+          "type": "BigNumber",
+          "hex": "0x0ba511"
+        }
+      },
+      "startTime": 1761397585721,
+      "paymentStatus": {
+        "paidCount": 10,
+        "unpaidCount": 0,
+        "totalCollected": "50000000",
+        "allPaid": true
+      },
+      "endTime": 1761398284708,
+      "duration": 698.987
+    },
+    {
+      "cycle": 8,
+      "payments": [
+        {
+          "member": "Adunni",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Babatunde",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Chinwe",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Damilola",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Emeka",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Funmilayo",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Gbenga",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Halima",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Ifeanyi",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Joke",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        }
+      ],
+      "payout": {
+        "recipient": "Halima",
+        "recipientAddress": "0x169EBda2b992e5Afe9Ca221c8Cf912fFa24b5Db9",
+        "amount": {
+          "type": "BigNumber",
+          "hex": "0x02faf080"
+        },
+        "success": true,
+        "gasUsed": {
+          "type": "BigNumber",
+          "hex": "0x0cc1cc"
+        }
+      },
+      "startTime": 1761398325800,
+      "paymentStatus": {
+        "paidCount": 10,
+        "unpaidCount": 0,
+        "totalCollected": "50000000",
+        "allPaid": true
+      },
+      "endTime": 1761398467783,
+      "duration": 141.983
+    },
+    {
+      "cycle": 9,
+      "payments": [
+        {
+          "member": "Adunni",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Babatunde",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Chinwe",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Damilola",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Emeka",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Funmilayo",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Gbenga",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Halima",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Ifeanyi",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Joke",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        }
+      ],
+      "payout": {
+        "recipient": "Ifeanyi",
+        "recipientAddress": "0x40a10D328Ae3a307a8830C4b3455e8bE521A675f",
+        "amount": {
+          "type": "BigNumber",
+          "hex": "0x02faf080"
+        },
+        "success": true,
+        "gasUsed": {
+          "type": "BigNumber",
+          "hex": "0x0df2e3"
+        }
+      },
+      "startTime": 1761398509220,
+      "paymentStatus": {
+        "paidCount": 10,
+        "unpaidCount": 0,
+        "totalCollected": "50000000",
+        "allPaid": true
+      },
+      "endTime": 1761398650127,
+      "duration": 140.907
+    },
+    {
+      "cycle": 10,
+      "payments": [
+        {
+          "member": "Adunni",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Babatunde",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Chinwe",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Damilola",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Emeka",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Funmilayo",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Gbenga",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Halima",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Ifeanyi",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        },
+        {
+          "member": "Joke",
+          "amount": {
+            "type": "BigNumber",
+            "hex": "0x4c4b40"
+          },
+          "success": true
+        }
+      ],
+      "payout": {
+        "recipient": "Joke",
+        "recipientAddress": "0xA9E5BBe7743f51E1980ED73f92B1d742305f92e1",
+        "amount": {
+          "type": "BigNumber",
+          "hex": "0x02faf080"
+        },
+        "success": true,
+        "gasUsed": {
+          "type": "BigNumber",
+          "hex": "0x0f3871"
+        }
+      },
+      "startTime": 1761398691152,
+      "paymentStatus": {
+        "paidCount": 10,
+        "unpaidCount": 0,
+        "totalCollected": "50000000",
+        "allPaid": true
+      },
+      "endTime": 1761398828661,
+      "duration": 137.509
+    }
+  ]
+}

@@ -823,6 +823,17 @@ interface IAjoPayments {
     function getPayout(uint256 cycle) external view returns (PayoutRecord memory);
     function calculatePayout() external view returns (uint256);
     function getNextRecipient() external view returns (address);
+    function hasMemberPaidInCycle(address member) external view returns (bool);
+    function batchCheckPaymentStatus(address[] calldata members) 
+        external 
+        view 
+        returns (bool[] memory statuses);
+        
+    
+    function getAllMembersPaymentStatus() 
+        external 
+        view 
+        returns (address[] memory members, bool[] memory statuses);
     
     // ============ NEW FRONTEND VIEW FUNCTIONS ============
     
