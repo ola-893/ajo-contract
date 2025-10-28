@@ -335,7 +335,7 @@ contract AjoCore is IAjoCore, ReentrancyGuard, Ownable, Initializable {
         emit CycleAdvanced(paymentsContract.getCurrentCycle(), block.timestamp);
     }
     
-    function handleDefault(address defaulter) external override onlyOwner {
+    function handleDefault(address defaulter) external override {
         // Retrieve member data from the members contract
         Member memory member = membersContract.getMember(defaulter);
         

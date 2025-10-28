@@ -513,7 +513,7 @@ async function setupHtsParticipants(ajoFactory, ajoId) {
       
     } catch (error) {
       const status = c.red("❌ Failed");
-      console.log(c.dim(`  │ ${(i+1).toString().padStart(2)} │ ${participant.name.padEnd(11)} │ ${participant.address.slice(0,10)}... │ ${'N/A'.padEnd(11)} │ ${status.padEnd(19)} │`));
+      console.log(c.dim(`  │ ${(i+1).toString()} │ ${participant.name} │ ${participant.address.slice(0,10)}... │ ${'N/A'} │ ${status} │`));
       console.log(c.red(`     Error: ${error.message.slice(0, 100)}`));
     }
     

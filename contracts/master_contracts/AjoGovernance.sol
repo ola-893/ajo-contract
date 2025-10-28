@@ -12,8 +12,8 @@ import "../hedera/HederaResponseCodes.sol";
 
 /**
  * @title AjoGovernance
- * @notice Governance using HCS for vote submission with full cycle management
- * @dev Includes cycle completion, restart, member participation, and onboarding governance
+ * @notice Governance using HCS for vote submission with full season management
+ * @dev Includes season completion, restart, member participation, and onboarding governance
  * 
  * Architecture:
  * 1. Member creates proposal on-chain
@@ -23,11 +23,15 @@ import "../hedera/HederaResponseCodes.sol";
  * 5. Contract verifies signatures and counts votes
  * 6. After voting period, proposal can be executed
  * 
- * NEW: Full cycle management for ROSCA continuity
- * - Cycle completion governance
+ * TERMINOLOGY:
+ * - Season: Full period where all members receive payout once (e.g., 10 cycles)
+ * - Cycle: Individual monthly payment slot within a season
+ * 
+ * NEW: Full season management for ROSCA continuity
+ * - Season completion governance
  * - Member participation opt-in/opt-out
  * - New member onboarding
- * - Cycle restart with new parameters
+ * - Season restart with new parameters
  */
 contract AjoGovernance is 
     Initializable, 
@@ -56,20 +60,20 @@ contract AjoGovernance is
     uint256 public quorumPercentage;
     uint256 public penaltyRate;
     
-    // ============ CYCLE MANAGEMENT STATE ============
+    // ============ SEASON MANAGEMENT STATE ============
     
-    uint256 public currentCycle;
-    mapping(uint256 => mapping(address => bool)) public cycleParticipation;
-    mapping(uint256 => bool) public cycleCompleted;
-    mapping(uint256 => uint256) public cycleEndTime;
+    uint256 public currentSeason;
+    mapping(uint256 => mapping(address => bool)) public seasonParticipation;
+    mapping(uint256 => bool) public seasonCompleted;
+    mapping(uint256 => uint256) public seasonEndTime;
     
-    // Member intentions for next cycle
-    mapping(address => bool) public willParticipateInNextCycle;
+    // Member intentions for next season
+    mapping(address => bool) public willParticipateInNextSeason;
     uint256 public participationDeclarationDeadline;
     
     // Carry-over rules
-    bool public carryReputationToNextCycle;
-    bool public carryPenaltiesToNextCycle;
+    bool public carryReputationToNextSeason;
+    bool public carryPenaltiesToNextSeason;
     
     // New member proposals
     mapping(address => uint256) public pendingNewMembers; // address => proposalId
@@ -101,12 +105,12 @@ contract AjoGovernance is
         FreezeAccount,
         UnfreezeAccount,
         Custom,
-        CompleteCurrentCycle,      // ✅ NEW
-        RestartNewCycle,           // ✅ NEW
-        AddNewMember,              // ✅ NEW
-        UpdateCycleParameters,     // ✅ NEW
-        SetParticipationDeadline,  // ✅ NEW
-        SetCarryOverRules          // ✅ NEW
+        CompleteCurrentSeason,      // ✅ Complete current season
+        RestartNewSeason,           // ✅ Restart new season
+        AddNewMember,               // ✅ Add new member for next season
+        UpdateSeasonParameters,     // ✅ Update season parameters
+        SetParticipationDeadline,   // ✅ Set participation deadline
+        SetCarryOverRules           // ✅ Set carry-over rules
     }
     
     // Vote tracking
@@ -163,17 +167,17 @@ contract AjoGovernance is
         ajoSchedule = _ajoSchedule;
         hcsTopicId = _hcsTopicId;
         proposalCount = 0;
-        currentCycle = 1;
+        currentSeason = 1;
         
         // Set default governance parameters
-        votingPeriod = 7 days;
+        votingPeriod = 1 minutes;
         proposalThreshold = 1;
         quorumPercentage = 51;
         penaltyRate = 5;
         
         // Set default carry-over rules
-        carryReputationToNextCycle = true;
-        carryPenaltiesToNextCycle = false;
+        carryReputationToNextSeason = true;
+        carryPenaltiesToNextSeason = false;
     }
     
     function setMembersContract(address _membersContract) external onlyOwner {
@@ -217,13 +221,13 @@ contract AjoGovernance is
         return responseCode == HederaResponseCodes.SUCCESS;
     }
     
-    // ============ CYCLE MANAGEMENT - PARTICIPATION ============
+    // ============ SEASON MANAGEMENT - PARTICIPATION ============
     
     /**
-     * @notice Member declares intent to participate in next cycle
+     * @notice Member declares intent to participate in next season
      * @param participate true to continue, false to opt out
      */
-    function declareNextCycleParticipation(bool participate) 
+    function declareNextSeasonParticipation(bool participate) 
         external 
         onlyMember 
         whenNotPaused
@@ -231,9 +235,9 @@ contract AjoGovernance is
         require(participationDeclarationDeadline > 0, "No declaration period active");
         require(block.timestamp <= participationDeclarationDeadline, "Declaration period ended");
         
-        willParticipateInNextCycle[msg.sender] = participate;
+        willParticipateInNextSeason[msg.sender] = participate;
         
-        emit ParticipationDeclared(msg.sender, participate, currentCycle + 1);
+        emit ParticipationDeclared(msg.sender, participate, currentSeason + 1);
     }
     
     /**
@@ -244,15 +248,15 @@ contract AjoGovernance is
         view 
         returns (bool willParticipate) 
     {
-        return willParticipateInNextCycle[member];
+        return willParticipateInNextSeason[member];
     }
     
     /**
-     * @notice Get cycle status
+     * @notice Get season status
      */
-    function getCycleStatus() external view returns (
-        uint256 _currentCycle,
-        bool _isCycleCompleted,
+    function getSeasonStatus() external view returns (
+        uint256 _currentSeason,
+        bool _isSeasonCompleted,
         uint256 _participationDeadline,
         uint256 _declaredParticipants
     ) {
@@ -261,33 +265,33 @@ contract AjoGovernance is
         
         for (uint256 i = 0; i < totalMembers; i++) {
             address member = _getMemberAtIndex(i);
-            if (willParticipateInNextCycle[member]) {
+            if (willParticipateInNextSeason[member]) {
                 participantCount++;
             }
         }
         
         return (
-            currentCycle,
-            cycleCompleted[currentCycle],
+            currentSeason,
+            seasonCompleted[currentSeason],
             participationDeclarationDeadline,
             participantCount
         );
     }
     
-    // ============ CYCLE MANAGEMENT - PROPOSALS ============
+    // ============ SEASON MANAGEMENT - PROPOSALS ============
     
     /**
-     * @notice Create proposal to complete current cycle
+     * @notice Create proposal to complete current season
      */
-    function proposeCycleCompletion(string memory description) 
+    function proposeSeasonCompletion(string memory description) 
         external 
         onlyMember 
         whenNotPaused
         returns (uint256 proposalId) 
     {
-        require(!cycleCompleted[currentCycle], "Cycle already completed");
+        require(!seasonCompleted[currentSeason], "Season already completed");
         
-        bytes memory proposalData = abi.encode(currentCycle);
+        bytes memory proposalData = abi.encode(currentSeason);
         
         proposalCount++;
         proposalId = proposalCount;
@@ -299,22 +303,22 @@ contract AjoGovernance is
         proposal.proposalData = proposalData;
         proposal.startTime = block.timestamp;
         proposal.endTime = block.timestamp + votingPeriod;
-        proposal.proposalType = ProposalType.CompleteCurrentCycle;
+        proposal.proposalType = ProposalType.CompleteCurrentSeason;
         
         emit ProposalCreated(proposalId, msg.sender, description, block.timestamp, proposal.endTime);
         return proposalId;
     }
     
     /**
-     * @notice Create proposal to restart with new parameters
+     * @notice Create proposal to restart with new season parameters
      */
-    function proposeNewCycleRestart(
+    function proposeNewSeasonRestart(
         string memory description,
         uint256 newDuration,
         uint256 newMonthlyContribution,
         address[] memory newMembers
     ) external onlyMember whenNotPaused returns (uint256 proposalId) {
-        require(cycleCompleted[currentCycle], "Current cycle not completed");
+        require(seasonCompleted[currentSeason], "Current season not completed");
         require(newDuration > 0, "Invalid duration");
         require(newMonthlyContribution > 0, "Invalid contribution");
         
@@ -334,14 +338,14 @@ contract AjoGovernance is
         proposal.proposalData = proposalData;
         proposal.startTime = block.timestamp;
         proposal.endTime = block.timestamp + votingPeriod;
-        proposal.proposalType = ProposalType.RestartNewCycle;
+        proposal.proposalType = ProposalType.RestartNewSeason;
         
         emit ProposalCreated(proposalId, msg.sender, description, block.timestamp, proposal.endTime);
         return proposalId;
     }
     
     /**
-     * @notice Propose adding a new member for next cycle
+     * @notice Propose adding a new member for next season
      */
     function proposeNewMember(
         address newMember,
@@ -374,9 +378,9 @@ contract AjoGovernance is
     }
     
     /**
-     * @notice Propose updating cycle parameters
+     * @notice Propose updating season parameters
      */
-    function proposeUpdateCycleParameters(
+    function proposeUpdateSeasonParameters(
         string memory description,
         uint256 newDuration,
         uint256 newMonthlyPayment
@@ -396,7 +400,7 @@ contract AjoGovernance is
         proposal.proposalData = proposalData;
         proposal.startTime = block.timestamp;
         proposal.endTime = block.timestamp + votingPeriod;
-        proposal.proposalType = ProposalType.UpdateCycleParameters;
+        proposal.proposalType = ProposalType.UpdateSeasonParameters;
         
         emit ProposalCreated(proposalId, msg.sender, description, block.timestamp, proposal.endTime);
         return proposalId;
@@ -662,37 +666,37 @@ contract AjoGovernance is
         uint256 proposalId,
         Proposal storage proposal
     ) internal returns (bool, bytes memory) {
-        // ✅ NEW: Cycle Management Execution
-        if (proposal.proposalType == ProposalType.CompleteCurrentCycle) {
-            return _executeCycleCompletion(proposalId);
+        // ✅ Season Management Execution
+        if (proposal.proposalType == ProposalType.CompleteCurrentSeason) {
+            return _executeSeasonCompletion(proposalId);
         }
         
-        if (proposal.proposalType == ProposalType.RestartNewCycle) {
-            return _executeCycleRestart(proposalId, proposal);
+        if (proposal.proposalType == ProposalType.RestartNewSeason) {
+            return _executeSeasonRestart(proposalId, proposal);
         }
         
         if (proposal.proposalType == ProposalType.AddNewMember) {
             address newMember = abi.decode(proposal.proposalData, (address));
             delete pendingNewMembers[newMember];
             return ajoCore.call(
-                abi.encodeWithSignature("addMemberForNextCycle(address)", newMember)
+                abi.encodeWithSignature("addMemberForNextSeason(address)", newMember)
             );
         }
         
-        if (proposal.proposalType == ProposalType.UpdateCycleParameters) {
+        if (proposal.proposalType == ProposalType.UpdateSeasonParameters) {
             (uint256 newDuration, uint256 newMonthlyPayment) = 
                 abi.decode(proposal.proposalData, (uint256, uint256));
-            emit CycleParametersUpdated(newDuration, newMonthlyPayment);
+            emit SeasonParametersUpdated(newDuration, newMonthlyPayment);
             return ajoCore.call(
-                abi.encodeWithSignature("updateCycleParameters(uint256,uint256)", newDuration, newMonthlyPayment)
+                abi.encodeWithSignature("updateSeasonParameters(uint256,uint256)", newDuration, newMonthlyPayment)
             );
         }
         
         if (proposal.proposalType == ProposalType.SetCarryOverRules) {
             (bool _carryReputation, bool _carryPenalties) = 
                 abi.decode(proposal.proposalData, (bool, bool));
-            carryReputationToNextCycle = _carryReputation;
-            carryPenaltiesToNextCycle = _carryPenalties;
+            carryReputationToNextSeason = _carryReputation;
+            carryPenaltiesToNextSeason = _carryPenalties;
             emit CarryOverRulesUpdated(_carryReputation, _carryPenalties);
             return (true, "");
         }
@@ -729,22 +733,22 @@ contract AjoGovernance is
         return (false, "Unknown proposal type");
     }
     
-    // ============ CYCLE EXECUTION LOGIC ============
+    // ============ SEASON EXECUTION LOGIC ============
     
-    function _executeCycleCompletion(uint256 /* proposalId */) internal returns (bool, bytes memory) {
-        cycleCompleted[currentCycle] = true;
-        cycleEndTime[currentCycle] = block.timestamp;
+    function _executeSeasonCompletion(uint256 /* proposalId */) internal returns (bool, bytes memory) {
+        seasonCompleted[currentSeason] = true;
+        seasonEndTime[currentSeason] = block.timestamp;
         
-        // Set declaration period for next cycle (7 days)
+        // Set declaration period for next season (7 days)
         participationDeclarationDeadline = block.timestamp + 7 days;
         
-        emit CycleCompleted(currentCycle, block.timestamp);
-        emit ParticipationDeadlineSet(participationDeclarationDeadline, currentCycle + 1);
+        emit SeasonCompleted(currentSeason, block.timestamp);
+        emit ParticipationDeadlineSet(participationDeclarationDeadline, currentSeason + 1);
         
         return (true, "");
     }
     
-    function _executeCycleRestart(uint256 /* proposalId */, Proposal storage proposal) 
+    function _executeSeasonRestart(uint256 /* proposalId */, Proposal storage proposal) 
         internal 
         returns (bool, bytes memory) 
     {
@@ -768,7 +772,7 @@ contract AjoGovernance is
         // Call AjoCore to restart with new parameters
         (bool success, ) = ajoCore.call(
             abi.encodeWithSignature(
-                "restartCycle(uint256,uint256,address[])",
+                "restartSeason(uint256,uint256,address[])",
                 newDuration,
                 newMonthlyContribution,
                 allMembers
@@ -776,15 +780,15 @@ contract AjoGovernance is
         );
         
         if (success) {
-            currentCycle++;
+            currentSeason++;
             participationDeclarationDeadline = 0; // Reset declaration period
             
             // Reset participation flags for all members
             for (uint256 i = 0; i < allMembers.length; i++) {
-                willParticipateInNextCycle[allMembers[i]] = false;
+                willParticipateInNextSeason[allMembers[i]] = false;
             }
             
-            emit NewCycleStarted(currentCycle, newDuration, newMonthlyContribution, allMembers);
+            emit NewSeasonStarted(currentSeason, newDuration, newMonthlyContribution, allMembers);
         }
         
         return (success, "");
@@ -797,7 +801,7 @@ contract AjoGovernance is
         // First pass: count continuing members
         for (uint256 i = 0; i < totalMembers; i++) {
             address member = _getMemberAtIndex(i);
-            if (willParticipateInNextCycle[member]) {
+            if (willParticipateInNextSeason[member]) {
                 continuingCount++;
             }
         }
@@ -808,7 +812,7 @@ contract AjoGovernance is
         
         for (uint256 i = 0; i < totalMembers; i++) {
             address member = _getMemberAtIndex(i);
-            if (willParticipateInNextCycle[member]) {
+            if (willParticipateInNextSeason[member]) {
                 continuingMembers[index] = member;
                 index++;
             }
@@ -943,10 +947,10 @@ contract AjoGovernance is
         return proposalIds;
     }
     
-    // ✅ NEW: Cycle Management View Functions
+    // ✅ NEW: Season Management View Functions
     
     function getCarryOverRules() external view returns (bool _carryReputation, bool _carryPenalties) {
-        return (carryReputationToNextCycle, carryPenaltiesToNextCycle);
+        return (carryReputationToNextSeason, carryPenaltiesToNextSeason);
     }
     
     function getContinuingMembersCount() external view returns (uint256) {
@@ -955,7 +959,7 @@ contract AjoGovernance is
         
         for (uint256 i = 0; i < totalMembers; i++) {
             address member = _getMemberAtIndex(i);
-            if (willParticipateInNextCycle[member]) {
+            if (willParticipateInNextSeason[member]) {
                 count++;
             }
         }
@@ -974,7 +978,7 @@ contract AjoGovernance is
         // Count opt-out members
         for (uint256 i = 0; i < totalMembers; i++) {
             address member = _getMemberAtIndex(i);
-            if (!willParticipateInNextCycle[member] && participationDeclarationDeadline > 0) {
+            if (!willParticipateInNextSeason[member] && participationDeclarationDeadline > 0) {
                 optOutCount++;
             }
         }
@@ -985,7 +989,7 @@ contract AjoGovernance is
         
         for (uint256 i = 0; i < totalMembers; i++) {
             address member = _getMemberAtIndex(i);
-            if (!willParticipateInNextCycle[member] && participationDeclarationDeadline > 0) {
+            if (!willParticipateInNextSeason[member] && participationDeclarationDeadline > 0) {
                 optOutMembers[index] = member;
                 index++;
             }

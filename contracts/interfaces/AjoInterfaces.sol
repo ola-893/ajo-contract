@@ -594,7 +594,19 @@ interface IAjoCore {
     ) external;
 }
 
-// ============ AJO GOVERNANCE INTERFACE (WITH CYCLE MANAGEMENT) ============
+
+// ============================================================================
+// AJO.SAVE GOVERNANCE INTERFACE (SEASON TERMINOLOGY)
+// ============================================================================
+
+/**
+ * TERMINOLOGY CLARIFICATION:
+ * - Season: The full period where all members receive payout once (e.g., 10 cycles)
+ * - Cycle: Individual monthly payment slot within a season
+ * 
+ * Example: If there are 10 members, a season consists of 10 cycles.
+ * After all 10 cycles complete, the season is done and a new season can start.
+ */
 
 interface IAjoGovernance {
     // Initialization
@@ -629,9 +641,9 @@ interface IAjoGovernance {
         uint256 votesNeeded
     );
     
-    // ============ CYCLE MANAGEMENT PROPOSALS ============
-    function proposeCycleCompletion(string memory description) external returns (uint256 proposalId);
-    function proposeNewCycleRestart(
+    // ============ SEASON MANAGEMENT PROPOSALS ============
+    function proposeSeasonCompletion(string memory description) external returns (uint256 proposalId);
+    function proposeNewSeasonRestart(
         string memory description,
         uint256 newDuration,
         uint256 newMonthlyContribution,
@@ -641,7 +653,7 @@ interface IAjoGovernance {
         address newMember,
         string memory description
     ) external returns (uint256 proposalId);
-    function proposeUpdateCycleParameters(
+    function proposeUpdateSeasonParameters(
         string memory description,
         uint256 newDuration,
         uint256 newMonthlyPayment
@@ -653,7 +665,7 @@ interface IAjoGovernance {
     ) external returns (uint256 proposalId);
     
     // ============ MEMBER PARTICIPATION ============
-    function declareNextCycleParticipation(bool participate) external;
+    function declareNextSeasonParticipation(bool participate) external;
     function getMemberParticipationStatus(address member) external view returns (bool willParticipate);
     
     // ============ VOTING FUNCTIONS ============
@@ -690,10 +702,10 @@ interface IAjoGovernance {
     );
     function getActiveProposals() external view returns (uint256[] memory proposalIds);
     
-    // ============ QUERY FUNCTIONS - CYCLE MANAGEMENT ============
-    function getCycleStatus() external view returns (
-        uint256 _currentCycle,
-        bool _isCycleCompleted,
+    // ============ QUERY FUNCTIONS - SEASON MANAGEMENT ============
+    function getSeasonStatus() external view returns (
+        uint256 _currentSeason,
+        bool _isSeasonCompleted,
         uint256 _participationDeadline,
         uint256 _declaredParticipants
     );
@@ -718,14 +730,14 @@ interface IAjoGovernance {
     event TokenPaused(address indexed token, int64 responseCode);
     event TokenUnpaused(address indexed token, int64 responseCode);
     
-    // ============ EVENTS - CYCLE MANAGEMENT ============
-    event ParticipationDeclared(address indexed member, bool willParticipate, uint256 indexed nextCycle);
-    event CycleCompleted(uint256 indexed cycle, uint256 timestamp);
-    event NewCycleStarted(uint256 indexed cycle, uint256 duration, uint256 monthlyContribution, address[] members);
-    event ParticipationDeadlineSet(uint256 deadline, uint256 cycle);
+    // ============ EVENTS - SEASON MANAGEMENT ============
+    event ParticipationDeclared(address indexed member, bool willParticipate, uint256 indexed nextSeason);
+    event SeasonCompleted(uint256 indexed season, uint256 timestamp);
+    event NewSeasonStarted(uint256 indexed season, uint256 duration, uint256 monthlyContribution, address[] members);
+    event ParticipationDeadlineSet(uint256 deadline, uint256 season);
     event CarryOverRulesUpdated(bool carryReputation, bool carryPenalties);
     event NewMemberProposed(address indexed newMember, uint256 indexed proposalId, address indexed proposer);
-    event CycleParametersUpdated(uint256 newDuration, uint256 newMonthlyPayment);
+    event SeasonParametersUpdated(uint256 newDuration, uint256 newMonthlyPayment);
 }
 
 // ============ COLLATERAL INTERFACE ============

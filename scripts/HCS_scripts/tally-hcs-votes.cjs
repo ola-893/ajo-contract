@@ -302,7 +302,7 @@ async function submitVoteToHCS(hederaClient, topicIdBytes32, voteData) {
 }
 
 // ================================================================
-// TEST 1: PROPOSAL CREATION
+// TEST 1: PROPOSAL CREATION (UPDATED FOR SEASONS)
 // ================================================================
 
 async function testProposalCreation(ajoGovernance, members, ajoInfo) {
@@ -317,13 +317,13 @@ async function testProposalCreation(ajoGovernance, members, ajoInfo) {
 
   const proposals = [];
 
-  // Proposal 1
-  console.log(c.dim("     → Creating Proposal #1: Complete Current Cycle"));
+  // Proposal 1 - Season Completion
+  console.log(c.dim("     → Creating Proposal #1: Complete Current Season"));
 
   try {
     const tx1 = await ajoGovernance
       .connect(members[0].signer)
-      .proposeCycleCompletion("Complete Cycle 1 and prepare for next cycle", {
+      .proposeSeasonCompletion("Complete Season 1 and prepare for next season", {
         gasLimit: 500000,
       });
     const receipt1 = await tx1.wait();
@@ -345,9 +345,9 @@ async function testProposalCreation(ajoGovernance, members, ajoInfo) {
 
     proposals.push({
       id: parseInt(proposalId1),
-      description: "Complete Current Cycle",
+      description: "Complete Current Season",
       proposer: members[0].name,
-      type: "CompleteCurrentCycle",
+      type: "CompleteCurrentSeason",
     });
   } catch (error) {
     console.log(c.red(`        ❌ Failed: ${error.message.slice(0, 100)}\n`));
@@ -355,7 +355,7 @@ async function testProposalCreation(ajoGovernance, members, ajoInfo) {
 
   await sleep(1000);
 
-  // Proposal 2
+  // Proposal 2 - Add New Member
   console.log(c.dim("     → Creating Proposal #2: Add New Member"));
 
   try {
@@ -363,7 +363,7 @@ async function testProposalCreation(ajoGovernance, members, ajoInfo) {
 
     const tx2 = await ajoGovernance
       .connect(members[1].signer)
-      .proposeNewMember(newMember.address, "Add new member for next cycle", {
+      .proposeNewMember(newMember.address, "Add new member for next season", {
         gasLimit: 500000,
       });
     const receipt2 = await tx2.wait();
@@ -398,7 +398,7 @@ async function testProposalCreation(ajoGovernance, members, ajoInfo) {
 
   await sleep(1000);
 
-  // Proposal 3
+  // Proposal 3 - Update Penalty Rate
   console.log(c.dim("     → Creating Proposal #3: Update Penalty Rate"));
 
   try {
@@ -642,7 +642,7 @@ async function testRealHcsVoteSubmission(
 }
 
 // ================================================================
-// TEST 3-6: REMAINING TESTS (Unchanged but complete)
+// TEST 3: ON-CHAIN VOTE TALLYING
 // ================================================================
 
 async function testVoteTallying(ajoGovernance, proposalId, votes, tallier) {
@@ -759,41 +759,44 @@ async function testVoteTallying(ajoGovernance, proposalId, votes, tallier) {
   console.log(c.blue("═".repeat(88) + "\n"));
 }
 
-async function testCycleStatus(ajoGovernance) {
+// ================================================================
+// TEST 4: SEASON STATUS CHECK (UPDATED)
+// ================================================================
+
+async function testSeasonStatus(ajoGovernance) {
   console.log(
     c.bgBlue(
-      "\n" + " ".repeat(27) + "TEST 4: CYCLE STATUS CHECK" + " ".repeat(33)
+      "\n" + " ".repeat(27) + "TEST 4: SEASON STATUS CHECK" + " ".repeat(32)
     )
   );
   console.log(c.blue("═".repeat(88) + "\n"));
-
-  console.log(c.cyan("  📊 Checking Current Cycle Status...\n"));
+  console.log(c.cyan("  📊 Checking Current Season Status...\n"));
 
   try {
-    const cycleStatus = await ajoGovernance.getCycleStatus();
+    const seasonStatus = await ajoGovernance.getSeasonStatus();
 
-    console.log(c.bright("     Cycle Information:"));
+    console.log(c.bright("     Season Information:"));
     console.log(
       c.dim("     ┌────────────────────────────────────────────────────┐")
     );
     console.log(
       c.dim(
-        `     │ Current Cycle:           ${cycleStatus._currentCycle.toString().padEnd(24)} │`
+        `     │ Current Season:          ${seasonStatus._currentSeason.toString().padEnd(24)} │`
       )
     );
     console.log(
       c.dim(
-        `     │ Cycle Completed:         ${(cycleStatus._isCycleCompleted ? "Yes" : "No").padEnd(24)} │`
+        `     │ Season Completed:        ${(seasonStatus._isSeasonCompleted ? "Yes" : "No").padEnd(24)} │`
       )
     );
     console.log(
       c.dim(
-        `     │ Participation Deadline:  ${cycleStatus._participationDeadline.toString().padEnd(24)} │`
+        `     │ Participation Deadline:  ${seasonStatus._participationDeadline.toString().padEnd(24)} │`
       )
     );
     console.log(
       c.dim(
-        `     │ Declared Participants:   ${cycleStatus._declaredParticipants.toString().padEnd(24)} │`
+        `     │ Declared Participants:   ${seasonStatus._declaredParticipants.toString().padEnd(24)} │`
       )
     );
     console.log(
@@ -820,11 +823,11 @@ async function testCycleStatus(ajoGovernance) {
       c.dim("     └────────────────────────────────────────────────────┘\n")
     );
 
-    return { cycleStatus, carryOverRules };
+    return { seasonStatus, carryOverRules };
   } catch (error) {
     console.log(
       c.red(
-        `     ❌ Failed to get cycle status: ${error.message.slice(0, 100)}\n`
+        `     ❌ Failed to get season status: ${error.message.slice(0, 100)}\n`
       )
     );
     throw error;
@@ -832,6 +835,10 @@ async function testCycleStatus(ajoGovernance) {
 
   console.log(c.blue("═".repeat(88) + "\n"));
 }
+
+// ================================================================
+// TEST 5: PROPOSAL STATUS & EXECUTION
+// ================================================================
 
 async function testProposalExecution(ajoGovernance, proposalId, executor) {
   console.log(
@@ -960,6 +967,10 @@ async function testProposalExecution(ajoGovernance, proposalId, executor) {
   console.log(c.blue("═".repeat(88) + "\n"));
 }
 
+// ================================================================
+// TEST 6: MEMBER PARTICIPATION DECLARATION (UPDATED FOR SEASONS)
+// ================================================================
+
 async function testParticipationDeclaration(ajoGovernance, members) {
   console.log(
     c.bgBlue(
@@ -971,7 +982,7 @@ async function testParticipationDeclaration(ajoGovernance, members) {
   );
   console.log(c.blue("═".repeat(88) + "\n"));
 
-  console.log(c.cyan("  📢 Members Declaring Next Cycle Participation...\n"));
+  console.log(c.cyan("  📢 Members Declaring Next Season Participation...\n"));
 
   const declarations = [];
 
@@ -995,7 +1006,7 @@ async function testParticipationDeclaration(ajoGovernance, members) {
     try {
       const tx = await ajoGovernance
         .connect(member.signer)
-        .declareNextCycleParticipation(willParticipate, { gasLimit: 200000 });
+        .declareNextSeasonParticipation(willParticipate, { gasLimit: 200000 });
 
       await tx.wait();
 
@@ -1039,7 +1050,7 @@ async function testParticipationDeclaration(ajoGovernance, members) {
     const continuingMembers = await ajoGovernance.getContinuingMembersList();
     const optOutMembers = await ajoGovernance.getOptOutMembersList();
 
-    console.log(c.bright("  📋 Members for Next Cycle:"));
+    console.log(c.bright("  📋 Members for Next Season:"));
     console.log(c.dim(`     Continuing: ${continuingMembers.length} members`));
     console.log(c.dim(`     Opt-out:    ${optOutMembers.length} members\n`));
   } catch (error) {
@@ -1146,7 +1157,7 @@ async function runGovernanceDemo(ajoGovernance, participantsInput, ajoInfo) {
 
   await sleep(2000);
 
-  await testCycleStatus(ajoGovernance);
+  await testSeasonStatus(ajoGovernance);
 
   await sleep(2000);
 
@@ -1211,7 +1222,7 @@ async function runGovernanceDemo(ajoGovernance, participantsInput, ajoInfo) {
   console.log(c.dim("     • No trusted intermediaries - anyone can tally"));
   console.log(c.dim("     • Signature verification ensures vote integrity"));
   console.log(
-    c.dim("     • Full cycle management - members can opt-in/opt-out")
+    c.dim("     • Full season management - members can opt-in/opt-out")
   );
   console.log(
     c.dim("     • Perfect for ROSCA continuity and sustainability\n")
@@ -1278,7 +1289,7 @@ module.exports = {
   testProposalCreation,
   testRealHcsVoteSubmission,
   testVoteTallying,
-  testCycleStatus,
+  testSeasonStatus,
   testProposalExecution,
   testParticipationDeclaration,
   createSignedVote,

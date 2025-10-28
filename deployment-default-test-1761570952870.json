@@ -1,0 +1,129 @@
+{
+  "network": "unknown",
+  "chainId": 296,
+  "deployedAt": "2025-10-27T13:15:52.868Z",
+  "testType": "Default & Collateral Seizure Testing",
+  "contracts": {
+    "AjoFactory": "0x25d0f53E436a9E1736E974779b5a6f02aDd949EB",
+    "USDC_HTS": "0x00000000000000000000000000000000006d0571",
+    "WHBAR_HTS": "0x00000000000000000000000000000000006d0572"
+  },
+  "masterCopies": {
+    "AjoCore": "0x1771E15f69E90B24005894113ca3dd0AFf69ceB2",
+    "AjoMembers": "0x4adA7cE2650a0Cc548B72C8f3f65832db3017a0E",
+    "AjoCollateral": "0xb537F04c9980eb76c6405367bAe5d057b67aa5D7",
+    "AjoPayments": "0xE4676607DA295240c0d3B7a9074118fC089907B1",
+    "AjoGovernance": "0x90E8fecD36D555343B81C00Faef53EfD0dAaaeCe",
+    "AjoSchedule": "0xE87CF77656050244e28A0534d3F60bc1671575FB"
+  },
+  "testAjo": {
+    "id": 1,
+    "core": "0x994D1E9854bD51f825f947dF82BABf903F297984",
+    "cycleDuration": 45,
+    "monthlyPaymentUSDC": "50.0",
+    "monthlyPaymentHBAR": "1000.0",
+    "hcsTopicId": "0.0.145414"
+  },
+  "participants": [
+    {
+      "name": "Adunni",
+      "address": "0xd863E1E194e0B0F95e87F6263c8517587919464B",
+      "position": 1
+    },
+    {
+      "name": "Babatunde",
+      "address": "0xD6BFf29dc91208cbd21253567923604f48054370",
+      "position": 2
+    },
+    {
+      "name": "Chinwe",
+      "address": "0x50Ac7731e6bf5631BA31F993D744ED5992C9D325",
+      "position": 3
+    },
+    {
+      "name": "Damilola",
+      "address": "0x922464Fc39f2E0F85A2EF03FA64DBDBC649351f7",
+      "position": 4
+    },
+    {
+      "name": "Emeka",
+      "address": "0x49196d181ba31388Fb74d9C95be17C22fFe57122",
+      "position": 5
+    },
+    {
+      "name": "Funmilayo",
+      "address": "0xA2cfDbcE8b15eeb51f874D0F3a1bC5C95778606B",
+      "position": 6
+    },
+    {
+      "name": "Gbenga",
+      "address": "0x33e2C844EA1C094dA3F9BC36956ac053675A4E94",
+      "position": 7
+    },
+    {
+      "name": "Halima",
+      "address": "0x169EBda2b992e5Afe9Ca221c8Cf912fFa24b5Db9",
+      "position": 8
+    },
+    {
+      "name": "Ifeanyi",
+      "address": "0x40a10D328Ae3a307a8830C4b3455e8bE521A675f",
+      "position": 9
+    },
+    {
+      "name": "Joke",
+      "address": "0xA9E5BBe7743f51E1980ED73f92B1d742305f92e1",
+      "position": 10
+    }
+  ],
+  "firstCycleResults": {
+    "paymentsProcessed": 9,
+    "payoutRecipient": "Adunni",
+    "payoutAddress": "0xd863E1E194e0B0F95e87F6263c8517587919464B"
+  },
+  "defaultTestResults": {
+    "totalScenarios": 3,
+    "successfulScenarios": 0,
+    "failedScenarios": 3,
+    "scenarios": [
+      {
+        "scenario": "Position 1 Default",
+        "defaulter": "Adunni",
+        "error": "transaction failed [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (transactionHash=\"0xe68457cbba4848d1aea455719107f3354d695f2bbb70632d70c2d05708f531ef\", transaction={\"hash\":\"0xe68457cbba4848d1aea455719107f3354d695f2bbb70632d70c2d05708f531ef\",\"type\":0,\"accessList\":null,\"blockHash\":\"0x86db5e9c14f7ee9504713d069c96c651a91a2a501b42a4cd0f14ab1a3cc40a8a\",\"blockNumber\":26762274,\"transactionIndex\":48,\"confirmations\":2,\"from\":\"0xD6BFf29dc91208cbd21253567923604f48054370\",\"gasPrice\":{\"type\":\"BigNumber\",\"hex\":\"0x721646a400\"},\"gasLimit\":{\"type\":\"BigNumber\",\"hex\":\"0x1e8480\"},\"to\":\"0x994D1E9854bD51f825f947dF82BABf903F297984\",\"value\":{\"type\":\"BigNumber\",\"hex\":\"0x00\"},\"nonce\":217,\"data\":\"0xf78fb15f000000000000000000000000d863e1e194e0b0f95e87f6263c8517587919464b\",\"r\":\"0x073a3f34095941c579d963009d83ff199974a8291be28cd535ab778b9b30f9e6\",\"s\":\"0x62f0dfa314d2386e6d8607dd35978faf61da1abcbe20b81a1cef7003607a0152\",\"v\":628,\"creates\":null,\"chainId\":296}, receipt={\"to\":\"0x994D1E9854bD51f825f947dF82BABf903F297984\",\"from\":\"0xD6BFf29dc91208cbd21253567923604f48054370\",\"contractAddress\":\"0x994D1E9854bD51f825f947dF82BABf903F297984\",\"transactionIndex\":48,\"root\":\"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421\",\"gasUsed\":{\"type\":\"BigNumber\",\"hex\":\"0x6c8e\"},\"logsBloom\":\"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000\",\"blockHash\":\"0x86db5e9c14f7ee9504713d069c96c651a91a2a501b42a4cd0f14ab1a3cc40a8a\",\"transactionHash\":\"0xe68457cbba4848d1aea455719107f3354d695f2bbb70632d70c2d05708f531ef\",\"logs\":[],\"blockNumber\":26762274,\"confirmations\":2,\"cumulativeGasUsed\":{\"type\":\"BigNumber\",\"hex\":\"0x6c8e\"},\"effectiveGasPrice\":{\"type\":\"BigNumber\",\"hex\":\"0x6d6e2edc00\"},\"status\":0,\"type\":0,\"byzantium\":true}, code=CALL_EXCEPTION, version=providers/5.8.0)",
+        "success": false
+      },
+      {
+        "scenario": "Position 5 Default",
+        "defaulter": "Emeka",
+        "error": "transaction failed [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (transactionHash=\"0xb295f066c0629a83f8a950459142a9337088e143a8d3f1de5e1b3ab2b709e838\", transaction={\"hash\":\"0xb295f066c0629a83f8a950459142a9337088e143a8d3f1de5e1b3ab2b709e838\",\"type\":0,\"accessList\":null,\"blockHash\":\"0xfb3fb8cba4417450f5b5b0246f9d438045d52e2913d702f07b5324cf903200a4\",\"blockNumber\":26762303,\"transactionIndex\":8,\"confirmations\":2,\"from\":\"0xD6BFf29dc91208cbd21253567923604f48054370\",\"gasPrice\":{\"type\":\"BigNumber\",\"hex\":\"0x721646a400\"},\"gasLimit\":{\"type\":\"BigNumber\",\"hex\":\"0x1e8480\"},\"to\":\"0x994D1E9854bD51f825f947dF82BABf903F297984\",\"value\":{\"type\":\"BigNumber\",\"hex\":\"0x00\"},\"nonce\":222,\"data\":\"0xf78fb15f00000000000000000000000049196d181ba31388fb74d9c95be17c22ffe57122\",\"r\":\"0xfff5e57bcac476816a651a684dae1af3c31b9360b0f7e25d2c57f71bef6ec419\",\"s\":\"0x16de219983e8ff6c208515800822cb3adfb4257a8729f87ce761766c9b53f310\",\"v\":628,\"creates\":null,\"chainId\":296}, receipt={\"to\":\"0x994D1E9854bD51f825f947dF82BABf903F297984\",\"from\":\"0xD6BFf29dc91208cbd21253567923604f48054370\",\"contractAddress\":\"0x994D1E9854bD51f825f947dF82BABf903F297984\",\"transactionIndex\":8,\"root\":\"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421\",\"gasUsed\":{\"type\":\"BigNumber\",\"hex\":\"0x6c8e\"},\"logsBloom\":\"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000\",\"blockHash\":\"0xfb3fb8cba4417450f5b5b0246f9d438045d52e2913d702f07b5324cf903200a4\",\"transactionHash\":\"0xb295f066c0629a83f8a950459142a9337088e143a8d3f1de5e1b3ab2b709e838\",\"logs\":[],\"blockNumber\":26762303,\"confirmations\":2,\"cumulativeGasUsed\":{\"type\":\"BigNumber\",\"hex\":\"0x6c8e\"},\"effectiveGasPrice\":{\"type\":\"BigNumber\",\"hex\":\"0x6d6e2edc00\"},\"status\":0,\"type\":0,\"byzantium\":true}, code=CALL_EXCEPTION, version=providers/5.8.0)",
+        "success": false
+      },
+      {
+        "scenario": "Position 9 Default",
+        "defaulter": "Ifeanyi",
+        "error": "transaction failed [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (transactionHash=\"0x495783f55c25f37dea2b00a5bc6885acca6ad1ca0bcd73d46746ef91628eb8b4\", transaction={\"hash\":\"0x495783f55c25f37dea2b00a5bc6885acca6ad1ca0bcd73d46746ef91628eb8b4\",\"type\":0,\"accessList\":null,\"blockHash\":\"0xbe1e9e7b47706443a684e039e773afa84af35240804206d22db93af66bc4ec3b\",\"blockNumber\":26762330,\"transactionIndex\":9,\"confirmations\":2,\"from\":\"0xD6BFf29dc91208cbd21253567923604f48054370\",\"gasPrice\":{\"type\":\"BigNumber\",\"hex\":\"0x721646a400\"},\"gasLimit\":{\"type\":\"BigNumber\",\"hex\":\"0x1e8480\"},\"to\":\"0x994D1E9854bD51f825f947dF82BABf903F297984\",\"value\":{\"type\":\"BigNumber\",\"hex\":\"0x00\"},\"nonce\":227,\"data\":\"0xf78fb15f00000000000000000000000040a10d328ae3a307a8830c4b3455e8be521a675f\",\"r\":\"0xe6c50a01e7f33f0390f085c95e2c9364261f90e02742ecabfd7ea09b64a33ac4\",\"s\":\"0x1a27d17f1f4aa65edfdf90486d645e411e0bb52c769cb96e88a65acddf017424\",\"v\":628,\"creates\":null,\"chainId\":296}, receipt={\"to\":\"0x994D1E9854bD51f825f947dF82BABf903F297984\",\"from\":\"0xD6BFf29dc91208cbd21253567923604f48054370\",\"contractAddress\":\"0x994D1E9854bD51f825f947dF82BABf903F297984\",\"transactionIndex\":9,\"root\":\"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421\",\"gasUsed\":{\"type\":\"BigNumber\",\"hex\":\"0x6c8e\"},\"logsBloom\":\"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000\",\"blockHash\":\"0xbe1e9e7b47706443a684e039e773afa84af35240804206d22db93af66bc4ec3b\",\"transactionHash\":\"0x495783f55c25f37dea2b00a5bc6885acca6ad1ca0bcd73d46746ef91628eb8b4\",\"logs\":[],\"blockNumber\":26762330,\"confirmations\":2,\"cumulativeGasUsed\":{\"type\":\"BigNumber\",\"hex\":\"0x6c8e\"},\"effectiveGasPrice\":{\"type\":\"BigNumber\",\"hex\":\"0x6d6e2edc00\"},\"status\":0,\"type\":0,\"byzantium\":true}, code=CALL_EXCEPTION, version=providers/5.8.0)",
+        "success": false
+      }
+    ]
+  },
+  "detailedScenarios": [
+    {
+      "scenario": "Position 1 Default",
+      "defaulter": "Adunni",
+      "error": "transaction failed [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (transactionHash=\"0xe68457cbba4848d1aea455719107f3354d695f2bbb70632d70c2d05708f531ef\", transaction={\"hash\":\"0xe68457cbba4848d1aea455719107f3354d695f2bbb70632d70c2d05708f531ef\",\"type\":0,\"accessList\":null,\"blockHash\":\"0x86db5e9c14f7ee9504713d069c96c651a91a2a501b42a4cd0f14ab1a3cc40a8a\",\"blockNumber\":26762274,\"transactionIndex\":48,\"confirmations\":2,\"from\":\"0xD6BFf29dc91208cbd21253567923604f48054370\",\"gasPrice\":{\"type\":\"BigNumber\",\"hex\":\"0x721646a400\"},\"gasLimit\":{\"type\":\"BigNumber\",\"hex\":\"0x1e8480\"},\"to\":\"0x994D1E9854bD51f825f947dF82BABf903F297984\",\"value\":{\"type\":\"BigNumber\",\"hex\":\"0x00\"},\"nonce\":217,\"data\":\"0xf78fb15f000000000000000000000000d863e1e194e0b0f95e87f6263c8517587919464b\",\"r\":\"0x073a3f34095941c579d963009d83ff199974a8291be28cd535ab778b9b30f9e6\",\"s\":\"0x62f0dfa314d2386e6d8607dd35978faf61da1abcbe20b81a1cef7003607a0152\",\"v\":628,\"creates\":null,\"chainId\":296}, receipt={\"to\":\"0x994D1E9854bD51f825f947dF82BABf903F297984\",\"from\":\"0xD6BFf29dc91208cbd21253567923604f48054370\",\"contractAddress\":\"0x994D1E9854bD51f825f947dF82BABf903F297984\",\"transactionIndex\":48,\"root\":\"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421\",\"gasUsed\":{\"type\":\"BigNumber\",\"hex\":\"0x6c8e\"},\"logsBloom\":\"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000\",\"blockHash\":\"0x86db5e9c14f7ee9504713d069c96c651a91a2a501b42a4cd0f14ab1a3cc40a8a\",\"transactionHash\":\"0xe68457cbba4848d1aea455719107f3354d695f2bbb70632d70c2d05708f531ef\",\"logs\":[],\"blockNumber\":26762274,\"confirmations\":2,\"cumulativeGasUsed\":{\"type\":\"BigNumber\",\"hex\":\"0x6c8e\"},\"effectiveGasPrice\":{\"type\":\"BigNumber\",\"hex\":\"0x6d6e2edc00\"},\"status\":0,\"type\":0,\"byzantium\":true}, code=CALL_EXCEPTION, version=providers/5.8.0)",
+      "success": false
+    },
+    {
+      "scenario": "Position 5 Default",
+      "defaulter": "Emeka",
+      "error": "transaction failed [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (transactionHash=\"0xb295f066c0629a83f8a950459142a9337088e143a8d3f1de5e1b3ab2b709e838\", transaction={\"hash\":\"0xb295f066c0629a83f8a950459142a9337088e143a8d3f1de5e1b3ab2b709e838\",\"type\":0,\"accessList\":null,\"blockHash\":\"0xfb3fb8cba4417450f5b5b0246f9d438045d52e2913d702f07b5324cf903200a4\",\"blockNumber\":26762303,\"transactionIndex\":8,\"confirmations\":2,\"from\":\"0xD6BFf29dc91208cbd21253567923604f48054370\",\"gasPrice\":{\"type\":\"BigNumber\",\"hex\":\"0x721646a400\"},\"gasLimit\":{\"type\":\"BigNumber\",\"hex\":\"0x1e8480\"},\"to\":\"0x994D1E9854bD51f825f947dF82BABf903F297984\",\"value\":{\"type\":\"BigNumber\",\"hex\":\"0x00\"},\"nonce\":222,\"data\":\"0xf78fb15f00000000000000000000000049196d181ba31388fb74d9c95be17c22ffe57122\",\"r\":\"0xfff5e57bcac476816a651a684dae1af3c31b9360b0f7e25d2c57f71bef6ec419\",\"s\":\"0x16de219983e8ff6c208515800822cb3adfb4257a8729f87ce761766c9b53f310\",\"v\":628,\"creates\":null,\"chainId\":296}, receipt={\"to\":\"0x994D1E9854bD51f825f947dF82BABf903F297984\",\"from\":\"0xD6BFf29dc91208cbd21253567923604f48054370\",\"contractAddress\":\"0x994D1E9854bD51f825f947dF82BABf903F297984\",\"transactionIndex\":8,\"root\":\"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421\",\"gasUsed\":{\"type\":\"BigNumber\",\"hex\":\"0x6c8e\"},\"logsBloom\":\"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000\",\"blockHash\":\"0xfb3fb8cba4417450f5b5b0246f9d438045d52e2913d702f07b5324cf903200a4\",\"transactionHash\":\"0xb295f066c0629a83f8a950459142a9337088e143a8d3f1de5e1b3ab2b709e838\",\"logs\":[],\"blockNumber\":26762303,\"confirmations\":2,\"cumulativeGasUsed\":{\"type\":\"BigNumber\",\"hex\":\"0x6c8e\"},\"effectiveGasPrice\":{\"type\":\"BigNumber\",\"hex\":\"0x6d6e2edc00\"},\"status\":0,\"type\":0,\"byzantium\":true}, code=CALL_EXCEPTION, version=providers/5.8.0)",
+      "success": false
+    },
+    {
+      "scenario": "Position 9 Default",
+      "defaulter": "Ifeanyi",
+      "error": "transaction failed [ See: https://links.ethers.org/v5-errors-CALL_EXCEPTION ] (transactionHash=\"0x495783f55c25f37dea2b00a5bc6885acca6ad1ca0bcd73d46746ef91628eb8b4\", transaction={\"hash\":\"0x495783f55c25f37dea2b00a5bc6885acca6ad1ca0bcd73d46746ef91628eb8b4\",\"type\":0,\"accessList\":null,\"blockHash\":\"0xbe1e9e7b47706443a684e039e773afa84af35240804206d22db93af66bc4ec3b\",\"blockNumber\":26762330,\"transactionIndex\":9,\"confirmations\":2,\"from\":\"0xD6BFf29dc91208cbd21253567923604f48054370\",\"gasPrice\":{\"type\":\"BigNumber\",\"hex\":\"0x721646a400\"},\"gasLimit\":{\"type\":\"BigNumber\",\"hex\":\"0x1e8480\"},\"to\":\"0x994D1E9854bD51f825f947dF82BABf903F297984\",\"value\":{\"type\":\"BigNumber\",\"hex\":\"0x00\"},\"nonce\":227,\"data\":\"0xf78fb15f00000000000000000000000040a10d328ae3a307a8830c4b3455e8be521a675f\",\"r\":\"0xe6c50a01e7f33f0390f085c95e2c9364261f90e02742ecabfd7ea09b64a33ac4\",\"s\":\"0x1a27d17f1f4aa65edfdf90486d645e411e0bb52c769cb96e88a65acddf017424\",\"v\":628,\"creates\":null,\"chainId\":296}, receipt={\"to\":\"0x994D1E9854bD51f825f947dF82BABf903F297984\",\"from\":\"0xD6BFf29dc91208cbd21253567923604f48054370\",\"contractAddress\":\"0x994D1E9854bD51f825f947dF82BABf903F297984\",\"transactionIndex\":9,\"root\":\"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421\",\"gasUsed\":{\"type\":\"BigNumber\",\"hex\":\"0x6c8e\"},\"logsBloom\":\"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000\",\"blockHash\":\"0xbe1e9e7b47706443a684e039e773afa84af35240804206d22db93af66bc4ec3b\",\"transactionHash\":\"0x495783f55c25f37dea2b00a5bc6885acca6ad1ca0bcd73d46746ef91628eb8b4\",\"logs\":[],\"blockNumber\":26762330,\"confirmations\":2,\"cumulativeGasUsed\":{\"type\":\"BigNumber\",\"hex\":\"0x6c8e\"},\"effectiveGasPrice\":{\"type\":\"BigNumber\",\"hex\":\"0x6d6e2edc00\"},\"status\":0,\"type\":0,\"byzantium\":true}, code=CALL_EXCEPTION, version=providers/5.8.0)",
+      "success": false
+    }
+  ]
+}
