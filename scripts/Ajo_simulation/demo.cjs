@@ -59,6 +59,7 @@ const c = {
   bgRed: (text) => `\x1b[41m\x1b[37m${text}\x1b[0m`
 };
 
+
 const DEMO_CONFIG = {
   MAX_RETRIES: 3,
   RETRY_DELAY: 2000,
@@ -86,6 +87,7 @@ const DEMO_CONFIG = {
   }
 };
 
+
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const formatUSDC = (amount) => ethers.utils.formatUnits(amount, 6);
 const formatHBAR = (amount) => ethers.utils.formatUnits(amount, 8);
@@ -93,19 +95,58 @@ const formatHBAR = (amount) => ethers.utils.formatUnits(amount, 8);
 // ================================================================
 // ENHANCED BANNER
 // ================================================================
-/**
- * Enhanced sleep with progress indicator
- */
-async function sleepWithProgress(seconds, label = "Waiting") {
-  const steps = 5;
-  const interval = seconds * 1000 / steps;
+
+function printEnhancedBanner() {
+  console.log(c.magenta("\n" + "═".repeat(88)));
+  console.log(c.bold(c.cyan("╔══════════════════════════════════════════════════════════════════════════════════════╗")));
+  console.log(c.bold(c.cyan("║                                                                                      ║")));
+  console.log(c.bold(c.cyan("║") + c.bgBlue("              🏦 AJO.SAVE - FULL HEDERA INTEGRATION DEMO 🏦                          ") + c.cyan("║")));
+  console.log(c.bold(c.cyan("║                                                                                      ║")));
+  console.log(c.bold(c.cyan("╚══════════════════════════════════════════════════════════════════════════════════════╝")));
+  console.log(c.magenta("═".repeat(88)));
   
-  for (let i = 1; i <= steps; i++) {
-    await sleep(interval);
-    const progress = '█'.repeat(i) + '░'.repeat(steps - i);
-    process.stdout.write(`\r     ${label}: [${progress}] ${Math.round(i/steps * 100)}%`);
+  console.log(c.bright("\n" + " ".repeat(15) + "HTS + HCS + HSS - Complete Hedera Native Demo"));
+  console.log(c.dim(" ".repeat(12) + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"));
+  
+  console.log(c.yellow("\n  🌟 HEDERA SERVICES INTEGRATION:"));
+  console.log(c.green("     ✓ HTS Auto-Association") + c.dim(" - Seamless token distribution"));
+  console.log(c.green("     ✓ HCS Governance") + c.dim(" - Off-chain voting, on-chain tally"));
+  console.log(c.green("     ✓ HSS Scheduling") + c.dim(" - Automated payment execution"));
+  console.log(c.green("     ✓ Factory Treasury") + c.dim(" - Centralized token management"));
+  console.log(c.green("     ✓ Native Hedera") + c.dim(" - 90%+ cost reduction\n"));
+  
+  console.log(c.bgRed(" ⚠️  CRITICAL: THIS DEMO REQUIRES HTS - NO ERC20 FALLBACK "));
+  console.log(c.yellow("  Minimum 50 HBAR required in deployer account\n"));
+}
+
+// ================================================================
+// RETRY OPERATION
+// ================================================================
+
+async function retryOperation(operation, operationName, maxRetries = DEMO_CONFIG.MAX_RETRIES) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(c.dim(`    ⏳ Attempt ${attempt}/${maxRetries}: ${operationName}`));
+      const result = await operation();
+      console.log(c.green(`    ✅ ${operationName} succeeded`));
+      return result;
+    } catch (error) {
+      const isNetworkError = error.message.includes('other-side closed') || 
+                           error.message.includes('SocketError') ||
+                           error.message.includes('network') ||
+                           error.message.includes('timeout');
+      
+      if (isNetworkError && attempt < maxRetries) {
+        console.log(c.yellow(`    ⚠️ Network error on attempt ${attempt}: ${error.message.slice(0, 100)}`));
+        console.log(c.dim(`    🔄 Retrying in ${DEMO_CONFIG.RETRY_DELAY/1000} seconds...`));
+        await sleep(DEMO_CONFIG.RETRY_DELAY * attempt);
+        continue;
+      }
+      
+      console.log(c.red(`    ❌ ${operationName} failed: ${error.message.slice(0, 150)}`));
+      throw error;
+    }
   }
-  console.log(); // New line after completion
 }
 
 /**
@@ -151,485 +192,6 @@ async function retryWithBackoff(operation, operationName, maxRetries = 5) {
       }
     }
   }
-}
-
-function printEnhancedBanner() {
-  console.log(c.magenta("\n" + "═".repeat(88)));
-  console.log(c.bold(c.cyan("╔══════════════════════════════════════════════════════════════════════════════════════╗")));
-  console.log(c.bold(c.cyan("║                                                                                      ║")));
-  console.log(c.bold(c.cyan("║") + c.bgBlue("              🏦 AJO.SAVE - FULL HEDERA INTEGRATION DEMO 🏦                          ") + c.cyan("║")));
-  console.log(c.bold(c.cyan("║                                                                                      ║")));
-  console.log(c.bold(c.cyan("╚══════════════════════════════════════════════════════════════════════════════════════╝")));
-  console.log(c.magenta("═".repeat(88)));
-  
-  console.log(c.bright("\n" + " ".repeat(15) + "HTS + HCS + HSS - Complete 10-Cycle Demo"));
-  console.log(c.dim(" ".repeat(12) + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"));
-  
-  console.log(c.yellow("\n  🌟 HEDERA SERVICES INTEGRATION:"));
-  console.log(c.green("     ✓ HTS Auto-Association") + c.dim(" - Seamless token distribution"));
-  console.log(c.green("     ✓ HCS Governance") + c.dim(" - Off-chain voting, on-chain tally"));
-  console.log(c.green("     ✓ HSS Scheduling") + c.dim(" - Automated payment execution"));
-  console.log(c.green("     ✓ Factory Treasury") + c.dim(" - Centralized token management"));
-  console.log(c.green("     ✓ Full ROSCA Cycle") + c.dim(" - Payment → Payout → Next Cycle"));
-  console.log(c.green("     ✓ Native Hedera") + c.dim(" - 90%+ cost reduction\n"));
-  
-  console.log(c.bgYellow(" ⚡ DEMO CONFIG: 30 SECOND CYCLES - FULL 10 CYCLES "));
-  console.log(c.yellow("  This demo will run through all 10 payment cycles\n"));
-}
-
-// ================================================================
-// RETRY OPERATION
-// ================================================================
-
-async function retryOperation(operation, operationName, maxRetries = DEMO_CONFIG.MAX_RETRIES) {
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      console.log(c.dim(`    ⏳ Attempt ${attempt}/${maxRetries}: ${operationName}`));
-      const result = await operation();
-      console.log(c.green(`    ✅ ${operationName} succeeded`));
-      return result;
-    } catch (error) {
-      const isNetworkError = error.message.includes('other-side closed') || 
-                           error.message.includes('SocketError') ||
-                           error.message.includes('network') ||
-                           error.message.includes('timeout');
-      
-      if (isNetworkError && attempt < maxRetries) {
-        console.log(c.yellow(`    ⚠️ Network error on attempt ${attempt}: ${error.message.slice(0, 100)}`));
-        console.log(c.dim(`    🔄 Retrying in ${DEMO_CONFIG.RETRY_DELAY/1000} seconds...`));
-        await sleep(DEMO_CONFIG.RETRY_DELAY * attempt);
-        continue;
-      }
-      
-      console.log(c.red(`    ❌ ${operationName} failed: ${error.message.slice(0, 150)}`));
-      throw error;
-    }
-  }
-}
-
-
-
-// ================================================================
-// PHASE 7: SUMMARY & ANALYSIS
-// ================================================================
-async function generateDefaultTestSummary(defaultScenarios, participants) {
-  console.log(c.bgGreen("\n" + " ".repeat(25) + "📊 DEFAULT TEST SUMMARY 📊" + " ".repeat(31)));
-  console.log(c.green("═".repeat(88) + "\n"));
-  
-  console.log(c.bright("  Test Results Overview:\n"));
-  console.log(c.dim("     ┌───────────────────────────────────────────┬──────────────┐"));
-  console.log(c.dim("     │ Scenario                                  │ Result       │"));
-  console.log(c.dim("     ├───────────────────────────────────────────┼──────────────┤"));
-  
-  for (const scenario of defaultScenarios) {
-    const status = scenario.success ? c.green("✅ Success") : c.red("❌ Failed");
-    console.log(c.dim(`     │ ${scenario.scenario.padEnd(41)} │ ${status.padEnd(20)} │`));
-  }
-  
-  console.log(c.dim("     └───────────────────────────────────────────┴──────────────┘\n"));
-  
-  // Detailed analysis for Position 1 default (most critical)
-  const position1Scenario = defaultScenarios.find(s => s.scenario.includes("Position 1"));
-  
-  if (position1Scenario && position1Scenario.success) {
-    console.log(c.bright("  🎯 V3 Collateral Model Validation (Position 1 Default):\n"));
-    console.log(c.dim("     ┌─────────────────────────────────────────────────────────┐"));
-    console.log(c.dim(`     │ Expected Seizable: ${formatUSDC(position1Scenario.expectedSeizable).padEnd(36)} │`));
-    console.log(c.dim(`     │ Net Loss to Group: ${formatUSDC(position1Scenario.netLoss).padEnd(36)} │`));
-    
-    if (position1Scenario.netLoss.gt(0)) {
-      console.log(c.dim(`     │ Safety Buffer: ${formatUSDC(position1Scenario.safetyBuffer).padEnd(40)} │`));
-      console.log(c.dim(`     │ Coverage Ratio: ${position1Scenario.coverageRatio.toFixed(2)}%${' '.repeat(38)} │`));
-      console.log(c.dim("     └─────────────────────────────────────────────────────────┘\n"));
-      
-      if (position1Scenario.coverageRatio >= 108) {
-        console.log(c.green("  ✅ V3 Model VALIDATED: Coverage ratio ≥108.9%\n"));
-        console.log(c.dim("     The 60% collateral factor with guarantor system provides"));
-        console.log(c.dim("     sufficient protection against worst-case defaults.\n"));
-      } else {
-        console.log(c.yellow(`  ⚠️  Coverage ratio: ${position1Scenario.coverageRatio.toFixed(2)}% (expected ≥108.9%)\n`));
-      }
-    } else {
-      console.log(c.dim("     └─────────────────────────────────────────────────────────┘\n"));
-      console.log(c.yellow("  ⚠️  Coverage analysis incomplete (net loss = 0)\n"));
-      console.log(c.dim(`     Contract totalPaid: ${formatUSDC(position1Scenario.totalPaidByContract)}\n`));
-      console.log(c.dim("     This suggests the contract may be tracking payout receipts"));
-      console.log(c.dim("     as 'totalPaid' rather than just contributions made.\n"));
-    }
-  }
-  
-  const successCount = defaultScenarios.filter(s => s.success).length;
-  console.log(c.bright(`  📈 Overall Success Rate: ${successCount}/${defaultScenarios.length} scenarios (${(successCount/defaultScenarios.length*100).toFixed(1)}%)\n`));
-  
-  console.log(c.green("═".repeat(88) + "\n"));
-  
-  return {
-    totalScenarios: defaultScenarios.length,
-    successfulScenarios: successCount,
-    failedScenarios: defaultScenarios.length - successCount,
-    scenarios: defaultScenarios
-  };
-}
-
-// ================================================================
-// PHASE 5: RUN FIRST CYCLE NORMALLY
-// ================================================================
-async function runFirstCycleNormally(ajo, ajoPayments, participants) {
-  console.log(c.bgBlue("\n" + " ".repeat(25) + "PHASE 5: FIRST CYCLE - NORMAL OPERATION" + " ".repeat(24)));
-  console.log(c.blue("═".repeat(88) + "\n"));
-  
-  // ============ VERIFY CURRENT CYCLE ============
-  const currentCycle = await ajoPayments.getCurrentCycle();
-  console.log(c.bright(`  📅 Current Cycle: ${currentCycle.toString()}\n`));
-  
-  console.log(c.bright(`  📅 Cycle 1: All members pay, Position 1 receives payout\n`));
-  
-  // Get next recipient
-  const nextRecipient = await ajoPayments.getNextRecipient();
-  const recipientParticipant = participants.find(p => 
-    p.address.toLowerCase() === nextRecipient.toLowerCase()
-  );
-  const recipientName = recipientParticipant ? recipientParticipant.name : "Unknown";
-  
-  console.log(c.cyan(`  💰 Next Recipient: ${recipientName} (${nextRecipient})\n`));
-  
-  console.log(c.cyan(`  💳 Step 1: Process Payments for Cycle 1\n`));
-  console.log(c.dim("     ┌────┬─────────────┬──────────────┬──────────────┐"));
-  console.log(c.dim("     │ #  │ Member      │ Amount       │ Status       │"));
-  console.log(c.dim("     ├────┼─────────────┼──────────────┼──────────────┤"));
-  
-  const paymentResults = [];
-  
-  for (let i = 0; i < participants.length; i++) {
-    const participant = participants[i];
-    
-    try {
-      await retryWithBackoff(async () => {
-        const tx = await ajo.connect(participant.signer).processPayment({
-          gasLimit: DEMO_CONFIG.GAS_LIMIT.PROCESS_PAYMENT
-        });
-        
-        return await tx.wait();
-      }, `${participant.name} - Payment`);
-      
-      paymentResults.push({
-        member: participant.name,
-        success: true
-      });
-      
-      const status = c.green("✅ Paid");
-      console.log(c.dim(`     │ ${(i+1).toString().padStart(2)} │ ${participant.name.padEnd(11)} │ ${formatUSDC(DEMO_CONFIG.MONTHLY_PAYMENT_USDC).padEnd(12)} │ ${status.padEnd(20)} │`));
-      
-    } catch (error) {
-      paymentResults.push({
-        member: participant.name,
-        error: error.message,
-        success: false
-      });
-      
-      const status = c.red("❌ Failed");
-      console.log(c.dim(`     │ ${(i+1).toString().padStart(2)} │ ${participant.name.padEnd(11)} │ ${'N/A'.padEnd(12)} │ ${status.padEnd(20)} │`));
-      console.log(c.red(`        Error: ${error.message.slice(0, 150)}`));
-    }
-    
-    await sleep(2000);
-  }
-  
-  console.log(c.dim("     └────┴─────────────┴──────────────┴──────────────┘\n"));
-  
-  const successfulPayments = paymentResults.filter(p => p.success).length;
-  console.log(c.green(`     ✅ ${successfulPayments}/${participants.length} payments processed\n`));
-  
-  await sleep(2000);
-  
-  // Distribute payout
-  console.log(c.cyan(`  💰 Step 2: Distribute Payout to ${recipientName}\n`));
-  
-  try {
-    const isReady = await ajoPayments.isPayoutReady();
-    console.log(c.dim(`     Payout Ready: ${isReady ? c.green('✅ Yes') : c.red('❌ No')}`));
-    
-    if (!isReady) {
-      throw new Error("Payout not ready");
-    }
-    
-    const expectedPayout = await ajoPayments.calculatePayout();
-    console.log(c.bright(`     Expected Payout: ${formatUSDC(expectedPayout)}\n`));
-    
-    const payoutReceipt = await retryWithBackoff(async () => {
-      const payoutTx = await ajo.connect(participants[0].signer).distributePayout({
-        gasLimit: DEMO_CONFIG.GAS_LIMIT.DISTRIBUTE_PAYOUT
-      });
-      return await payoutTx.wait();
-    }, "Distribute Payout");
-    
-    console.log(c.green(`     ✅ Payout Distributed!`));
-    console.log(c.dim(`        Recipient: ${recipientName}`));
-    console.log(c.dim(`        Amount: ${formatUSDC(expectedPayout)}\n`));
-    
-  } catch (error) {
-    console.log(c.red(`     ❌ Payout Failed: ${error.message.slice(0, 100)}\n`));
-  }
-  
-  // ============ VERIFY POST-PAYOUT CYCLE ============
-  const postPayoutCycle = await ajoPayments.getCurrentCycle();
-  console.log(c.bright(`  📅 After Payout - Current Cycle: ${postPayoutCycle.toString()}\n`));
-  
-  console.log(c.blue("═".repeat(88) + "\n"));
-  
-  return { paymentResults, recipientName, recipientAddress: nextRecipient };
-}
-
-// ================================================================
-// PHASE 6: ADVANCE TO CYCLE 2 & SIMULATE DEFAULTS
-// ================================================================
-async function advanceToCycle2AndSimulateDefaults(ajo, ajoPayments, participants) {
-  console.log(c.bgYellow("\n" + " ".repeat(20) + "PHASE 6: ADVANCE TO CYCLE 2 & SIMULATE DEFAULTS" + " ".repeat(20)));
-  console.log(c.yellow("═".repeat(88) + "\n"));
-  
-  // Check current cycle
-  const currentCycle = await ajoPayments.getCurrentCycle();
-  console.log(c.bright(`  📅 Current Cycle: ${currentCycle.toString()}\n`));
-  
-  console.log(c.cyan("  ⏰ Waiting for Cycle 2 to begin...\n"));
-  console.log(c.dim(`     Cycle Duration: ${DEMO_CONFIG.CYCLE_DURATION} seconds\n`));
-  
-  // Wait for cycle duration
-  await sleepWithProgress(DEMO_CONFIG.CYCLE_DURATION, "Advancing to Cycle 2");
-  console.log();
-  
-  // Verify cycle advanced
-  const newCycle = await ajoPayments.getCurrentCycle();
-  console.log(c.bright(`  📅 New Cycle: ${newCycle.toString()}\n`));
-  
-  // if (newCycle.toString() === currentCycle.toString()) {
-  //   console.log(c.yellow("  ⚠️  Cycle hasn't auto-advanced. Manually triggering...\n"));
-    
-  //   // Manually trigger cycle advance by attempting payout distribution
-  //   try {
-  //     // This will advance the cycle if time has passed
-  //     const advanceTx = await ajo.connect(participants[0].signer).distributePayout({
-  //       gasLimit: DEMO_CONFIG.GAS_LIMIT.DISTRIBUTE_PAYOUT
-  //     });
-  //     await advanceTx.wait();
-      
-  //     const finalCycle = await ajoPayments.getCurrentCycle();
-  //     console.log(c.green(`  ✅ Cycle Advanced to: ${finalCycle.toString()}\n`));
-  //   } catch (error) {
-  //     console.log(c.red(`  ❌ Failed to advance cycle: ${error.message}\n`));
-  //   }
-  // }
-  
-  console.log(c.bgRed("\n" + " ".repeat(15) + "🚨 CYCLE 2: SIMULATING DEFAULTS (MEMBERS DON'T PAY) 🚨" + " ".repeat(15)));
-  console.log(c.red("═".repeat(88) + "\n"));
-  
-  console.log(c.yellow("  📋 Default Simulation Strategy:\n"));
-  console.log(c.dim("     • Members in Cycle 2 will NOT make payments"));
-  console.log(c.dim("     • This creates REAL defaults (missed payments)"));
-  console.log(c.dim("     • After cycle duration passes, we'll handle defaults"));
-  console.log(c.dim("     • This tests the actual default scenario\n"));
-  
-  // Show which members would be in default
-  console.log(c.red("  🚨 Members who will default (not paying in Cycle 2):\n"));
-  console.log(c.dim("     ┌────┬─────────────┬──────────────┬─────────────────┐"));
-  console.log(c.dim("     │ #  │ Name        │ Position     │ Collateral      │"));
-  console.log(c.dim("     ├────┼─────────────┼──────────────┼─────────────────┤"));
-  
-  // Select members to default (Position 1, 5, 9)
-  const defaulters = [
-    participants.find(p => p.position === 1),  // Worst case
-    participants.find(p => p.position === 5),  // Mid position
-    participants.find(p => p.position === 9)   // Late position
-  ];
-  
-  for (let i = 0; i < defaulters.length; i++) {
-    const member = defaulters[i];
-    const memberInfo = await ajo.getMemberInfo(member.address);
-    const collateral = memberInfo.memberInfo.lockedCollateral;
-    
-    console.log(c.dim(`     │ ${(i+1).toString().padStart(2)} │ ${member.name.padEnd(11)} │ ${member.position.toString().padEnd(12)} │ ${formatUSDC(collateral).padEnd(15)} │`));
-  }
-  
-  console.log(c.dim("     └────┴─────────────┴──────────────┴─────────────────┘\n"));
-  
-  console.log(c.yellow("  ℹ️  Other members WILL pay to keep the Ajo running\n"));
-  
-  // Other members pay
-  console.log(c.cyan("  💳 Processing Payments for Non-Defaulters:\n"));
-  
-  for (let i = 0; i < participants.length; i++) {
-    const participant = participants[i];
-    
-    // Skip defaulters
-    if (defaulters.find(d => d.address === participant.address)) {
-      console.log(c.red(`     ⏭️  Skipping ${participant.name} (will default)`));
-      continue;
-    }
-    
-    try {
-      await retryWithBackoff(async () => {
-        const tx = await ajo.connect(participant.signer).processPayment({
-          gasLimit: DEMO_CONFIG.GAS_LIMIT.PROCESS_PAYMENT
-        });
-        return await tx.wait();
-      }, `${participant.name} - Payment`);
-      
-      console.log(c.green(`     ✅ ${participant.name} paid`));
-      
-    } catch (error) {
-      console.log(c.red(`     ❌ ${participant.name} payment failed: ${error.message.slice(0, 100)}`));
-    }
-    
-    await sleep(1000);
-  }
-  
-  console.log();
-  console.log(c.yellow("═".repeat(88) + "\n"));
-  
-  return defaulters;
-}
-
-// ================================================================
-// PHASE 7: HANDLE DEFAULTS AFTER CYCLE 2
-// ================================================================
-async function testDefaultScenarios(ajo, ajoPayments, ajoCollateral, ajoMembers, participants, defaulters, ajoInfo) {
-  console.log(c.bgRed("\n" + " ".repeat(20) + "PHASE 7: DEFAULT HANDLING & COLLATERAL SEIZURE" + " ".repeat(21)));
-  console.log(c.red("═".repeat(88) + "\n"));
-  
-  // Verify current cycle
-  const currentCycle = await ajoPayments.getCurrentCycle();
-  console.log(c.bright(`  📅 Current Cycle: ${currentCycle.toString()}\n`));
-  
-  console.log(c.yellow("  ⏰ Waiting for grace period to expire...\n"));
-  console.log(c.dim("     After this, members who didn't pay are officially in default\n"));
-  
-  // Wait another cycle duration to ensure defaults are recognized
-  await sleepWithProgress(DEMO_CONFIG.CYCLE_DURATION, "Grace Period");
-  console.log();
-  
-  const defaultScenarios = [];
-  
-  // ================================================================
-  // TEST EACH DEFAULTER
-  // ================================================================
-  for (let i = 0; i < defaulters.length; i++) {
-    const defaulter = defaulters[i];
-    
-    console.log(c.bgYellow(`\n${"═".repeat(25)} SCENARIO ${i+1}: ${defaulter.name.toUpperCase()} DEFAULTS ${"═".repeat(25)}`));
-    console.log(c.yellow("═".repeat(88) + "\n"));
-    
-    console.log(c.red(`  🚨 Processing default for ${defaulter.name} (Position ${defaulter.position})\n`));
-    
-    // Get pre-default state
-    console.log(c.cyan("  📊 Step 1: Analyze Pre-Default State\n"));
-    
-    const memberInfo = await ajo.getMemberInfo(defaulter.address);
-    const lockedCollateral = memberInfo.memberInfo.lockedCollateral;
-    const lastPaymentCycle = memberInfo.memberInfo.lastPaymentCycle;
-    const totalPaid = memberInfo.memberInfo.totalPaid;
-    const guarantorAddress = memberInfo.memberInfo.guarantor;
-    
-    console.log(c.dim("     ┌─────────────────────────────────────────────────────────┐"));
-    console.log(c.dim(`     │ Defaulter: ${defaulter.name.padEnd(44)} │`));
-    console.log(c.dim(`     │ Position: ${defaulter.position.toString().padEnd(46)} │`));
-    console.log(c.dim(`     │ Last Payment Cycle: ${lastPaymentCycle.toString().padEnd(34)} │`));
-    console.log(c.dim(`     │ Current Cycle: ${currentCycle.toString().padEnd(39)} │`));
-    console.log(c.dim(`     │ Cycles Missed: ${currentCycle.sub(lastPaymentCycle).toString().padEnd(39)} │`));
-    console.log(c.dim(`     │ Locked Collateral: ${formatUSDC(lockedCollateral).padEnd(36)} │`));
-    console.log(c.dim(`     │ Total Paid: ${formatUSDC(totalPaid).padEnd(42)} │`));
-    console.log(c.dim(`     │ Guarantor: ${guarantorAddress.slice(0, 42).padEnd(44)} │`));
-    console.log(c.dim("     └─────────────────────────────────────────────────────────┘\n"));
-    
-    let guarantorCollateral = ethers.BigNumber.from(0);
-    if (guarantorAddress !== "0x0000000000000000000000000000000000000000") {
-      const guarantorInfo = await ajo.getMemberInfo(guarantorAddress);
-      guarantorCollateral = guarantorInfo.memberInfo.lockedCollateral;
-      console.log(c.dim(`     Guarantor Collateral: ${formatUSDC(guarantorCollateral)}\n`));
-    }
-    
-    const expectedSeizable = lockedCollateral.add(guarantorCollateral);
-    console.log(c.bright(`  💰 Expected Seizable Collateral: ${formatUSDC(expectedSeizable)}\n`));
-    
-    await sleep(2000);
-    
-    // Execute default handling
-    console.log(c.cyan("  🔒 Step 2: Execute Default Handling & Collateral Seizure\n"));
-    
-    try {
-      const handleDefaultTx = await retryWithBackoff(async () => {
-        const tx = await ajo.connect(participants[1].signer).handleDefault(
-          defaulter.address,
-          { gasLimit: DEMO_CONFIG.GAS_LIMIT.HANDLE_DEFAULT }
-        );
-        return await tx.wait();
-      }, "Handle Default");
-      
-      console.log(c.green(`     ✅ Default handling executed successfully`));
-      console.log(c.dim(`        Transaction Hash: ${handleDefaultTx.transactionHash}`));
-      console.log(c.dim(`        Gas Used: ${handleDefaultTx.gasUsed.toString()}\n`));
-      
-      // Verify post-default state
-      console.log(c.cyan("  📊 Step 3: Verify Post-Default State\n"));
-      
-      try {
-        const postDefaultInfo = await ajo.getMemberInfo(defaulter.address);
-        const postDefaultCollateral = postDefaultInfo.memberInfo.lockedCollateral;
-        const isActive = postDefaultInfo.memberInfo.isActive;
-        
-        console.log(c.dim("     ┌─────────────────────────────────────────────────────────┐"));
-        console.log(c.dim(`     │ Remaining Collateral: ${formatUSDC(postDefaultCollateral).padEnd(34)} │`));
-        console.log(c.dim(`     │ Member Status: ${(isActive ? 'Active' : 'Removed').padEnd(41)} │`));
-        console.log(c.dim("     └─────────────────────────────────────────────────────────┘\n"));
-        
-        const actualSeized = lockedCollateral.sub(postDefaultCollateral);
-        console.log(c.green(`     ✅ Collateral Seized: ${formatUSDC(actualSeized)}\n`));
-      } catch (error) {
-        console.log(c.yellow(`     ℹ️  Member removed from contract (expected after seizure)\n`));
-      }
-      
-      defaultScenarios.push({
-        scenario: `Position ${defaulter.position} Default`,
-        defaulter: defaulter.name,
-        defaulterAddress: defaulter.address,
-        preDefaultCollateral: lockedCollateral,
-        guarantorCollateral,
-        expectedSeizable,
-        success: true,
-        transactionHash: handleDefaultTx.transactionHash
-      });
-      
-    } catch (error) {
-      console.log(c.red(`     ❌ Default handling failed: ${error.message}\n`));
-      
-      defaultScenarios.push({
-        scenario: `Position ${defaulter.position} Default`,
-        defaulter: defaulter.name,
-        error: error.message,
-        success: false
-      });
-    }
-    
-    await sleep(3000);
-  }
-  
-  console.log(c.red("═".repeat(88) + "\n"));
-  
-  return defaultScenarios;
-}
-
-/**
- * Enhanced sleep with progress indicator
- */
-async function sleepWithProgress(seconds, label = "Waiting") {
-  const steps = 5;
-  const interval = seconds * 1000 / steps;
-  
-  for (let i = 1; i <= steps; i++) {
-    await sleep(interval);
-    const progress = '█'.repeat(i) + '░'.repeat(steps - i);
-    process.stdout.write(`\r     ${label}: [${progress}] ${Math.round(i/steps * 100)}%`);
-  }
-  console.log(); // New line after completion
 }
 
 // ================================================================
@@ -1219,319 +781,70 @@ async function demonstrateMemberJoining(ajo, ajoCollateral, ajoMembers, particip
   return joinResults;
 }
 
+
 // ================================================================
-// PHASE 5: FULL 10-CYCLE DEMONSTRATION WITH PAYMENT STATUS
+// PHASE 4: DEMONSTRATE HTS FEATURES
 // ================================================================
 
-async function demonstrateFullCycles(ajo, ajoMembers, ajoPayments, ajoCollateral, ajoFactory, ajoId,  participants, cycleDuration) {
-  console.log(c.bgBlue("\n" + " ".repeat(20) + "PHASE 5: FULL 10-CYCLE PAYMENT & PAYOUT DEMONSTRATION" + " ".repeat(18)));
+async function demonstrateHtsFeatures(ajoFactory, ajoId, participants, ajoInfo) {
+  console.log(c.bgBlue("\n" + " ".repeat(22) + "PHASE 4: HTS AUTO-ASSOCIATION DEMONSTRATION" + " ".repeat(23)));
+  console.log(c.blue("═".repeat(88)));
+  console.log(c.bright("\n  💎 Native Hedera Tokens with Auto-Association\n"));
+  
+  console.log(c.cyan("  📊 HTS Token Configuration\n"));
+  console.log(c.dim("     USDC Token (HTS):"));
+  console.log(c.dim("     ┌─────────────────────────────────────────────────┐"));
+  console.log(c.dim(`     │ Address:      ${ajoInfo.usdcToken.slice(0, 42).padEnd(42)} │`));
+  console.log(c.dim(`     │ Symbol:       USDC (HTS)                          │`));
+  console.log(c.dim(`     │ Decimals:     6                                   │`));
+  console.log(c.dim(`     │ Auto-Assoc:   ${c.green('✅ ENABLED').padEnd(51)} │`));
+  console.log(c.dim(`     │ Treasury:     Factory                             │`));
+  console.log(c.dim("     └─────────────────────────────────────────────────┘\n"));
+  
+  console.log(c.cyan("  📊 Member Token Balances\n"));
+  console.log(c.dim("     ┌─────────────┬──────────────┬──────────────┬──────────────┐"));
+  console.log(c.dim("     │ Member      │ USDC Balance │ HBAR Balance │ Ready Status │"));
+  console.log(c.dim("     ├─────────────┼──────────────┼──────────────┼──────────────┤"));
+  
+  for (let i = 0; i < Math.min(5, participants.length); i++) {
+    const p = participants[i];
+    try {
+      const usdcContract = new ethers.Contract(
+        ajoInfo.usdcToken,
+        ["function balanceOf(address) view returns (uint256)"],
+        ethers.provider
+      );
+      
+      const hbarContract = new ethers.Contract(
+        ajoInfo.hbarToken,
+        ["function balanceOf(address) view returns (uint256)"],
+        ethers.provider
+      );
+      
+      const usdcBalance = await usdcContract.balanceOf(p.address);
+      const hbarBalance = await hbarContract.balanceOf(p.address);
+      
+      const usdcBal = formatUSDC(usdcBalance);
+      const hbarBal = formatHBAR(hbarBalance);
+      const readyStatus = usdcBalance.gt(0) ? c.green('✅ Ready') : c.yellow('⚠️ No Balance');
+      
+      console.log(c.dim(`     │ ${p.name.padEnd(11)} │ ${usdcBal.padEnd(12)} │ ${hbarBal.padEnd(12)} │ ${readyStatus.padEnd(20)} │`));
+      
+    } catch (error) {
+      console.log(c.dim(`     │ ${p.name.padEnd(11)} │ ${'⚠️ Error'.padEnd(12)} │ ${'⚠️ Error'.padEnd(12)} │ ${'⚠️ Error'.padEnd(12)} │`));
+    }
+  }
+  console.log(c.dim("     └─────────────┴──────────────┴──────────────┴──────────────┘\n"));
+  
+  console.log(c.cyan("  💡 HTS Auto-Association Benefits:\n"));
+  console.log(c.green("     ✓ No Manual Association") + c.dim(" - Users receive tokens automatically"));
+  console.log(c.green("     ✓ Seamless Onboarding") + c.dim(" - Individual user processing"));
+  console.log(c.green("     ✓ Reduced Gas Costs") + c.dim(" - No separate association transactions"));
+  console.log(c.green("     ✓ Better UX") + c.dim(" - Simplified user experience"));
+  console.log(c.green("     ✓ Factory Treasury") + c.dim(" - Centralized token distribution"));
+  console.log(c.green("     ✓ Native Hedera") + c.dim(" - Faster & cheaper than ERC20\n"));
+  
   console.log(c.blue("═".repeat(88) + "\n"));
-  
-  console.log(c.bright(`  ⏱️  Cycle Duration: ${cycleDuration} seconds\n`));
-  console.log(c.yellow("  📊 Running through all 10 cycles...\n"));
-  
-  const cycleResults = [];
-  const TOTAL_CYCLES = 10;
-  
-  for (let cycle = 1; cycle <= TOTAL_CYCLES; cycle++) {
-    console.log(c.bgYellow(`\n${"═".repeat(35)} CYCLE ${cycle}/10 ${"═".repeat(35)}`));
-    console.log(c.bright(`\n  📅 Cycle ${cycle} Started\n`));
-    
-    const cycleData = {
-      cycle,
-      payments: [],
-      payout: null,
-      startTime: Date.now()
-    };
-    
-    // Get current cycle from contract with retry
-    let currentCycle, nextRecipient;
-    try {
-      currentCycle = await retryWithBackoff(
-        async () => await ajoPayments.getCurrentCycle(),
-        "Get Current Cycle"
-      );
-      console.log(c.dim(`     Contract Cycle: ${currentCycle.toString()}`));
-      
-      nextRecipient = await retryWithBackoff(
-        async () => await ajoPayments.getNextRecipient(),
-        "Get Next Recipient"
-      );
-      console.log(c.bright(`     💰 Next Recipient: ${nextRecipient}\n`));
-    } catch (error) {
-      console.log(c.red(`\n  ❌ Failed to get cycle info: ${error.message}`));
-      console.log(c.yellow(`  ⏩ Skipping to next cycle...\n`));
-      continue;
-    }
-    
-    // Find recipient name
-    const recipientParticipant = participants.find(p => 
-      p.address.toLowerCase() === nextRecipient.toLowerCase()
-    );
-    const recipientName = recipientParticipant ? recipientParticipant.name : "Unknown";
-    
-    if (nextRecipient === "0x0000000000000000000000000000000000000000") {
-      console.log(c.red(`\n  ⚠️ WARNING: Next recipient is address(0) - getNextRecipient() issue!`));
-      console.log(c.yellow(`  This indicates a contract logic problem that needs fixing.\n`));
-    }
-    
-    console.log(c.cyan(`  💳 Step 1: Process Payments for Cycle ${cycle}\n`));
-    console.log(c.dim("     ┌────┬─────────────┬──────────────┬──────────────┐"));
-    console.log(c.dim("     │ #  │ Member      │ Amount       │ Status       │"));
-    console.log(c.dim("     ├────┼─────────────┼──────────────┼──────────────┤"));
-    
-    // All members make payments with retry
-    for (let i = 0; i < participants.length; i++) {
-      const participant = participants[i];
-      
-      try {
-        // Call AjoCore.processPayment() with NO parameters
-        await retryWithBackoff(async () => {
-          const tx = await ajo.connect(participant.signer).processPayment({
-            gasLimit: DEMO_CONFIG.GAS_LIMIT.PROCESS_PAYMENT
-          });
-          
-          return await tx.wait();
-        }, `${participant.name} - Payment`);
-        
-        cycleData.payments.push({
-          member: participant.name,
-          amount: DEMO_CONFIG.MONTHLY_PAYMENT_USDC,
-          success: true
-        });
-        
-        const status = c.green("✅ Paid");
-        console.log(c.dim(`     │ ${(i+1).toString().padStart(2)} │ ${participant.name.padEnd(11)} │ ${formatUSDC(DEMO_CONFIG.MONTHLY_PAYMENT_USDC).padEnd(12)} │ ${status.padEnd(20)} │`));
-        
-      } catch (error) {
-        cycleData.payments.push({
-          member: participant.name,
-          error: error.message,
-          success: false
-        });
-        
-        const status = c.red("❌ Failed");
-        console.log(c.dim(`     │ ${(i+1).toString().padStart(2)} │ ${participant.name.padEnd(11)} │ ${'N/A'.padEnd(12)} │ ${status.padEnd(20)} │`));
-        console.log(c.red(`        Error: ${error.message.slice(0, 150)}`));
-      }
-      
-      await sleep(2000);
-    }
-    
-    console.log(c.dim("     └────┴─────────────┴──────────────┴──────────────┘\n"));
-    
-    const successfulPayments = cycleData.payments.filter(p => p.success).length;
-    console.log(c.green(`     ✅ ${successfulPayments}/${participants.length} payments processed\n`));
-    
-    await sleep(2000);
-    
-    // ============ NEW: GET CYCLE PAYMENT STATUS ============
-    console.log(c.cyan(`  📊 Step 1.5: Verify Cycle Payment Status\n`));
-    
-    try {
-      const paymentStatus = await retryWithBackoff(
-        async () => await ajoPayments.getCyclePaymentStatus(currentCycle),
-        "Get Cycle Payment Status"
-      );
-      
-      const [paidMembers, unpaidMembers, totalCollected] = paymentStatus;
-      
-      console.log(c.bright(`     Payment Status for Cycle ${currentCycle}:\n`));
-      console.log(c.dim(`     Total Collected: ${formatUSDC(totalCollected)}`));
-      console.log(c.dim(`     Members Paid: ${paidMembers.length}/${participants.length}\n`));
-      
-      // Display paid members
-      if (paidMembers.length > 0) {
-        console.log(c.green(`     ✅ Paid Members (${paidMembers.length}):`));
-        for (const memberAddr of paidMembers) {
-          const memberName = participants.find(p => 
-            p.address.toLowerCase() === memberAddr.toLowerCase()
-          )?.name || "Unknown";
-          console.log(c.dim(`        • ${memberName} (${memberAddr.slice(0, 8)}...)`));
-        }
-        console.log();
-      }
-      
-      // Display unpaid members (if any)
-      if (unpaidMembers.length > 0) {
-        console.log(c.red(`     ❌ Unpaid Members (${unpaidMembers.length}):`));
-        for (const memberAddr of unpaidMembers) {
-          const memberName = participants.find(p => 
-            p.address.toLowerCase() === memberAddr.toLowerCase()
-          )?.name || "Unknown";
-          console.log(c.dim(`        • ${memberName} (${memberAddr.slice(0, 8)}...)`));
-        }
-        console.log();
-      } else {
-        console.log(c.green(`     🎉 All members have paid!\n`));
-      }
-      
-      // Store payment status in cycle data
-      cycleData.paymentStatus = {
-        paidCount: paidMembers.length,
-        unpaidCount: unpaidMembers.length,
-        totalCollected: totalCollected.toString(),
-        allPaid: unpaidMembers.length === 0
-      };
-      
-    } catch (error) {
-      console.log(c.red(`     ❌ Failed to get payment status: ${error.message}\n`));
-      cycleData.paymentStatus = {
-        error: error.message
-      };
-    }
-    
-    await sleep(2000);
-    
-    // ============ DISTRIBUTE PAYOUT ============
-    console.log(c.cyan(`  💰 Step 2: Distribute Payout to ${recipientName}\n`));
-
-    // DEBUG: Test batch payment status
-console.log(c.yellow("\n🔍 DEBUG: Testing Batch Payment Status...\n"));
-
-try {
-    const activeMembers = await ajoMembers.getActiveMembersList();
-    console.log(c.dim(`   Active members count: ${activeMembers.length}`));
-    console.log(c.dim(`   Sample addresses: ${activeMembers.slice(0, 3).map(a => a.slice(0, 10)).join(', ')}...\n`));
-    
-    // Test the batch call directly
-    const debugResult = await ajoPayments.batchCheckPaymentStatus(activeMembers);
-    console.log(c.green(`   ✅ Batch call succeeded!`));
-    console.log(c.dim(`   Current Cycle: ${debugResult.currentCycleValue}`));
-    console.log(c.dim(`   Members Checked: ${debugResult.memberCount}`));
-    console.log(c.dim(`   Statuses: ${debugResult.statuses.map(s => s ? '✓' : '✗').join(', ')}\n`));
-    
-} catch (error) {
-    console.log(c.red(`   ❌ Batch call FAILED!`));
-    console.log(c.red(`   Error: ${error.message}\n`));
-}
-
-
-
-
-     const postStateInspection = await inspectAjoState(
-      ajo,
-      ajoMembers, 
-      ajoPayments, 
-      ajoCollateral, 
-      ajoFactory, 
-      ajoId
-    );
-
-    try {
-      const isReady = await retryWithBackoff(
-        async () => await ajoPayments.isPayoutReady(),
-        "Check Payout Ready"
-      );
-      console.log(c.dim(`     Payout Ready: ${isReady ? c.green('✅ Yes') : c.red('❌ No')}`));
-      
-      if (!isReady) {
-        throw new Error("Payout not ready - check member payments or contract logic");
-      }
-      
-      const expectedPayout = await retryWithBackoff(
-        async () => await ajoPayments.calculatePayout(),
-        "Calculate Payout"
-      );
-      console.log(c.bright(`     Expected Payout: ${formatUSDC(expectedPayout)}\n`));
-      
-      const payoutReceipt = await retryWithBackoff(async () => {
-        const payoutTx = await ajo.connect(participants[0].signer).distributePayout({
-          gasLimit: DEMO_CONFIG.GAS_LIMIT.DISTRIBUTE_PAYOUT
-        });
-        return await payoutTx.wait();
-      }, "Distribute Payout");
-      
-      cycleData.payout = {
-        recipient: recipientName,
-        recipientAddress: nextRecipient,
-        amount: expectedPayout,
-        success: true,
-        gasUsed: payoutReceipt.gasUsed
-      };
-      
-      console.log(c.green(`     ✅ Payout Distributed!`));
-      console.log(c.dim(`        Recipient: ${recipientName}`));
-      console.log(c.dim(`        Amount: ${formatUSDC(expectedPayout)}`));
-      console.log(c.dim(`        Gas Used: ${payoutReceipt.gasUsed.toString()}\n`));
-      
-    } catch (error) {
-      cycleData.payout = {
-        recipient: recipientName,
-        error: error.message,
-        success: false
-      };
-      
-      console.log(c.red(`     ❌ Payout Failed: ${error.message.slice(0, 100)}\n`));
-    }
-    
-    cycleData.endTime = Date.now();
-    cycleData.duration = (cycleData.endTime - cycleData.startTime) / 1000;
-    
-    cycleResults.push(cycleData);
-    
-    console.log(c.bright(`  ✅ Cycle ${cycle} Complete`));
-    console.log(c.dim(`     Duration: ${cycleData.duration.toFixed(2)} seconds\n`));
-    
-    // Wait for next cycle with progress indicator
-    if (cycle < TOTAL_CYCLES) {
-      await sleepWithProgress(cycleDuration, `Waiting for Cycle ${cycle + 1}`);
-      console.log();
-    }
-    
-    console.log(c.blue("═".repeat(88) + "\n"));
-
-    const preStateInspection = await inspectAjoState(
-      ajo,
-      ajoMembers, 
-      ajoPayments, 
-      ajoCollateral, 
-      ajoFactory, 
-      ajoId
-    );
-  }
-  
-  // ============ ENHANCED SUMMARY WITH PAYMENT STATUS ============
-  console.log(c.bgGreen("\n" + " ".repeat(28) + "📊 FULL CYCLE SUMMARY 📊" + " ".repeat(32)));
-  console.log(c.green("═".repeat(88) + "\n"));
-  
-  console.log(c.bright("  Overall Statistics:\n"));
-  console.log(c.dim("     ┌─────────────────────────────┬──────────────┐"));
-  console.log(c.dim(`     │ Total Cycles Completed      │ ${cycleResults.length.toString().padStart(12)} │`));
-  
-  const totalPayments = cycleResults.reduce((sum, c) => sum + c.payments.filter(p => p.success).length, 0);
-  const totalPayouts = cycleResults.filter(c => c.payout && c.payout.success).length;
-  
-  console.log(c.dim(`     │ Total Payments Processed    │ ${totalPayments.toString().padStart(12)} │`));
-  console.log(c.dim(`     │ Total Payouts Distributed   │ ${totalPayouts.toString().padStart(12)} │`));
-  
-  const avgCycleDuration = cycleResults.reduce((sum, c) => sum + c.duration, 0) / cycleResults.length;
-  console.log(c.dim(`     │ Avg Cycle Duration          │ ${avgCycleDuration.toFixed(2).padStart(10)}s │`));
-  
-  // Add payment status summary
-  const cyclesWithFullPayment = cycleResults.filter(c => c.paymentStatus?.allPaid).length;
-  console.log(c.dim(`     │ Cycles w/ Full Payment      │ ${cyclesWithFullPayment.toString().padStart(12)} │`));
-  
-  console.log(c.dim("     └─────────────────────────────┴──────────────┘\n"));
-  
-  console.log(c.bright("  Payout Recipients:\n"));
-  console.log(c.dim("     ┌──────┬─────────────┬──────────────┬──────────────┐"));
-  console.log(c.dim("     │ Cycle│ Recipient   │ Amount       │ Status       │"));
-  console.log(c.dim("     ├──────┼─────────────┼──────────────┼──────────────┤"));
-  
-  for (const cycleData of cycleResults) {
-    if (cycleData.payout) {
-      const status = cycleData.payout.success ? c.green("✅ Success") : c.red("❌ Failed");
-      const amount = cycleData.payout.amount ? formatUSDC(cycleData.payout.amount) : "N/A";
-      console.log(c.dim(`     │ ${cycleData.cycle.toString().padStart(4)} │ ${cycleData.payout.recipient.padEnd(11)} │ ${amount.padEnd(12)} │ ${status.padEnd(20)} │`));
-    }
-  }
-  
-  console.log(c.dim("     └──────┴─────────────┴──────────────┴──────────────┘\n"));
-  
-  console.log(c.green("═".repeat(88) + "\n"));
-  
-  return cycleResults;
 }
 
 // ================================================================
@@ -1603,161 +916,111 @@ async function createRealHcsTopic(hederaClient, ajoName) {
     };
   }
 }
+
+
 // ================================================================
-// COMPREHENSIVE AJO STATE INSPECTION
+// PHASE 6: GOVERNANCE & HCS VOTING DEMONSTRATION
 // ================================================================
-async function inspectAjoState(ajo, ajoMembers, ajoPayments, ajoCollateral, ajoFactory, ajoId) {
-  console.log(c.cyan("\n📊 INSPECTING AJO STATE BEFORE OPERATIONS...\n"));
+
+async function demonstrateGovernance(ajoFactory, ajoId, participants, ajoInfo) {
+  console.log(c.bgBlue("\n" + " ".repeat(22) + "PHASE 6: GOVERNANCE & HCS VOTING DEMONSTRATION" + " ".repeat(20)));
+  console.log(c.blue("═".repeat(88)));
+  console.log(c.bright("\n  🗳️  Hedera Consensus Service (HCS) + On-Chain Tally\n"));
+  
+  console.log(c.cyan("  📊 Governance System Overview:\n"));
+  console.log(c.dim("     ┌─────────────────────────────────────────────────────────────┐"));
+  console.log(c.dim("     │ HCS Topic:        " + (ajoInfo.hcsTopicId || 'N/A').toString().slice(0, 40).padEnd(40) + " │"));
+  console.log(c.dim("     │ Governance:       " + ajoInfo.ajoGovernance.slice(0, 40).padEnd(40) + " │"));
+  console.log(c.dim("     │ Voting Type:      " + "Off-Chain HCS + On-Chain Tally".padEnd(40) + " │"));
+  console.log(c.dim("     │ Active Members:   " + participants.length.toString().padEnd(40) + " │"));
+  console.log(c.dim("     └─────────────────────────────────────────────────────────────┘\n"));
   
   try {
-    // 1. Contract Stats from AjoMembers
-    console.log(c.bright("  1️⃣ Contract Statistics (from AjoMembers):"));
-    const stats = await ajoMembers.getContractStats();
-    console.log(c.dim(`     Total Members: ${stats.totalMembers}`));
-    console.log(c.dim(`     Active Members: ${stats.activeMembers}`));
-    console.log(c.dim(`     Total Collateral USDC: ${formatUSDC(stats.totalCollateralUSDC)}`));
-    console.log(c.dim(`     Total Collateral HBAR: ${formatHBAR(stats.totalCollateralHBAR)}`));
-    console.log(c.dim(`     Contract Balance USDC: ${formatUSDC(stats.contractBalanceUSDC)}`));
-    console.log(c.dim(`     Contract Balance HBAR: ${formatHBAR(stats.contractBalanceHBAR)}`));
-    console.log(c.dim(`     Current Queue Position: ${stats.currentQueuePosition}`));
-    console.log(c.dim(`     Active Token: ${stats.activeToken === 0 ? 'USDC' : 'HBAR'}\n`));
+    const ajoGovernance = await ethers.getContractAt("AjoGovernance", ajoInfo.ajoGovernance);
     
-    // 2. Payment Cycle Information
-    console.log(c.bright("  2️⃣ Payment Cycle Information (from AjoPayments):"));
-    const currentCycle = await ajoPayments.getCurrentCycle();
-    const nextPayoutPosition = await ajoPayments.getNextPayoutPosition();
-    const activeToken = await ajoPayments.getActivePaymentToken();
-    const tokenConfig = await ajoPayments.getTokenConfig(activeToken);
-    const isPayoutReady = await ajoPayments.isPayoutReady();
+    console.log(c.cyan("  🔍 Verifying Governance Setup...\n"));
     
-    console.log(c.dim(`     Current Cycle: ${currentCycle}`));
-    console.log(c.dim(`     Next Payout Position: ${nextPayoutPosition}`));
-    console.log(c.dim(`     Active Payment Token: ${activeToken === 0 ? 'USDC' : 'HBAR'}`));
-    console.log(c.dim(`     Monthly Payment: ${activeToken === 0 ? formatUSDC(tokenConfig.monthlyPayment) : formatHBAR(tokenConfig.monthlyPayment)}`));
-    console.log(c.dim(`     Token Active: ${tokenConfig.isActive}`));
-    console.log(c.dim(`     Is Payout Ready: ${isPayoutReady}\n`));
-    
-    // 3. Next Recipient Info
-    console.log(c.bright("  3️⃣ Next Recipient Information:"));
-    try {
-      const nextRecipient = await ajoPayments.getNextRecipient();
-      console.log(c.dim(`     Next Recipient Address: ${nextRecipient}`));
-      
-      if (nextRecipient !== ethers.constants.AddressZero) {
-        const memberInfo = await ajoMembers.getMemberInfo(nextRecipient);
-        console.log(c.dim(`     Queue Position: ${memberInfo.memberInfo.queueNumber}`));
-        console.log(c.dim(`     Has Received Payout: ${memberInfo.memberInfo.hasReceivedPayout}`));
-        console.log(c.dim(`     Is Active: ${memberInfo.memberInfo.isActive}\n`));
-      } else {
-        console.log(c.yellow(`     ⚠️ No recipient set (Ajo may be empty)\n`));
+    await retryOperation(async () => {
+      const isValid = await ajoGovernance.verifySetup();
+      if (!isValid[0]) {
+        throw new Error(`Governance not properly initialized: ${isValid[1]}`);
       }
-    } catch (error) {
-      console.log(c.yellow(`     ⚠️ Could not get next recipient: ${error.message}\n`));
-    }
+      console.log(c.green(`     ✅ Governance properly initialized`));
+      console.log(c.dim(`        Reason: ${isValid[1]}\n`));
+      return isValid;
+    }, "Verify Governance Setup");
     
-    // 4. Active Members Details
-    console.log(c.bright("  4️⃣ Active Members Details:"));
-    const activeMembersList = await ajoMembers.getActiveMembersList();
+    const settings = await retryOperation(async () => {
+      return await ajoGovernance.getGovernanceSettings();
+    }, "Get Governance Settings");
     
-    try {
-      const allMembersDetails = await ajoMembers.getAllMembersDetails();
-      console.log(c.dim(`     Total Active: ${allMembersDetails.length}`));
-      
-      if (allMembersDetails.length > 0) {
-        console.log(c.dim(`\n     📋 Member Details Table:\n`));
-        console.log(c.bright(`     ${'#'.padEnd(3)} | ${'Address'.padEnd(12)} | ${'Queue'.padEnd(5)} | ${'Paid?'.padEnd(5)} | ${'Collateral'.padEnd(12)} | ${'Payout?'.padEnd(7)} | ${'Defaults'.padEnd(8)} | ${'Rep'.padEnd(4)}`));
-        console.log(c.dim(`     ${'-'.repeat(80)}`));
-        
-        for (let i = 0; i < allMembersDetails.length; i++) {
-          const detail = allMembersDetails[i];
-          const num = (i + 1).toString().padEnd(3);
-          const addr = detail.userAddress.slice(0, 10) + '..';
-          const queue = detail.queuePosition.toString().padEnd(5);
-          const paid = (detail.hasPaidThisCycle ? '✓' : '✗').padEnd(5);
-          const collateral = formatUSDC(detail.collateralLocked).padEnd(12);
-          const payout = (detail.hasReceivedPayout ? '✓' : '✗').padEnd(7);
-          const defaults = detail.defaultCount.toString().padEnd(8);
-          const rep = detail.reputationScore.toString().padEnd(4);
-          
-          const color = detail.hasPaidThisCycle ? c.green : c.yellow;
-          console.log(color(`     ${num} | ${addr} | ${queue} | ${paid} | ${collateral} | ${payout} | ${defaults} | ${rep}`));
-          
-          if (detail.guarantorAddress !== ethers.constants.AddressZero) {
-            console.log(c.dim(`          └─ Guarantor: ${detail.guarantorAddress.slice(0, 8)}... (Queue: ${detail.guarantorQueuePosition})`));
-          }
+    console.log(c.cyan("  ⚙️  Governance Parameters:\n"));
+    console.log(c.dim("     ┌──────────────────────────────┬──────────────┐"));
+    console.log(c.dim(`     │ Voting Period                │ ${(settings._votingPeriod.toNumber() / 86400).toFixed(0).padStart(10)} days │`));
+    console.log(c.dim(`     │ Quorum Required              │ ${settings._quorumPercentage.toString().padStart(11)}% │`));
+    console.log(c.dim(`     │ Proposal Threshold           │ ${settings._proposalThreshold.toString().padStart(12)} │`));
+    console.log(c.dim(`     │ Current Penalty Rate         │ ${settings.currentPenaltyRate.toString().padStart(11)}% │`));
+    console.log(c.dim(`     │ Total Proposals              │ ${settings.totalProposals.toString().padStart(12)} │`));
+    console.log(c.dim("     └──────────────────────────────┴──────────────┘\n"));
+    
+    await sleep(2000);
+    
+    console.log(c.yellow("  🚀 Starting Full Governance Demo...\n"));
+    
+    const governanceResults = await retryOperation(async () => {
+      return await runGovernanceDemo(
+        ajoGovernance,
+        participants,
+        {
+          hcsTopicId: ajoInfo.hcsTopicId,
+          ajoCore: ajoInfo.ajoCore,
+          totalMembers: participants.length
         }
-        console.log();
-        
-        const paidMembers = allMembersDetails.filter(d => d.hasPaidThisCycle).length;
-        const receivedPayout = allMembersDetails.filter(d => d.hasReceivedPayout).length;
-        const totalCollateral = allMembersDetails.reduce((sum, d) => sum.add(d.collateralLocked), ethers.BigNumber.from(0));
-        const avgReputation = allMembersDetails.reduce((sum, d) => sum + d.reputationScore.toNumber(), 0) / allMembersDetails.length;
-        
-        console.log(c.bright(`     📊 Member Statistics:`));
-        console.log(c.dim(`        Members Paid This Cycle: ${paidMembers}/${allMembersDetails.length}`));
-        console.log(c.dim(`        Members Received Payout: ${receivedPayout}/${allMembersDetails.length}`));
-        console.log(c.dim(`        Total Collateral Locked: ${formatUSDC(totalCollateral)} USDC`));
-        console.log(c.dim(`        Average Reputation: ${avgReputation.toFixed(2)}\n`));
-      }
-    } catch (error) {
-      console.log(c.yellow(`     ⚠️ Could not get detailed members: ${error.message}\n`));
+      );
+    }, "Run Governance Demo", 5); // Increased retries to 5 for the full demo
+    
+    await sleep(2000);
+    
+    console.log(c.bgGreen("\n" + " ".repeat(24) + "📊 GOVERNANCE DEMO SUMMARY 📊" + " ".repeat(31)));
+    console.log(c.green("═".repeat(88) + "\n"));
+    
+    if (governanceResults) {
+      console.log(c.bright("  Results:\n"));
+      console.log(c.dim("     ┌──────────────────────────────┬──────────────┐"));
+      console.log(c.dim(`     │ Proposals Created            │ ${(governanceResults.proposals?.length || 0).toString().padStart(12)} │`));
+      console.log(c.dim(`     │ Votes Cast (HCS)             │ ${(governanceResults.votes?.length || 0).toString().padStart(12)} │`));
+      console.log(c.dim(`     │ Tally Gas Cost               │ ${(governanceResults.tallyResult?.gasUsed?.toString() || 'N/A').padStart(12)} │`));
+      
+      const execStatus = governanceResults.execResult?.success ? c.green('✅ Success') : c.red('❌ Failed');
+      console.log(c.dim(`     │ Execution Status             │ ${execStatus.padEnd(20)} │`));
+      console.log(c.dim("     └──────────────────────────────┴──────────────┘\n"));
+      
+      console.log(c.yellow("  💡 Key Insights:\n"));
+      console.log(c.dim("     • HCS voting costs ~$0.0001 per vote"));
+      console.log(c.dim("     • 90%+ cost reduction vs pure on-chain voting"));
+      console.log(c.dim("     • Anyone can tally votes (no trusted intermediaries)"));
+      console.log(c.dim("     • Signature verification ensures vote integrity"));
+      console.log(c.dim("     • Perfect for 10-100 member DAOs\n"));
     }
     
-    // 5. Current Cycle Dashboard
-    console.log(c.bright("  5️⃣ Current Cycle Dashboard:"));
-    try {
-      const dashboard = await ajoPayments.getCurrentCycleDashboard();
-      console.log(c.dim(`     Current Cycle: ${dashboard.currentCycle}`));
-      console.log(c.dim(`     Next Payout Position: ${dashboard.nextPayoutPosition}`));
-      console.log(c.dim(`     Next Recipient: ${dashboard.nextRecipient}`));
-      console.log(c.dim(`     Expected Payout: ${formatUSDC(dashboard.expectedPayout)}`));
-      console.log(c.dim(`     Total Paid This Cycle: ${formatUSDC(dashboard.totalPaidThisCycle)}`));
-      console.log(c.dim(`     Remaining To Pay: ${formatUSDC(dashboard.remainingToPay)}`));
-      console.log(c.dim(`     Members Paid Count: ${dashboard.membersPaid.length}`));
-      console.log(c.dim(`     Members Unpaid Count: ${dashboard.membersUnpaid.length}`));
-      console.log(c.dim(`     Is Payout Ready: ${dashboard.isPayoutReady}\n`));
-    } catch (error) {
-      console.log(c.yellow(`     ⚠️ Could not get cycle dashboard: ${error.message}\n`));
-    }
+    console.log(c.green("═".repeat(88) + "\n"));
     
-    // 6. Factory Health Status
-    console.log(c.bright("  6️⃣ Factory Health Status:"));
-    const initStatus = await ajoFactory.getAjoInitializationStatus(ajoId);
-    const operationalStatus = await ajoFactory.getAjoOperationalStatus(ajoId);
-    
-    console.log(c.dim(`     Initialization Phase: ${initStatus.phase}/5`));
-    console.log(c.dim(`     Is Ready: ${initStatus.isReady}`));
-    console.log(c.dim(`     Is Fully Finalized: ${initStatus.isFullyFinalized}`));
-    console.log(c.dim(`     Total Members: ${operationalStatus.totalMembers}`));
-    console.log(c.dim(`     Current Cycle: ${operationalStatus.currentCycle}`));
-    console.log(c.dim(`     Can Accept Members: ${operationalStatus.canAcceptMembers}\n`));
-    
-    console.log(c.green("✅ State inspection complete!\n"));
-    
-    return {
-      stats,
-      currentCycle,
-      nextPayoutPosition,
-      activeToken,
-      tokenConfig,
-      isPayoutReady,
-      activeMembersList,
-      initStatus,
-      operationalStatus
-    };
+    return governanceResults;
     
   } catch (error) {
-    console.log(c.red(`❌ State inspection failed: ${error.message}\n`));
-    throw error;
+    console.log(c.red(`\n  ❌ Governance demonstration failed: ${error.message.slice(0, 150)}\n`));
+    console.log(c.yellow("     ⚠️ Continuing with remaining demo phases...\n"));
+    console.log(c.blue("═".repeat(88) + "\n"));
+    return null;
   }
 }
 
 // ================================================================
-// UPDATED MAIN DEMONSTRATION WITH STATE INSPECTION
+// MAIN DEMONSTRATION - UPDATED
 // ================================================================
 
 async function main() {
-  try {
+try {
     printEnhancedBanner();
     
     await sleep(2000);
@@ -1795,6 +1058,10 @@ async function main() {
     
     await sleep(3000);
     
+    await demonstrateHtsFeatures(ajoFactory, ajoId, participants, ajoInfo);
+    
+    await sleep(2000);
+    
     const joinResults = await demonstrateMemberJoining(
       ajo, 
       ajoCollateral, 
@@ -1803,77 +1070,108 @@ async function main() {
       ajoInfo
     );
     
+    // ✅ FIXED: Call governance demo with proper parameters
+    let governanceResults = null;
+    try {
+      console.log(c.bgBlue("\n" + " ".repeat(22) + "PHASE 6: GOVERNANCE & HCS VOTING DEMONSTRATION" + " ".repeat(20)));
+      console.log(c.blue("═".repeat(88)));
+      console.log(c.bright("\n  🗳️  Hedera Consensus Service (HCS) + On-Chain Tally\n"));
+      
+      console.log(c.cyan("  📊 Governance System Overview:\n"));
+      console.log(c.dim("     ┌─────────────────────────────────────────────────────────────┐"));
+      console.log(c.dim("     │ HCS Topic:        " + (hcsTopicId || 'N/A').toString().slice(0, 40).padEnd(40) + " │"));
+      console.log(c.dim("     │ Governance:       " + ajoInfo.ajoGovernance.slice(0, 40).padEnd(40) + " │"));
+      console.log(c.dim("     │ Voting Type:      " + "Off-Chain HCS + On-Chain Tally".padEnd(40) + " │"));
+      console.log(c.dim("     │ Active Members:   " + participants.length.toString().padEnd(40) + " │"));
+      console.log(c.dim("     └─────────────────────────────────────────────────────────────┘\n"));
+      
+      // Get governance contract instance
+      const ajoGovernance = await ethers.getContractAt("AjoGovernance", ajoInfo.ajoGovernance);
+      
+      console.log(c.cyan("  🔍 Verifying Governance Setup...\n"));
+      
+      await retryOperation(async () => {
+        const isValid = await ajoGovernance.verifySetup();
+        if (!isValid[0]) {
+          throw new Error(`Governance not properly initialized: ${isValid[1]}`);
+        }
+        console.log(c.green(`     ✅ Governance properly initialized`));
+        console.log(c.dim(`        Reason: ${isValid[1]}\n`));
+        return isValid;
+      }, "Verify Governance Setup");
+      
+      const settings = await retryOperation(async () => {
+        return await ajoGovernance.getGovernanceSettings();
+      }, "Get Governance Settings");
+      
+      console.log(c.cyan("  ⚙️  Governance Parameters:\n"));
+      console.log(c.dim("     ┌──────────────────────────────┬──────────────┐"));
+      console.log(c.dim(`     │ Voting Period                │ ${(settings._votingPeriod.toNumber() / 86400).toFixed(0).padStart(10)} days │`));
+      console.log(c.dim(`     │ Quorum Required              │ ${settings._quorumPercentage.toString().padStart(11)}% │`));
+      console.log(c.dim(`     │ Proposal Threshold           │ ${settings._proposalThreshold.toString().padStart(12)} │`));
+      console.log(c.dim(`     │ Current Penalty Rate         │ ${settings.currentPenaltyRate.toString().padStart(11)}% │`));
+      console.log(c.dim(`     │ Total Proposals              │ ${settings.totalProposals.toString().padStart(12)} │`));
+      console.log(c.dim("     └──────────────────────────────┴──────────────┘\n"));
+      
+      await sleep(2000);
+      
+      console.log(c.yellow("  🚀 Starting Full Governance Demo...\n"));
+      
+      // ✅ CALL THE FIXED GOVERNANCE DEMO
+      governanceResults = await retryOperation(async () => {
+        return await runGovernanceDemo(
+          ajoGovernance,
+          participants, // Pass participants array directly
+          {
+            hcsTopicId: hcsTopicId,
+            ajoCore: ajoInfo.ajoCore,
+            totalMembers: participants.length,
+            name: ajoInfo.name
+          }
+        );
+      }, "Run Governance Demo", 5);
+      
+      await sleep(2000);
+      
+      // Display summary
+      console.log(c.bgGreen("\n" + " ".repeat(24) + "📊 GOVERNANCE DEMO SUMMARY 📊" + " ".repeat(31)));
+      console.log(c.green("═".repeat(88) + "\n"));
+      
+      if (governanceResults) {
+        console.log(c.bright("  Results:\n"));
+        console.log(c.dim("     ┌──────────────────────────────┬──────────────┐"));
+        console.log(c.dim(`     │ Proposals Created            │ ${(governanceResults.proposals?.length || 0).toString().padStart(12)} │`));
+        console.log(c.dim(`     │ Votes Cast (HCS)             │ ${(governanceResults.votes?.length || 0).toString().padStart(12)} │`));
+        console.log(c.dim(`     │ Tally Gas Cost               │ ${(governanceResults.tallyResult?.gasUsed?.toString() || 'N/A').padStart(12)} │`));
+        
+        const execStatus = governanceResults.execResult?.success ? c.green('✅ Success') : c.red('❌ Failed');
+        console.log(c.dim(`     │ Execution Status             │ ${execStatus.padEnd(20)} │`));
+        console.log(c.dim("     └──────────────────────────────┴──────────────┘\n"));
+        
+        console.log(c.yellow("  💡 Key Insights:\n"));
+        console.log(c.dim("     • HCS voting costs ~$0.0001 per vote"));
+        console.log(c.dim("     • 90%+ cost reduction vs pure on-chain voting"));
+        console.log(c.dim("     • Anyone can tally votes (no trusted intermediaries)"));
+        console.log(c.dim("     • Signature verification ensures vote integrity"));
+        console.log(c.dim("     • Perfect for 10-100 member DAOs\n"));
+      }
+      
+      console.log(c.green("═".repeat(88) + "\n"));
+      
+    } catch (error) {
+      console.log(c.red(`\n  ❌ Governance demonstration failed: ${error.message.slice(0, 150)}\n`));
+      console.log(c.yellow("     ⚠️ Continuing with remaining demo phases...\n"));
+      console.log(c.blue("═".repeat(88) + "\n"));
+    }
+    
     await sleep(3000);
-    
-    // ============ NEW: INSPECT AJO STATE BEFORE CYCLES ============
-    console.log(c.bgBlue("\n" + " ".repeat(25) + "🔍 PRE-CYCLE STATE INSPECTION" + " ".repeat(29)));
-    console.log(c.blue("═".repeat(88) + "\n"));
-    
-    const preStateInspection = await inspectAjoState(
-      ajo,
-      ajoMembers, 
-      ajoPayments, 
-      ajoCollateral, 
-      ajoFactory, 
-      ajoId
-    );
-     await sleep(3000);
-        
-        // Phase 5: Run first cycle normally (all pay, position 1 gets payout)
-        const firstCycleResults = await runFirstCycleNormally(
-          ajo,
-          ajoPayments,
-          participants
-        );
-        
-        await sleep(3000);
-        
-        // Phase 6: Advance to Cycle 2 and simulate defaults (members DON'T pay)
-        const defaulters = await advanceToCycle2AndSimulateDefaults(
-          ajo,
-          ajoPayments,
-          participants
-        );
-        
-        await sleep(3000);
-        
-        // Phase 7: Handle the defaults and seize collateral
-        const defaultScenarios = await testDefaultScenarios(
-          ajo,
-          ajoPayments,
-          ajoCollateral,
-          ajoMembers,
-          participants,
-          defaulters,
-          ajoInfo
-        );
-        
-        await sleep(2000);
-        
-        // Phase 8: Generate summary
-        const summary = await generateDefaultTestSummary(defaultScenarios, participants);
-        
-    // ============ NEW: INSPECT AJO STATE AFTER CYCLES ============
-    console.log(c.bgBlue("\n" + " ".repeat(25) + "🔍 POST-CYCLE STATE INSPECTION" + " ".repeat(28)));
-    console.log(c.blue("═".repeat(88) + "\n"));
-    
-    const postStateInspection = await inspectAjoState(
-      ajo,
-      ajoMembers, 
-      ajoPayments, 
-      ajoCollateral, 
-      ajoFactory, 
-      ajoId
-    );
-    
-    await sleep(2000);
-    // ============================================================
     
     const deploymentInfo = {
       network: (await ethers.provider.getNetwork()).name,
       chainId: (await ethers.provider.getNetwork()).chainId,
       deployedAt: new Date().toISOString(),
       htsOnly: true,
+      individualCalls: true,
       contracts: {
         AjoFactory: ajoFactory.address,
         USDC_HTS: usdcHtsToken,
@@ -1891,12 +1189,30 @@ async function main() {
         id: ajoId,
         name: ajoInfo.name,
         core: ajoInfo.ajoCore,
-        cycleDuration: cycleDuration,
-        monthlyPaymentUSDC: formatUSDC(DEMO_CONFIG.MONTHLY_PAYMENT_USDC),
-        monthlyPaymentHBAR: formatHBAR(DEMO_CONFIG.MONTHLY_PAYMENT_HBAR),
+        members: ajoInfo.ajoMembers,
+        collateral: ajoInfo.ajoCollateral,
+        payments: ajoInfo.ajoPayments,
+        governance: ajoInfo.ajoGovernance,
+        schedule: ajoInfo.ajoSchedule,
         hcsTopicId: hcsTopicId,
-        hcsTopicIdBytes32: hcsTopicIdBytes32,
-        hcsTopicSimulated: hcsTopicSimulated
+        usesHtsTokens: true,
+        usesScheduledPayments: ajoInfo.usesScheduledPayments
+      },
+      hederaServices: {
+        HTS: {
+          enabled: true,
+          autoAssociation: true,
+          usdcToken: usdcHtsToken,
+          hbarToken: hbarHtsToken
+        },
+        HSS: {
+          enabled: true,
+          address: "0x000000000000000000000000000000000000016b"
+        },
+        HCS: {
+          enabled: true,
+          topicId: hcsTopicId
+        }
       },
       participants: participants.map(p => ({
         name: p.name,
@@ -1906,18 +1222,17 @@ async function main() {
       statistics: {
         totalParticipants: participants.length,
         successfulJoins: joinResults.filter(r => r.success).length,
-        totalCycles: cycleResults.length,
-        totalPayments: cycleResults.reduce((sum, c) => sum + c.payments.filter(p => p.success).length, 0),
-        totalPayouts: cycleResults.filter(c => c.payout && c.payout.success).length
-      },
-      stateInspections: {
-        preState: preStateInspection,
-        postState: postStateInspection
-      },
-      cycleResults: cycleResults
+        htsEnabled: true,
+        autoAssociationEnabled: true,
+        batchOperations: false,
+        individualCalls: true,
+        governanceProposals: governanceResults?.proposals?.length || 0,
+        governanceVotes: governanceResults?.votes?.length || 0,
+        governanceExecuted: governanceResults?.execResult?.success || false
+      }
     };
     
-    const filename = `deployment-full-cycles-${Date.now()}.json`;
+    const filename = `deployment-full-hedera-${Date.now()}.json`;
     try {
       fs.writeFileSync(filename, JSON.stringify(deploymentInfo, null, 2));
       console.log(c.green(`\n  ✅ Deployment info saved to: ${filename}\n`));
@@ -1927,38 +1242,28 @@ async function main() {
     
     console.log(c.bgGreen("\n" + " ".repeat(28) + "🎉 DEMONSTRATION COMPLETE! 🎉" + " ".repeat(28)));
     console.log(c.green("═".repeat(88) + "\n"));
-    console.log(c.bright("  🚀 AJO.SAVE - Full 10-Cycle Demo Complete!\n"));
+    console.log(c.bright("  🚀 AJO.SAVE - Full Hedera Integration Demo"));
+    console.log(c.dim("     HTS Auto-Association + HCS Governance + HSS Scheduling\n"));
     
     console.log(c.yellow("  ✨ Features Demonstrated:"));
     console.log(c.dim("     • HTS tokens with auto-association"));
-    console.log(c.dim("     • Configurable cycle duration (30 seconds)"));
-    console.log(c.dim("     • Configurable monthly payments"));
+    console.log(c.dim("     • Factory treasury management"));
+    console.log(c.dim("     • Individual user processing (no batch)"));
     console.log(c.dim("     • Dynamic collateral system"));
     console.log(c.dim("     • Member joining workflow"));
-    console.log(c.dim("     • Pre/Post cycle state inspection"));
-    console.log(c.dim("     • 10 complete payment cycles"));
-    console.log(c.dim("     • Payout distribution per cycle"));
-    console.log(c.dim("     • Real-time cycle progression\n"));
+    console.log(c.dim("     • HCS off-chain voting"));
+    console.log(c.dim("     • On-chain vote tallying"));
+    console.log(c.dim("     • Proposal creation & execution"));
+    console.log(c.dim("     • Signature verification\n"));
     
     console.log(c.yellow("  📊 Demo Statistics:"));
     console.log(c.dim(`     • Participants: ${participants.length}`));
-    // console.log(c.dim(`     • Cycles Completed: ${cycleResults.length}`));
-    console.log(c.dim(`     • Total Payments: ${deploymentInfo.statistics.totalPayments}`));
-    console.log(c.dim(`     • Total Payouts: ${deploymentInfo.statistics.totalPayouts}`));
-    console.log(c.dim(`     • Cycle Duration: ${cycleDuration}s\n`));
-    
-    // Display state comparison
-    console.log(c.yellow("  🔍 State Comparison (Pre → Post):"));
-    console.log(c.dim(`     • Total Members: ${preStateInspection.stats.totalMembers} → ${postStateInspection.stats.totalMembers}`));
-    console.log(c.dim(`     • Current Cycle: ${preStateInspection.currentCycle} → ${postStateInspection.currentCycle}`));
-    console.log(c.dim(`     • Next Payout Position: ${preStateInspection.nextPayoutPosition} → ${postStateInspection.nextPayoutPosition}`));
-    console.log(c.dim(`     • Payout Ready: ${preStateInspection.isPayoutReady} → ${postStateInspection.isPayoutReady}\n`));
+    console.log(c.dim(`     • Successful Joins: ${joinResults.filter(r => r.success).length}/${participants.length}`));
+    console.log(c.dim(`     • Proposals Created: ${governanceResults?.proposals?.length || 0}`));
+    console.log(c.dim(`     • Votes Cast: ${governanceResults?.votes?.length || 0}`));
+    console.log(c.dim(`     • Proposals Executed: ${governanceResults?.execResult?.success ? '1' : '0'}\n`));
     
     console.log(c.green("═".repeat(88) + "\n"));
-    
-    if (hederaClient) {
-      hederaClient.close();
-    }
     
     return deploymentInfo;
     
@@ -1977,7 +1282,7 @@ async function main() {
 if (require.main === module) {
   main()
     .then(() => {
-      console.log(c.green("\n🎉 Full 10-cycle demonstration completed successfully!\n"));
+      console.log(c.green("\n🎉 Full Hedera demonstration completed successfully!\n"));
       process.exit(0);
     })
     .catch((error) => {
@@ -1991,6 +1296,7 @@ module.exports = {
   deployHtsSystem,
   createHtsAjo,
   setupHtsParticipants,
+  demonstrateHtsFeatures,
   demonstrateMemberJoining,
-  demonstrateFullCycles
+  demonstrateGovernance
 };

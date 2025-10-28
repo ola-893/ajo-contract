@@ -1,0 +1,112 @@
+{
+  "network": "unknown",
+  "chainId": 296,
+  "deployedAt": "2025-10-28T07:45:04.597Z",
+  "htsOnly": true,
+  "individualCalls": true,
+  "contracts": {
+    "AjoFactory": "0x3328F1b6235B999f66cD5311487591c7FcD284eB",
+    "USDC_HTS": "0x00000000000000000000000000000000006D147B",
+    "WHBAR_HTS": "0x00000000000000000000000000000000006D147C"
+  },
+  "masterCopies": {
+    "AjoCore": "0x2DdA1562037F8693d514c9999cdB7CeBB943f544",
+    "AjoMembers": "0xD7B08451387b1c48C7f47EF20176b5d4Ab684950",
+    "AjoCollateral": "0x5D38444b6Bfb63321db1DDFbfd0d691Cc2DccC2c",
+    "AjoPayments": "0xddaa15346ba52aD6B43b993B5270574f484CC86f",
+    "AjoGovernance": "0xC8C5D88F607B9fe5b8f4731701cb86A1A03f3613",
+    "AjoSchedule": "0x7cA1D685bd3960EF096F11DFD28A888c7e96e011"
+  },
+  "testAjo": {
+    "id": 1,
+    "name": "Hedera Hackathon 2025 - 10 Cycle Demo",
+    "core": "0xf49ce564D80b39dC1F647eD8cc19e7012045b276",
+    "members": "0xC643E96c7DBbFCFAbF842a560cb6f5874c40f29E",
+    "collateral": "0x8ccC5a4bED689A5400D2fEf895011A2231fF546F",
+    "payments": "0x36bE5745d1e0077b183e7e02a33F418169799aDa",
+    "governance": "0xC26097ec3506C9b4827bF9B1228b949C46d0b017",
+    "schedule": "0xc60415055f43dF5A48e5F3F101c2F2D12ca9E8E0",
+    "hcsTopicId": "0.0.7148675",
+    "usesHtsTokens": true,
+    "usesScheduledPayments": true
+  },
+  "hederaServices": {
+    "HTS": {
+      "enabled": true,
+      "autoAssociation": true,
+      "usdcToken": "0x00000000000000000000000000000000006D147B",
+      "hbarToken": "0x00000000000000000000000000000000006D147C"
+    },
+    "HSS": {
+      "enabled": true,
+      "address": "0x000000000000000000000000000000000000016b"
+    },
+    "HCS": {
+      "enabled": true,
+      "topicId": "0.0.7148675"
+    }
+  },
+  "participants": [
+    {
+      "name": "Adunni",
+      "address": "0xd863E1E194e0B0F95e87F6263c8517587919464B",
+      "position": 1
+    },
+    {
+      "name": "Babatunde",
+      "address": "0xD6BFf29dc91208cbd21253567923604f48054370",
+      "position": 2
+    },
+    {
+      "name": "Chinwe",
+      "address": "0x50Ac7731e6bf5631BA31F993D744ED5992C9D325",
+      "position": 3
+    },
+    {
+      "name": "Damilola",
+      "address": "0x922464Fc39f2E0F85A2EF03FA64DBDBC649351f7",
+      "position": 4
+    },
+    {
+      "name": "Emeka",
+      "address": "0x49196d181ba31388Fb74d9C95be17C22fFe57122",
+      "position": 5
+    },
+    {
+      "name": "Funmilayo",
+      "address": "0xA2cfDbcE8b15eeb51f874D0F3a1bC5C95778606B",
+      "position": 6
+    },
+    {
+      "name": "Gbenga",
+      "address": "0x33e2C844EA1C094dA3F9BC36956ac053675A4E94",
+      "position": 7
+    },
+    {
+      "name": "Halima",
+      "address": "0x169EBda2b992e5Afe9Ca221c8Cf912fFa24b5Db9",
+      "position": 8
+    },
+    {
+      "name": "Ifeanyi",
+      "address": "0x40a10D328Ae3a307a8830C4b3455e8bE521A675f",
+      "position": 9
+    },
+    {
+      "name": "Joke",
+      "address": "0xA9E5BBe7743f51E1980ED73f92B1d742305f92e1",
+      "position": 10
+    }
+  ],
+  "statistics": {
+    "totalParticipants": 10,
+    "successfulJoins": 10,
+    "htsEnabled": true,
+    "autoAssociationEnabled": true,
+    "batchOperations": false,
+    "individualCalls": true,
+    "governanceProposals": 0,
+    "governanceVotes": 0,
+    "governanceExecuted": false
+  }
+}
