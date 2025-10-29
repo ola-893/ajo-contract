@@ -869,256 +869,256 @@ contract AjoCore is IAjoCore, ReentrancyGuard, Ownable, Initializable {
         return (enabled, gracePeriod, authorizedAddresses);
     }
     /**
-    * @dev Check if cycle should be advanced automatically
-    * @return shouldAdvance Whether cycle advancement is ready
-    * @return reason Human-readable reason
-    * @return readyForPayout Whether payout should be distributed first
-    */
-    function shouldAdvanceCycle() external view returns (
-        bool shouldAdvance,
-        string memory reason,
-        bool readyForPayout
-    ) {
-        // Check if auto-advance is enabled
-        if (!autoAdvanceCycleEnabled) {
-            return (false, "Auto-advance disabled", false);
-        }
-        
-        // Check if contract is paused
-        if (paused) {
-            return (false, "Contract paused", false);
-        }
-        
-        uint256 currentCycle = paymentsContract.getCurrentCycle();
-        
-        // Check if this is first cycle (special handling)
-        if (!isFirstCycleComplete) {
-            // First cycle: check if payout is ready
-            bool payoutReady = paymentsContract.isPayoutReady();
-            
-            if (payoutReady) {
-                return (true, "First cycle payout ready", true);
-            } else {
-                return (false, "Waiting for all payments in first cycle", false);
-            }
-        }
-        
-        // Regular cycles: check if cycle duration has passed
-        uint256 timeSinceLastCycle = block.timestamp - lastCycleTimestamp;
-        
-        if (timeSinceLastCycle < cycleDuration) {
-            uint256 timeRemaining = cycleDuration - timeSinceLastCycle;
-            return (
-                false, 
-                string(abi.encodePacked("Cycle duration not elapsed. ", _uintToString(timeRemaining), " seconds remaining")),
-                false
-            );
-        }
-        
-        // Check if payout should be distributed first
+ * @dev Check if cycle should be advanced automatically
+ * @return shouldAdvance Whether cycle advancement is ready
+ * @return reason Human-readable reason
+ * @return readyForPayout Whether payout should be distributed first
+ */
+function shouldAdvanceCycle() external view returns (
+    bool shouldAdvance,
+    string memory reason,
+    bool readyForPayout
+) {
+    // Check if auto-advance is enabled
+    if (!autoAdvanceCycleEnabled) {
+        return (false, "Auto-advance disabled", false);
+    }
+    
+    // Check if contract is paused
+    if (paused) {
+        return (false, "Contract paused", false);
+    }
+    
+    uint256 currentCycle = paymentsContract.getCurrentCycle();
+    
+    // Check if this is first cycle (special handling)
+    if (!isFirstCycleComplete) {
+        // First cycle: check if payout is ready
         bool payoutReady = paymentsContract.isPayoutReady();
         
         if (payoutReady) {
-            return (true, "Cycle complete, payout ready", true);
+            return (true, "First cycle payout ready", true);
+        } else {
+            return (false, "Waiting for all payments in first cycle", false);
         }
-        
-        // Check if minimum advance delay has passed since all payments received
-        (bool allPaid, uint256 lastPaymentTime) = _checkAllMembersPaid();
-        
-        if (!allPaid) {
-            return (false, "Not all members have paid yet", false);
-        }
-        
-        uint256 timeSinceLastPayment = block.timestamp - lastPaymentTime;
-        
-        if (timeSinceLastPayment < minCycleAdvanceDelay) {
-            return (
-                false,
-                "Waiting for minimum delay after last payment",
-                false
-            );
-        }
-        
-        // All conditions met - can advance without payout (default scenario handled)
-        return (true, "Ready to advance (all paid or defaults handled)", false);
     }
-
-    /**
-    * @dev Advance cycle automatically (called by Defender Autotask)
-    * @notice Handles payout distribution if ready, then advances cycle
-    */
-    function advanceCycleAutomated() 
-        external 
-        onlyAuthorizedAutomation 
-        whenAutomationEnabled
-        nonReentrant 
-        returns (bool success, bool payoutDistributed)
-    {
-        // Check if we should advance
-        (bool shouldAdvance, string memory reason, bool payoutReady) = this.shouldAdvanceCycle();
-        
-        require(shouldAdvance, reason);
-        
-        uint256 oldCycle = paymentsContract.getCurrentCycle();
-        
-        // If payout is ready, distribute it first
-        if (payoutReady) {
-            try paymentsContract.distributePayout() {
-                payoutDistributed = true;
-            } catch Error(string memory errorReason) {
-                emit CycleAdvancementFailed(oldCycle, errorReason, block.timestamp);
-                revert(string(abi.encodePacked("Payout distribution failed: ", errorReason)));
-            }
-        }
-        
-        // Advance the cycle
-        _advanceCycle();
-        
-        // If first cycle, mark as complete
-        if (!isFirstCycleComplete) {
-            isFirstCycleComplete = true;
-        }
-        
-        uint256 newCycle = paymentsContract.getCurrentCycle();
-        
-        emit CycleAdvancedAutomatically(
-            oldCycle,
-            newCycle,
-            msg.sender,
-            block.timestamp,
-            payoutDistributed
+    
+    // Regular cycles: check if cycle duration has passed
+    uint256 timeSinceLastCycle = block.timestamp - lastCycleTimestamp;
+    
+    if (timeSinceLastCycle < cycleDuration) {
+        uint256 timeRemaining = cycleDuration - timeSinceLastCycle;
+        return (
+            false, 
+            string(abi.encodePacked("Cycle duration not elapsed. ", _uintToString(timeRemaining), " seconds remaining")),
+            false
         );
-        
-        return (true, payoutDistributed);
     }
+    
+    // Check if payout should be distributed first
+    bool payoutReady = paymentsContract.isPayoutReady();
+    
+    if (payoutReady) {
+        return (true, "Cycle complete, payout ready", true);
+    }
+    
+    // Check if minimum advance delay has passed since all payments received
+    (bool allPaid, uint256 lastPaymentTime) = _checkAllMembersPaid();
+    
+    if (!allPaid) {
+        return (false, "Not all members have paid yet", false);
+    }
+    
+    uint256 timeSinceLastPayment = block.timestamp - lastPaymentTime;
+    
+    if (timeSinceLastPayment < minCycleAdvanceDelay) {
+        return (
+            false,
+            "Waiting for minimum delay after last payment",
+            false
+        );
+    }
+    
+    // All conditions met - can advance without payout (default scenario handled)
+    return (true, "Ready to advance (all paid or defaults handled)", false);
+}
 
-    /**
-    * @dev Check if all active members have paid current cycle
-    * @return allPaid Whether all members have paid
-    * @return lastPaymentTime Timestamp of the last payment received
-    */
-    function _checkAllMembersPaid() internal view returns (bool allPaid, uint256 lastPaymentTime) {
-        address[] memory members = membersContract.getActiveMembersList();
-        uint256 currentCycle = paymentsContract.getCurrentCycle();
+/**
+ * @dev Advance cycle automatically (called by Defender Autotask)
+ * @notice Handles payout distribution if ready, then advances cycle
+ */
+function advanceCycleAutomated() 
+    external 
+    onlyAuthorizedAutomation 
+    whenAutomationEnabled
+    nonReentrant 
+    returns (bool success, bool payoutDistributed)
+{
+    // Check if we should advance
+    (bool shouldAdvance, string memory reason, bool payoutReady) = this.shouldAdvanceCycle();
+    
+    require(shouldAdvance, reason);
+    
+    uint256 oldCycle = paymentsContract.getCurrentCycle();
+    
+    // If payout is ready, distribute it first
+    if (payoutReady) {
+        try paymentsContract.distributePayout() {
+            payoutDistributed = true;
+        } catch Error(string memory errorReason) {
+            emit CycleAdvancementFailed(oldCycle, errorReason, block.timestamp);
+            revert(string(abi.encodePacked("Payout distribution failed: ", errorReason)));
+        }
+    }
+    
+    // Advance the cycle
+    _advanceCycle();
+    
+    // If first cycle, mark as complete
+    if (!isFirstCycleComplete) {
+        isFirstCycleComplete = true;
+    }
+    
+    uint256 newCycle = paymentsContract.getCurrentCycle();
+    
+    emit CycleAdvancedAutomatically(
+        oldCycle,
+        newCycle,
+        msg.sender,
+        block.timestamp,
+        payoutDistributed
+    );
+    
+    return (true, payoutDistributed);
+}
+
+/**
+ * @dev Check if all active members have paid current cycle
+ * @return allPaid Whether all members have paid
+ * @return lastPaymentTime Timestamp of the last payment received
+ */
+function _checkAllMembersPaid() internal view returns (bool allPaid, uint256 lastPaymentTime) {
+    address[] memory members = membersContract.getActiveMembersList();
+    uint256 currentCycle = paymentsContract.getCurrentCycle();
+    
+    allPaid = true;
+    lastPaymentTime = 0;
+    
+    for (uint256 i = 0; i < members.length; i++) {
+        Member memory member = membersContract.getMember(members[i]);
         
-        allPaid = true;
-        lastPaymentTime = 0;
-        
-        for (uint256 i = 0; i < members.length; i++) {
-            Member memory member = membersContract.getMember(members[i]);
-            
-            if (member.lastPaymentCycle < currentCycle) {
-                allPaid = false;
-            }
-            
-            // Track latest payment time (you'll need to add this to Member struct or track separately)
-            // For now, using lastCycleTimestamp as approximation
-            if (member.lastPaymentCycle == currentCycle && lastCycleTimestamp > lastPaymentTime) {
-                lastPaymentTime = lastCycleTimestamp;
-            }
+        if (member.lastPaymentCycle < currentCycle) {
+            allPaid = false;
         }
         
-        // If no payments tracked, use cycle start time
-        if (lastPaymentTime == 0) {
+        // Track latest payment time (you'll need to add this to Member struct or track separately)
+        // For now, using lastCycleTimestamp as approximation
+        if (member.lastPaymentCycle == currentCycle && lastCycleTimestamp > lastPaymentTime) {
             lastPaymentTime = lastCycleTimestamp;
         }
-        
-        return (allPaid, lastPaymentTime);
     }
-
-    /**
-    * @dev Get cycle advancement status for all conditions
-    * @return status Detailed status of cycle advancement readiness
-    */
-    function getCycleAdvancementStatus() external view returns (CycleAdvancementStatus memory status) {
-        status.currentCycle = paymentsContract.getCurrentCycle();
-        status.isFirstCycle = !isFirstCycleComplete;
-        status.cycleStartTime = lastCycleTimestamp;
-        status.cycleDuration = cycleDuration;
-        status.timeElapsed = block.timestamp - lastCycleTimestamp;
-        status.autoAdvanceEnabled = autoAdvanceCycleEnabled;
-        
-        (status.allMembersPaid, status.lastPaymentTime) = _checkAllMembersPaid();
-        status.payoutReady = paymentsContract.isPayoutReady();
-        status.nextPayoutRecipient = paymentsContract.getNextRecipient();
-        
-        (status.shouldAdvance, status.advanceReason, status.needsPayout) = this.shouldAdvanceCycle();
-        
-        // Calculate time until next advancement
-        if (status.timeElapsed < cycleDuration) {
-            status.timeUntilAdvancement = cycleDuration - status.timeElapsed;
-        } else {
-            status.timeUntilAdvancement = 0;
-        }
-        
-        return status;
+    
+    // If no payments tracked, use cycle start time
+    if (lastPaymentTime == 0) {
+        lastPaymentTime = lastCycleTimestamp;
     }
+    
+    return (allPaid, lastPaymentTime);
+}
 
-    /**
-    * @dev Enable or disable automatic cycle advancement
-    * @param enabled Whether auto-advance should be enabled
-    */
-    function setAutoAdvanceCycleEnabled(bool enabled) external onlyOwner {
-        autoAdvanceCycleEnabled = enabled;
-        emit AutoAdvanceCycleToggled(enabled);
+/**
+ * @dev Get cycle advancement status for all conditions
+ * @return status Detailed status of cycle advancement readiness
+ */
+function getCycleAdvancementStatus() external view returns (CycleAdvancementStatus memory status) {
+    status.currentCycle = paymentsContract.getCurrentCycle();
+    status.isFirstCycle = !isFirstCycleComplete;
+    status.cycleStartTime = lastCycleTimestamp;
+    status.cycleDuration = cycleDuration;
+    status.timeElapsed = block.timestamp - lastCycleTimestamp;
+    status.autoAdvanceEnabled = autoAdvanceCycleEnabled;
+    
+    (status.allMembersPaid, status.lastPaymentTime) = _checkAllMembersPaid();
+    status.payoutReady = paymentsContract.isPayoutReady();
+    status.nextPayoutRecipient = paymentsContract.getNextRecipient();
+    
+    (status.shouldAdvance, status.advanceReason, status.needsPayout) = this.shouldAdvanceCycle();
+    
+    // Calculate time until next advancement
+    if (status.timeElapsed < cycleDuration) {
+        status.timeUntilAdvancement = cycleDuration - status.timeElapsed;
+    } else {
+        status.timeUntilAdvancement = 0;
     }
+    
+    return status;
+}
 
-    /**
-    * @dev Update minimum delay after payments before advancing
-    * @param newDelay New minimum delay in seconds
-    */
-    function setMinCycleAdvanceDelay(uint256 newDelay) external onlyOwner {
-        require(newDelay <= 24 hours, "Delay too long");
-        uint256 oldDelay = minCycleAdvanceDelay;
-        minCycleAdvanceDelay = newDelay;
-        emit MinCycleAdvanceDelayUpdated(oldDelay, newDelay);
+/**
+ * @dev Enable or disable automatic cycle advancement
+ * @param enabled Whether auto-advance should be enabled
+ */
+function setAutoAdvanceCycleEnabled(bool enabled) external onlyOwner {
+    autoAdvanceCycleEnabled = enabled;
+    emit AutoAdvanceCycleToggled(enabled);
+}
+
+/**
+ * @dev Update minimum delay after payments before advancing
+ * @param newDelay New minimum delay in seconds
+ */
+function setMinCycleAdvanceDelay(uint256 newDelay) external onlyOwner {
+    require(newDelay <= 24 hours, "Delay too long");
+    uint256 oldDelay = minCycleAdvanceDelay;
+    minCycleAdvanceDelay = newDelay;
+    emit MinCycleAdvanceDelayUpdated(oldDelay, newDelay);
+}
+
+// ============ HELPER FUNCTIONS ============
+
+/**
+ * @dev Convert uint to string (for error messages)
+ */
+function _uintToString(uint256 value) internal pure returns (string memory) {
+    if (value == 0) {
+        return "0";
     }
-
-    // ============ HELPER FUNCTIONS ============
-
-    /**
-    * @dev Convert uint to string (for error messages)
-    */
-    function _uintToString(uint256 value) internal pure returns (string memory) {
-        if (value == 0) {
-            return "0";
-        }
-        
-        uint256 temp = value;
-        uint256 digits;
-        
-        while (temp != 0) {
-            digits++;
-            temp /= 10;
-        }
-        
-        bytes memory buffer = new bytes(digits);
-        
-        while (value != 0) {
-            digits -= 1;
-            buffer[digits] = bytes1(uint8(48 + uint256(value % 10)));
-            value /= 10;
-        }
-        
-        return string(buffer);
+    
+    uint256 temp = value;
+    uint256 digits;
+    
+    while (temp != 0) {
+        digits++;
+        temp /= 10;
     }
-
-    // ============ NEW STRUCT ============
-    struct CycleAdvancementStatus {
-        uint256 currentCycle;
-        bool isFirstCycle;
-        uint256 cycleStartTime;
-        uint256 cycleDuration;
-        uint256 timeElapsed;
-        uint256 timeUntilAdvancement;
-        bool autoAdvanceEnabled;
-        bool allMembersPaid;
-        uint256 lastPaymentTime;
-        bool payoutReady;
-        address nextPayoutRecipient;
-        bool shouldAdvance;
-        string advanceReason;
-        bool needsPayout;
+    
+    bytes memory buffer = new bytes(digits);
+    
+    while (value != 0) {
+        digits -= 1;
+        buffer[digits] = bytes1(uint8(48 + uint256(value % 10)));
+        value /= 10;
     }
+    
+    return string(buffer);
+}
+
+// ============ NEW STRUCT ============
+struct CycleAdvancementStatus {
+    uint256 currentCycle;
+    bool isFirstCycle;
+    uint256 cycleStartTime;
+    uint256 cycleDuration;
+    uint256 timeElapsed;
+    uint256 timeUntilAdvancement;
+    bool autoAdvanceEnabled;
+    bool allMembersPaid;
+    uint256 lastPaymentTime;
+    bool payoutReady;
+    address nextPayoutRecipient;
+    bool shouldAdvance;
+    string advanceReason;
+    bool needsPayout;
+}
 
 }

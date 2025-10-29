@@ -11,26 +11,6 @@ import "hardhat/console.sol";
 contract AjoCore is IAjoCore, ReentrancyGuard, Ownable, Initializable {
     
     // ============ STATE VARIABLES ============
-    bool public autoAdvanceCycleEnabled = true;
-    uint256 public minCycleAdvanceDelay = 1 hours; // Min time after all payments before advancing
-
-    // ============ NEW EVENTS ============
-    event CycleAdvancedAutomatically(
-        uint256 indexed oldCycle,
-        uint256 indexed newCycle,
-        address indexed advancer,
-        uint256 timestamp,
-        bool hadPayout
-    );
-    event CycleAdvancementFailed(
-        uint256 indexed cycle,
-        string reason,
-        uint256 timestamp
-    );
-    event AutoAdvanceCycleToggled(bool enabled);
-    event MinCycleAdvanceDelayUpdated(uint256 oldDelay, uint256 newDelay);
-
-
     // Add these to the state variables section:
 
     mapping(address => bool) public authorizedAutomation; // Defender Relayer addresses
@@ -683,442 +663,190 @@ contract AjoCore is IAjoCore, ReentrancyGuard, Ownable, Initializable {
     }
 
     /**
-    * @dev Authorize an address for automation (Defender Relayer)
-    * @param automationAddress Address to authorize (Defender Relayer)
-    * @param authorized Whether to authorize or revoke
-    */
-    function setAutomationAuthorization(address automationAddress, bool authorized) 
-        external 
-        onlyOwner 
-    {
-        require(automationAddress != address(0), "Invalid automation address");
-        authorizedAutomation[automationAddress] = authorized;
-        emit AutomationAuthorized(automationAddress, authorized);
-    }
+ * @dev Authorize an address for automation (Defender Relayer)
+ * @param automationAddress Address to authorize (Defender Relayer)
+ * @param authorized Whether to authorize or revoke
+ */
+function setAutomationAuthorization(address automationAddress, bool authorized) 
+    external 
+    onlyOwner 
+{
+    require(automationAddress != address(0), "Invalid automation address");
+    authorizedAutomation[automationAddress] = authorized;
+    emit AutomationAuthorized(automationAddress, authorized);
+}
 
-    /**
-    * @dev Enable or disable automation system
-    * @param enabled Whether automation should be enabled
-    */
-    function setAutomationEnabled(bool enabled) external onlyOwner {
-        automationEnabled = enabled;
-        emit AutomationToggled(enabled);
-    }
+/**
+ * @dev Enable or disable automation system
+ * @param enabled Whether automation should be enabled
+ */
+function setAutomationEnabled(bool enabled) external onlyOwner {
+    automationEnabled = enabled;
+    emit AutomationToggled(enabled);
+}
 
-    /**
-    * @dev Update grace period after deadline before automation kicks in
-    * @param newGracePeriod New grace period in seconds
-    */
-    function setAutomationGracePeriod(uint256 newGracePeriod) external onlyOwner {
-        require(newGracePeriod <= 24 hours, "Grace period too long");
-        uint256 oldPeriod = automationGracePeriod;
-        automationGracePeriod = newGracePeriod;
-        emit AutomationGracePeriodUpdated(oldPeriod, newGracePeriod);
-    }
+/**
+ * @dev Update grace period after deadline before automation kicks in
+ * @param newGracePeriod New grace period in seconds
+ */
+function setAutomationGracePeriod(uint256 newGracePeriod) external onlyOwner {
+    require(newGracePeriod <= 24 hours, "Grace period too long");
+    uint256 oldPeriod = automationGracePeriod;
+    automationGracePeriod = newGracePeriod;
+    emit AutomationGracePeriodUpdated(oldPeriod, newGracePeriod);
+}
 
-    // ============ ENHANCED BATCH DEFAULT HANDLING ============
+// ============ ENHANCED BATCH DEFAULT HANDLING ============
 
-    /**
-    * @dev Batch handle defaults with detailed error tracking
-    * @notice Optimized for Defender Autotask execution
-    * @param defaulters Array of addresses to process
-    * @return successCount Number of successfully processed defaults
-    * @return failureCount Number of failed default processings
-    */
-    function batchHandleDefaultsAutomated(address[] calldata defaulters) 
-        external 
-        onlyAuthorizedAutomation 
-        whenAutomationEnabled
-        nonReentrant 
-        returns (uint256 successCount, uint256 failureCount)
-    {
-        require(defaulters.length > 0, "No defaulters provided");
-        require(defaulters.length <= 20, "Batch size too large"); // Gas limit protection
+/**
+ * @dev Batch handle defaults with detailed error tracking
+ * @notice Optimized for Defender Autotask execution
+ * @param defaulters Array of addresses to process
+ * @return successCount Number of successfully processed defaults
+ * @return failureCount Number of failed default processings
+ */
+function batchHandleDefaultsAutomated(address[] calldata defaulters) 
+    external 
+    onlyAuthorizedAutomation 
+    whenAutomationEnabled
+    nonReentrant 
+    returns (uint256 successCount, uint256 failureCount)
+{
+    require(defaulters.length > 0, "No defaulters provided");
+    require(defaulters.length <= 20, "Batch size too large"); // Gas limit protection
+    
+    // Verify grace period has passed
+    (bool isPastDeadline, uint256 secondsOverdue) = paymentsContract.isDeadlinePassed();
+    require(isPastDeadline, "Deadline not reached");
+    require(secondsOverdue >= automationGracePeriod, "Grace period not elapsed");
+    
+    uint256 currentCycle = paymentsContract.getCurrentCycle();
+    
+    for (uint256 i = 0; i < defaulters.length; i++) {
+        address defaulter = defaulters[i];
         
-        // Verify grace period has passed
-        (bool isPastDeadline, uint256 secondsOverdue) = paymentsContract.isDeadlinePassed();
-        require(isPastDeadline, "Deadline not reached");
-        require(secondsOverdue >= automationGracePeriod, "Grace period not elapsed");
-        
-        uint256 currentCycle = paymentsContract.getCurrentCycle();
-        
-        for (uint256 i = 0; i < defaulters.length; i++) {
-            address defaulter = defaulters[i];
-            
-            try this.handleDefaultInternal(defaulter) {
-                successCount++;
-            } catch Error(string memory reason) {
-                failureCount++;
-                emit DefaultHandlingFailed(defaulter, currentCycle, reason);
-            } catch {
-                failureCount++;
-                emit DefaultHandlingFailed(defaulter, currentCycle, "Unknown error");
-            }
-        }
-        
-        emit DefaultsHandledByAutomation(
-            currentCycle,
-            defaulters,
-            block.timestamp,
-            msg.sender,
-            successCount,
-            failureCount
-        );
-        
-        return (successCount, failureCount);
-    }
-
-    /**
-    * @dev Internal function for handling individual defaults
-    * @notice Separated to enable try-catch in batch processing
-    */
-    function handleDefaultInternal(address defaulter) external {
-        require(msg.sender == address(this), "Internal only");
-        
-        // Retrieve member data
-        Member memory member = membersContract.getMember(defaulter);
-        require(member.isActive, "Member not active");
-        
-        uint256 currentCycle = paymentsContract.getCurrentCycle();
-        require(member.lastPaymentCycle < currentCycle, "Member already paid");
-        
-        // Apply penalties through payments contract
-        paymentsContract.handleDefault(defaulter);
-        
-        // Update reputation negatively
-        governanceContract.updateReputationAndVotingPower(defaulter, false);
-        
-        // Check for severe default (3+ cycles missed)
-        uint256 cyclesMissed = currentCycle - member.lastPaymentCycle;
-        
-        if (cyclesMissed >= 3) {
-            // Execute collateral seizure
-            collateralContract.executeSeizure(defaulter);
-            
-            // Remove defaulter
-            membersContract.removeMember(defaulter);
-            
-            // Remove guarantor if exists
-            if (member.guarantor != address(0)) {
-                membersContract.removeMember(member.guarantor);
-            }
+        try this.handleDefaultInternal(defaulter) {
+            successCount++;
+        } catch Error(string memory reason) {
+            failureCount++;
+            emit DefaultHandlingFailed(defaulter, currentCycle, reason);
+        } catch {
+            failureCount++;
+            emit DefaultHandlingFailed(defaulter, currentCycle, "Unknown error");
         }
     }
+    
+    emit DefaultsHandledByAutomation(
+        currentCycle,
+        defaulters,
+        block.timestamp,
+        msg.sender,
+        successCount,
+        failureCount
+    );
+    
+    return (successCount, failureCount);
+}
 
-    // ============ VIEW FUNCTIONS FOR AUTOMATION ============
-
-    /**
-    * @dev Check if automation should run for this Ajo
-    * @return shouldRun Whether automation should execute
-    * @return reason Human-readable reason
-    * @return defaultersCount Number of defaulters found
-    */
-    function shouldAutomationRun() external view returns (
-        bool shouldRun,
-        string memory reason,
-        uint256 defaultersCount
-    ) {
-        // Check if automation is enabled
-        if (!automationEnabled) {
-            return (false, "Automation disabled", 0);
+/**
+ * @dev Internal function for handling individual defaults
+ * @notice Separated to enable try-catch in batch processing
+ */
+function handleDefaultInternal(address defaulter) external {
+    require(msg.sender == address(this), "Internal only");
+    
+    // Retrieve member data
+    Member memory member = membersContract.getMember(defaulter);
+    require(member.isActive, "Member not active");
+    
+    uint256 currentCycle = paymentsContract.getCurrentCycle();
+    require(member.lastPaymentCycle < currentCycle, "Member already paid");
+    
+    // Apply penalties through payments contract
+    paymentsContract.handleDefault(defaulter);
+    
+    // Update reputation negatively
+    governanceContract.updateReputationAndVotingPower(defaulter, false);
+    
+    // Check for severe default (3+ cycles missed)
+    uint256 cyclesMissed = currentCycle - member.lastPaymentCycle;
+    
+    if (cyclesMissed >= 3) {
+        // Execute collateral seizure
+        collateralContract.executeSeizure(defaulter);
+        
+        // Remove defaulter
+        membersContract.removeMember(defaulter);
+        
+        // Remove guarantor if exists
+        if (member.guarantor != address(0)) {
+            membersContract.removeMember(member.guarantor);
         }
-        
-        // Check if deadline passed
-        (bool isPastDeadline, uint256 secondsOverdue) = paymentsContract.isDeadlinePassed();
-        
-        if (!isPastDeadline) {
-            return (false, "Deadline not reached", 0);
-        }
-        
-        // Check if grace period elapsed
-        if (secondsOverdue < automationGracePeriod) {
-            return (false, "Grace period not elapsed", 0);
-        }
-        
-        // Check for defaulters
-        address[] memory defaulters = paymentsContract.getMembersInDefault();
-        defaultersCount = defaulters.length;
-        
-        if (defaultersCount == 0) {
-            return (false, "No defaulters found", 0);
-        }
-        
-        // Check if contract is paused
-        if (paused) {
-            return (false, "Contract is paused", defaultersCount);
-        }
-        
-        return (true, "Ready to process defaults", defaultersCount);
     }
+}
 
-    /**
-    * @dev Get automation configuration
-    */
-    function getAutomationConfig() external view returns (
-        bool enabled,
-        uint256 gracePeriod,
-        address[] memory authorizedAddresses
-    ) {
-        enabled = automationEnabled;
-        gracePeriod = automationGracePeriod;
-        
-        // Note: In production, you'd maintain an array of authorized addresses
-        // For simplicity, returning empty array - check mapping directly
-        authorizedAddresses = new address[](0);
-        
-        return (enabled, gracePeriod, authorizedAddresses);
-    }
-    /**
-    * @dev Check if cycle should be advanced automatically
-    * @return shouldAdvance Whether cycle advancement is ready
-    * @return reason Human-readable reason
-    * @return readyForPayout Whether payout should be distributed first
-    */
-    function shouldAdvanceCycle() external view returns (
-        bool shouldAdvance,
-        string memory reason,
-        bool readyForPayout
-    ) {
-        // Check if auto-advance is enabled
-        if (!autoAdvanceCycleEnabled) {
-            return (false, "Auto-advance disabled", false);
-        }
-        
-        // Check if contract is paused
-        if (paused) {
-            return (false, "Contract paused", false);
-        }
-        
-        uint256 currentCycle = paymentsContract.getCurrentCycle();
-        
-        // Check if this is first cycle (special handling)
-        if (!isFirstCycleComplete) {
-            // First cycle: check if payout is ready
-            bool payoutReady = paymentsContract.isPayoutReady();
-            
-            if (payoutReady) {
-                return (true, "First cycle payout ready", true);
-            } else {
-                return (false, "Waiting for all payments in first cycle", false);
-            }
-        }
-        
-        // Regular cycles: check if cycle duration has passed
-        uint256 timeSinceLastCycle = block.timestamp - lastCycleTimestamp;
-        
-        if (timeSinceLastCycle < cycleDuration) {
-            uint256 timeRemaining = cycleDuration - timeSinceLastCycle;
-            return (
-                false, 
-                string(abi.encodePacked("Cycle duration not elapsed. ", _uintToString(timeRemaining), " seconds remaining")),
-                false
-            );
-        }
-        
-        // Check if payout should be distributed first
-        bool payoutReady = paymentsContract.isPayoutReady();
-        
-        if (payoutReady) {
-            return (true, "Cycle complete, payout ready", true);
-        }
-        
-        // Check if minimum advance delay has passed since all payments received
-        (bool allPaid, uint256 lastPaymentTime) = _checkAllMembersPaid();
-        
-        if (!allPaid) {
-            return (false, "Not all members have paid yet", false);
-        }
-        
-        uint256 timeSinceLastPayment = block.timestamp - lastPaymentTime;
-        
-        if (timeSinceLastPayment < minCycleAdvanceDelay) {
-            return (
-                false,
-                "Waiting for minimum delay after last payment",
-                false
-            );
-        }
-        
-        // All conditions met - can advance without payout (default scenario handled)
-        return (true, "Ready to advance (all paid or defaults handled)", false);
-    }
+// ============ VIEW FUNCTIONS FOR AUTOMATION ============
 
-    /**
-    * @dev Advance cycle automatically (called by Defender Autotask)
-    * @notice Handles payout distribution if ready, then advances cycle
-    */
-    function advanceCycleAutomated() 
-        external 
-        onlyAuthorizedAutomation 
-        whenAutomationEnabled
-        nonReentrant 
-        returns (bool success, bool payoutDistributed)
-    {
-        // Check if we should advance
-        (bool shouldAdvance, string memory reason, bool payoutReady) = this.shouldAdvanceCycle();
-        
-        require(shouldAdvance, reason);
-        
-        uint256 oldCycle = paymentsContract.getCurrentCycle();
-        
-        // If payout is ready, distribute it first
-        if (payoutReady) {
-            try paymentsContract.distributePayout() {
-                payoutDistributed = true;
-            } catch Error(string memory errorReason) {
-                emit CycleAdvancementFailed(oldCycle, errorReason, block.timestamp);
-                revert(string(abi.encodePacked("Payout distribution failed: ", errorReason)));
-            }
-        }
-        
-        // Advance the cycle
-        _advanceCycle();
-        
-        // If first cycle, mark as complete
-        if (!isFirstCycleComplete) {
-            isFirstCycleComplete = true;
-        }
-        
-        uint256 newCycle = paymentsContract.getCurrentCycle();
-        
-        emit CycleAdvancedAutomatically(
-            oldCycle,
-            newCycle,
-            msg.sender,
-            block.timestamp,
-            payoutDistributed
-        );
-        
-        return (true, payoutDistributed);
+/**
+ * @dev Check if automation should run for this Ajo
+ * @return shouldRun Whether automation should execute
+ * @return reason Human-readable reason
+ * @return defaultersCount Number of defaulters found
+ */
+function shouldAutomationRun() external view returns (
+    bool shouldRun,
+    string memory reason,
+    uint256 defaultersCount
+) {
+    // Check if automation is enabled
+    if (!automationEnabled) {
+        return (false, "Automation disabled", 0);
     }
-
-    /**
-    * @dev Check if all active members have paid current cycle
-    * @return allPaid Whether all members have paid
-    * @return lastPaymentTime Timestamp of the last payment received
-    */
-    function _checkAllMembersPaid() internal view returns (bool allPaid, uint256 lastPaymentTime) {
-        address[] memory members = membersContract.getActiveMembersList();
-        uint256 currentCycle = paymentsContract.getCurrentCycle();
-        
-        allPaid = true;
-        lastPaymentTime = 0;
-        
-        for (uint256 i = 0; i < members.length; i++) {
-            Member memory member = membersContract.getMember(members[i]);
-            
-            if (member.lastPaymentCycle < currentCycle) {
-                allPaid = false;
-            }
-            
-            // Track latest payment time (you'll need to add this to Member struct or track separately)
-            // For now, using lastCycleTimestamp as approximation
-            if (member.lastPaymentCycle == currentCycle && lastCycleTimestamp > lastPaymentTime) {
-                lastPaymentTime = lastCycleTimestamp;
-            }
-        }
-        
-        // If no payments tracked, use cycle start time
-        if (lastPaymentTime == 0) {
-            lastPaymentTime = lastCycleTimestamp;
-        }
-        
-        return (allPaid, lastPaymentTime);
+    
+    // Check if deadline passed
+    (bool isPastDeadline, uint256 secondsOverdue) = paymentsContract.isDeadlinePassed();
+    
+    if (!isPastDeadline) {
+        return (false, "Deadline not reached", 0);
     }
-
-    /**
-    * @dev Get cycle advancement status for all conditions
-    * @return status Detailed status of cycle advancement readiness
-    */
-    function getCycleAdvancementStatus() external view returns (CycleAdvancementStatus memory status) {
-        status.currentCycle = paymentsContract.getCurrentCycle();
-        status.isFirstCycle = !isFirstCycleComplete;
-        status.cycleStartTime = lastCycleTimestamp;
-        status.cycleDuration = cycleDuration;
-        status.timeElapsed = block.timestamp - lastCycleTimestamp;
-        status.autoAdvanceEnabled = autoAdvanceCycleEnabled;
-        
-        (status.allMembersPaid, status.lastPaymentTime) = _checkAllMembersPaid();
-        status.payoutReady = paymentsContract.isPayoutReady();
-        status.nextPayoutRecipient = paymentsContract.getNextRecipient();
-        
-        (status.shouldAdvance, status.advanceReason, status.needsPayout) = this.shouldAdvanceCycle();
-        
-        // Calculate time until next advancement
-        if (status.timeElapsed < cycleDuration) {
-            status.timeUntilAdvancement = cycleDuration - status.timeElapsed;
-        } else {
-            status.timeUntilAdvancement = 0;
-        }
-        
-        return status;
+    
+    // Check if grace period elapsed
+    if (secondsOverdue < automationGracePeriod) {
+        return (false, "Grace period not elapsed", 0);
     }
-
-    /**
-    * @dev Enable or disable automatic cycle advancement
-    * @param enabled Whether auto-advance should be enabled
-    */
-    function setAutoAdvanceCycleEnabled(bool enabled) external onlyOwner {
-        autoAdvanceCycleEnabled = enabled;
-        emit AutoAdvanceCycleToggled(enabled);
+    
+    // Check for defaulters
+    address[] memory defaulters = paymentsContract.getMembersInDefault();
+    defaultersCount = defaulters.length;
+    
+    if (defaultersCount == 0) {
+        return (false, "No defaulters found", 0);
     }
-
-    /**
-    * @dev Update minimum delay after payments before advancing
-    * @param newDelay New minimum delay in seconds
-    */
-    function setMinCycleAdvanceDelay(uint256 newDelay) external onlyOwner {
-        require(newDelay <= 24 hours, "Delay too long");
-        uint256 oldDelay = minCycleAdvanceDelay;
-        minCycleAdvanceDelay = newDelay;
-        emit MinCycleAdvanceDelayUpdated(oldDelay, newDelay);
+    
+    // Check if contract is paused
+    if (paused) {
+        return (false, "Contract is paused", defaultersCount);
     }
+    
+    return (true, "Ready to process defaults", defaultersCount);
+}
 
-    // ============ HELPER FUNCTIONS ============
-
-    /**
-    * @dev Convert uint to string (for error messages)
-    */
-    function _uintToString(uint256 value) internal pure returns (string memory) {
-        if (value == 0) {
-            return "0";
-        }
-        
-        uint256 temp = value;
-        uint256 digits;
-        
-        while (temp != 0) {
-            digits++;
-            temp /= 10;
-        }
-        
-        bytes memory buffer = new bytes(digits);
-        
-        while (value != 0) {
-            digits -= 1;
-            buffer[digits] = bytes1(uint8(48 + uint256(value % 10)));
-            value /= 10;
-        }
-        
-        return string(buffer);
-    }
-
-    // ============ NEW STRUCT ============
-    struct CycleAdvancementStatus {
-        uint256 currentCycle;
-        bool isFirstCycle;
-        uint256 cycleStartTime;
-        uint256 cycleDuration;
-        uint256 timeElapsed;
-        uint256 timeUntilAdvancement;
-        bool autoAdvanceEnabled;
-        bool allMembersPaid;
-        uint256 lastPaymentTime;
-        bool payoutReady;
-        address nextPayoutRecipient;
-        bool shouldAdvance;
-        string advanceReason;
-        bool needsPayout;
-    }
+/**
+ * @dev Get automation configuration
+ */
+function getAutomationConfig() external view returns (
+    bool enabled,
+    uint256 gracePeriod,
+    address[] memory authorizedAddresses
+) {
+    enabled = automationEnabled;
+    gracePeriod = automationGracePeriod;
+    
+    // Note: In production, you'd maintain an array of authorized addresses
+    // For simplicity, returning empty array - check mapping directly
+    authorizedAddresses = new address[](0);
+    
+    return (enabled, gracePeriod, authorizedAddresses);
+}
 
 }
