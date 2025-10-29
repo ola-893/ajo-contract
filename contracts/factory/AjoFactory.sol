@@ -117,6 +117,8 @@ contract AjoFactory is IAjoFactory, HederaTokenService {
     event AjoPhase4Completed(uint256 indexed ajoId);
     event AjoPhase5Completed(uint256 indexed ajoId);
     event AjoForceCompleted(uint256 indexed ajoId, address indexed completer, uint8 finalPhase);
+    event HtsTokensConfigured(address indexed usdcToken, address indexed hbarToken);
+    event HtsTokensSet(address indexed usdcToken, address indexed hbarToken);
      
     // ============ MODIFIERS ============
     
@@ -285,6 +287,24 @@ contract AjoFactory is IAjoFactory, HederaTokenService {
         return (usdcAddr, hbarAddr);
     }
     
+    /**
+    * @notice Use official Circle USDC and Hedera WHBAR
+    * @dev No token creation needed - just reference official addresses
+    */
+    function useOfficialTokens() external override onlyOwner {
+        require(!htsEnabled, "Tokens already configured");
+        require(USDC != address(0) && WHBAR != address(0), "Invalid token addresses");
+        
+        // Set references to official tokens
+        usdcHtsToken = USDC;  // Official Circle USDC
+        hbarHtsToken = WHBAR; // Official Hedera WHBAR
+        
+        htsEnabled = true;
+        factoryTokensMinted = false; // We're not minting - using existing tokens
+        
+        emit HtsTokensConfigured(USDC, WHBAR);
+    }
+
     /**
      * @notice Internal helper to create fungible token with HBAR value
      * @dev Uses low-level call to HTS precompile

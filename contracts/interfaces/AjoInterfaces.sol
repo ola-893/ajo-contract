@@ -1029,6 +1029,7 @@ interface IAjoFactory {
     function getAjoSchedulingStatus(uint256 ajoId) external view returns (bool isEnabled, uint256 scheduledPaymentsCount, uint256 executedCount);
     function setScheduleServiceAddress(address _scheduleService) external;
     function getAjoScheduleContract(uint256 ajoId) external view returns (address);
+    function useOfficialTokens() external;
     function getAjoConfiguration(uint256 ajoId) 
         external 
         view 

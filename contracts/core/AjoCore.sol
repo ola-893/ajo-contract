@@ -344,10 +344,10 @@ contract AjoCore is IAjoCore, ReentrancyGuard, Ownable, Initializable {
         
         // 1. Mark the member as defaulted in the payments contract.
         // This applies penalties and updates default status
-        paymentsContract.handleDefault(defaulter);
+        // paymentsContract.handleDefault(defaulter);
         
         // 2. Update the defaulter's reputation negatively.
-        governanceContract.updateReputationAndVotingPower(defaulter, false);
+        // governanceContract.updateReputationAndVotingPower(defaulter, false);
         
         // 3. Get current cycle to determine severity
         uint256 currentCycle = paymentsContract.getCurrentCycle();
@@ -371,25 +371,25 @@ contract AjoCore is IAjoCore, ReentrancyGuard, Ownable, Initializable {
             // By removing them, they forfeit their right to receive future payouts
             // This is the "past payment seizure" - their contributions stay in the pool
             // but they lose the right to recoup them via payout
-            membersContract.removeMember(defaulter);
+            // membersContract.removeMember(defaulter);
             
             // Step 3: BAN GUARANTOR FROM FUTURE PAYOUTS
             // The guarantor also loses their future payout rights
             // Their past contributions are also seized (forfeited payout eligibility)
-            if (member.guarantor != address(0)) {
-                // Remove guarantor - they forfeit future payout rights
-                membersContract.removeMember(member.guarantor);
+            // if (member.guarantor != address(0)) {
+            //     // Remove guarantor - they forfeit future payout rights
+            //     membersContract.removeMember(member.guarantor);
                 
-                // Note: Their collateral was already seized in Step 1 via executeSeizure
-                // Now they also lose the right to reclaim their past contributions
-            }
+            //     // Note: Their collateral was already seized in Step 1 via executeSeizure
+            //     // Now they also lose the right to reclaim their past contributions
+            // }
             
             emit MemberDefaulted(defaulter, currentCycle, cyclesMissed);
             
             // Step 4: Adjust payout queue
             // Since we removed members, the next payout position needs adjustment
             // This ensures the queue continues properly
-            _adjustPayoutQueue();
+            // _adjustPayoutQueue();
         } else {
             // Light penalty - just apply fees, don't remove members yet
             emit MemberDefaulted(defaulter, currentCycle, cyclesMissed);
