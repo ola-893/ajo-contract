@@ -537,7 +537,7 @@ interface IAjoCore {
     function joinAjo(PaymentToken tokenChoice) external;
     function processPayment() external;
     function distributePayout() external;
-    function handleDefault(address defaulter) external;
+    // function handleDefault(address defaulter) external;
     function exitAjo() external;
     
     // View Functions - Member Information
@@ -581,12 +581,20 @@ interface IAjoCore {
         uint256 collateralSeized, 
         uint256 paymentsSeized
     );
+    function setAutomationAuthorization(address automationAddress, bool authorized) 
+    external ;
+    function setAutomationEnabled(bool enabled) external;
+    function shouldAutomationRun() external view returns (
+    bool shouldRun,
+    string memory reason,
+    uint256 defaultersCount
+) ;
     
     // Admin Functions
     function emergencyWithdraw(PaymentToken token) external;
     function updateCycleDuration(uint256 newDuration) external;
     function emergencyPause() external;
-    function batchHandleDefaults(address[] calldata defaulters) external;
+    // function batchHandleDefaults(address[] calldata defaulters) external;
     function updateTokenConfig(
         PaymentToken token,
         uint256 monthlyPayment,
@@ -851,12 +859,13 @@ interface IAjoPayments {
     
     // Payment History & Tracking
     function getMemberPaymentHistory(address member) external view returns (PaymentStatus[] memory);
-    
+    function getMembersInDefault() external view returns (address[] memory defaulters);
     function getCyclePaymentStatus(uint256 cycle) external view returns (
         address[] memory paidMembers,
         address[] memory unpaidMembers,
         uint256 totalCollected
     );
+    function isDeadlinePassed() external view returns (bool isPastDeadline, uint256 secondsOverdue);
     
     // Active Cycle Dashboard
     function getCurrentCycleDashboard() external view returns (CycleDashboard memory);
@@ -994,17 +1003,18 @@ interface IAjoFactory {
         bytes32 hcsTopicId;
         bool usesScheduledPayments;
         uint256 scheduledPaymentsCount;
+        uint256   ajoCycleDuration;
+        uint256    ajoMonthlyPaymentUSDC;
+        uint256   ajoMonthlyPaymentHBAR;
     }
 
     // HTS Token Functions
-    function createHtsTokens() external payable returns (address usdcToken, address hbarToken);
     function setHtsTokensForFactory(address _usdcHts, address _hbarHts) external;
     function getHtsTokenAddresses() external view returns (address usdc, address hbar);
     function isHtsEnabled() external view returns (bool);
     //function getHtsTokenInfo(address token) external view returns (HtsTokenInfo memory);
     
     // HTS User Management Functions
-   function fundUserWithHtsTokens(address user, int64 usdcAmount, int64 hbarAmount) external returns (bool usdcSuccess, bool hbarSuccess);
     function checkUserHtsAssociation(address user) external view returns (bool usdcAssociated, bool hbarAssociated, uint256 lastAssociationTime);
     //function getUserHtsBalance(address user) external view returns (uint256 usdcBalance, uint256 hbarBalance);
     //function isUserReadyForHts(address user, uint256 minUsdcBalance, uint256 minHbarBalance) external view returns (bool isReady, bool usdcReady, bool hbarReady);
@@ -1082,16 +1092,8 @@ interface IAjoFactory {
     event AjoInitializedPhase5(uint256 indexed ajoId, address ajoSchedule);
     event ScheduledPaymentsEnabled(uint256 indexed ajoId);
     event ScheduledPaymentsDisabled(uint256 indexed ajoId);
-    event HtsTokenCreated(address indexed tokenAddress, string name, string symbol, uint8 decimals);
-    // event HtsTokenCreationAttempt(string tokenName, int64 responseCode, address tokenAddress, bool success);
-    // event UserHtsTokenAssociated(address indexed user, address indexed token, bool success);
-    // event UserHtsTokenFunded(address indexed user, address indexed token, int64 amount, bool success);
-    // event BatchAssociationCompleted(uint256 successCount, uint256 failCount);
-    // event BatchFundingCompleted(uint256 successCount, uint256 failCount);
     event MasterImplementationsSet(address ajoCore, address ajoMembers, address ajoCollateral, address ajoPayments, address ajoGovernance, address ajoSchedule);
     event ScheduleServiceSet(address indexed scheduleService);
-    event HtsTokensCreatedWithAutoAssociation(address indexed usdcToken, address indexed hbarToken);
-    event HtsTokenCreationAttempt(string tokenName, int64 responseCode, address tokenAddress, bool success);
     event UserHtsAssociated(address indexed user, address indexed usdcToken, address indexed hbarToken, int64 usdcResponse, int64 hbarResponse);
     event UserHtsTokenAssociated(address indexed user, address indexed token, bool success);
     event UserHtsFunded(address indexed user, uint256 usdcAmount, uint256 hbarAmount, int64 usdcResponse, int64 hbarResponse);

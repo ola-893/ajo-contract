@@ -51,6 +51,8 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
     // ============ ENHANCED EVENTS (FOR HISTORICAL DATA) ============
     
     event AjoCoreUpdated(address indexed oldCore, address indexed newCore);
+    event CycleForceAdvanced(uint256 indexed newCycle, uint256 timestamp, address indexed advancer);
+
     
     // DETAILED EVENT - Frontend indexes this for payment history
     event PaymentMadeDetailed(
@@ -787,4 +789,115 @@ contract AjoPayments is IAjoPayments, ReentrancyGuard, Ownable, Initializable, L
         uint256 balance = tokenContract.balanceOf(address(this));
         tokenContract.transfer(ajoCore, balance);
     }
+
+
+    /**
+ * @dev Get all members who are currently in default (after deadline)
+ * @notice This function is called by the Defender Autotask
+ * @return defaulters Array of addresses that missed payment deadline
+ */
+function getMembersInDefault() external override view returns (address[] memory defaulters) {
+    // Check if we're past the payment deadline
+    uint256 deadline = this.getNextPaymentDeadline();
+    
+    // If deadline hasn't passed, no one is in default yet
+    if (block.timestamp <= deadline) {
+        return new address[](0);
+    }
+    
+    // Get all active members
+    address[] memory allMembers = membersContract.getActiveMembersList();
+    uint256 defaultCount = 0;
+    
+    // First pass: count how many members are in default
+    for (uint256 i = 0; i < allMembers.length; i++) {
+        Member memory member = membersContract.getMember(allMembers[i]);
+        
+        // Check if member hasn't paid this cycle
+        if (member.isActive && member.lastPaymentCycle < currentCycle) {
+            defaultCount++;
+        }
+    }
+    
+    // If no defaults, return empty array
+    if (defaultCount == 0) {
+        return new address[](0);
+    }
+    
+    // Second pass: build array of defaulters
+    defaulters = new address[](defaultCount);
+    uint256 index = 0;
+    
+    for (uint256 i = 0; i < allMembers.length; i++) {
+        Member memory member = membersContract.getMember(allMembers[i]);
+        
+        if (member.isActive && member.lastPaymentCycle < currentCycle) {
+            defaulters[index] = allMembers[i];
+            index++;
+        }
+    }
+    
+    return defaulters;
+}
+
+/**
+ * @dev Check if deadline has passed for current cycle
+ * @return isPastDeadline Whether the payment deadline has been exceeded
+ * @return secondsOverdue How many seconds past deadline (0 if not past)
+ */
+function isDeadlinePassed() external override view returns (bool isPastDeadline, uint256 secondsOverdue) {
+    uint256 deadline = this.getNextPaymentDeadline();
+    
+    if (block.timestamp > deadline) {
+        isPastDeadline = true;
+        secondsOverdue = block.timestamp - deadline;
+    } else {
+        isPastDeadline = false;
+        secondsOverdue = 0;
+    }
+    
+    return (isPastDeadline, secondsOverdue);
+}
+
+/**
+ * @dev Get comprehensive default status for automation
+ * @return isPastDeadline Whether deadline has passed
+ * @return defaultersCount Number of members in default
+ * @return defaulters Array of defaulter addresses
+ * @return currentCycleNum Current cycle number
+ * @return deadlineTimestamp Payment deadline timestamp
+ */
+function getDefaultStatus() external view returns (
+    bool isPastDeadline,
+    uint256 defaultersCount,
+    address[] memory defaulters,
+    uint256 currentCycleNum,
+    uint256 deadlineTimestamp
+) {
+    deadlineTimestamp = this.getNextPaymentDeadline();
+    isPastDeadline = block.timestamp > deadlineTimestamp;
+    currentCycleNum = currentCycle;
+    
+    if (isPastDeadline) {
+        defaulters = this.getMembersInDefault();
+        defaultersCount = defaulters.length;
+    } else {
+        defaulters = new address[](0);
+        defaultersCount = 0;
+    }
+    
+    return (isPastDeadline, defaultersCount, defaulters, currentCycleNum, deadlineTimestamp);
+}
+
+/**
+ * @dev Emergency function to manually advance stuck cycle (admin only)
+ * @notice Only callable by AjoCore after thorough checks
+ */
+function forceAdvanceCycle() external onlyAjoCore {
+    require(block.timestamp > cycleStartTime + cycleDuration + 7 days, "Cycle not stuck yet");
+    advanceCycle();
+    emit CycleForceAdvanced(currentCycle, block.timestamp, msg.sender);
+}
+
+
 }

@@ -68,19 +68,19 @@ const DEMO_CONFIG = {
   TOTAL_PARTICIPANTS: 13,
   MIN_HBAR_FOR_HTS: ethers.utils.parseEther("50"),
   GAS_LIMIT: {
-    DEPLOY_MASTER: 6000000,
-    DEPLOY_GOVERNANCE: 6000000,
+    DEPLOY_MASTER: 15000000,
+    DEPLOY_GOVERNANCE: 15000000,
     DEPLOY_FACTORY: 15000000,
-    CREATE_HTS: 5000000,
-    CREATE_AJO: 1500000,
-    INIT_PHASE_2: 1200000,
-    INIT_PHASE_3: 1500000,
-    INIT_PHASE_4: 1800000,
-    INIT_PHASE_5: 1500000,
-    JOIN_AJO: 1000000,
-    HTS_ASSOCIATE: 300000,
-    HTS_FUND: 800000,
-    HTS_APPROVE: 400000,
+    CREATE_HTS: 15000000,
+    CREATE_AJO: 15000000,
+    INIT_PHASE_2: 15000000,
+    INIT_PHASE_3: 15000000,
+    INIT_PHASE_4: 15000000,
+    INIT_PHASE_5: 15000000,
+    JOIN_AJO: 15000000,
+    HTS_ASSOCIATE: 15000000,
+    HTS_FUND: 15000000,
+    HTS_APPROVE: 15000000,
     PROCESS_PAYMENT: 15000000,
     DISTRIBUTE_PAYOUT: 15000000
   }
@@ -549,7 +549,7 @@ async function setupHtsParticipants(ajoFactory, ajoId) {
   }
   
   // Calculate per-participant amounts
-  const usdcPerParticipant = ethers.utils.parseUnits("10", 6);
+  const usdcPerParticipant = ethers.utils.parseUnits("5", 6);
   
   const totalUsdcNeeded = usdcPerParticipant.mul(REQUIRED_PARTICIPANTS);
   
@@ -1286,7 +1286,7 @@ async function main() {
       deployer,
       hederaClient,
       {
-        name: "Hedera Hackathon 2025 - 10 Cycle Demo",
+        name: "African Ajo",
         useScheduledPayments: true,
         cycleDuration: DEMO_CONFIG.CYCLE_DURATION,
         monthlyPaymentUSDC: DEMO_CONFIG.MONTHLY_PAYMENT_USDC,
@@ -1301,13 +1301,13 @@ async function main() {
     
     await sleep(3000);
     
-    const joinResults = await demonstrateMemberJoining(
-      ajo, 
-      ajoCollateral, 
-      ajoMembers, 
-      participants,
-      ajoInfo
-    );
+    // const joinResults = await demonstrateMemberJoining(
+    //   ajo, 
+    //   ajoCollateral, 
+    //   ajoMembers, 
+    //   participants,
+    //   ajoInfo
+    // );
     
     await sleep(3000);
     
@@ -1328,12 +1328,12 @@ async function main() {
     // ============================================================
     
     // Run full 10 cycles
-    const cycleResults = await demonstrateFullCycles(
-      ajo,
-      ajoPayments,
-      participants,
-      cycleDuration
-    );
+    // const cycleResults = await demonstrateFullCycles(
+    //   ajo,
+    //   ajoPayments,
+    //   participants,
+    //   cycleDuration
+    // );
     
     await sleep(2000);
     
