@@ -19,7 +19,7 @@ task("show-balance", "Show account balance", async () => {
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
   solidity: {
-    version: "0.8.19",
+    version: "0.8.24",
     settings: {
       optimizer: {
         enabled: true,
@@ -52,6 +52,13 @@ module.exports = {
         process.env.PRIVATE_KEY_4,
         process.env.PRIVATE_KEY_5,
         process.env.PRIVATE_KEY_6,
+        process.env.PRIVATE_KEY_7,
+        process.env.PRIVATE_KEY_8,
+        process.env.PRIVATE_KEY_9,
+         process.env.PRIVATE_KEY_10,
+         process.env.PRIVATE_KEY_11,
+         process.env.PRIVATE_KEY_12,
+         process.env.PRIVATE_KEY_13,
       ].filter(key => key), // Remove undefined keys
       gas: "auto",
       gasPrice: "auto",

@@ -1,31 +1,58 @@
 {
-  "name": "protego-ai-sei",
-  "version": "1.0.0",
-  "description": "Protego.ai - Revolutionary Invoice Financing Platform on Sei Network",
+  "name": "ajo-save",
+  "version": "3.0.0",
+  "description": "Decentralized Rotating Savings and Credit Association (ROSCA) protocol on Hedera with V3 60% collateral model, HCS-enabled governance, and factory scaling",
   "main": "index.js",
-  "type": "module",
   "scripts": {
     "compile": "hardhat compile",
     "test": "hardhat test",
+    "test:coverage": "hardhat coverage",
+    "test:gas": "REPORT_GAS=true hardhat test",
     "deploy:hedera-testnet": "hardhat run scripts/deploy-hardhat.cjs --network hedera_testnet",
     "deploy:hedera-mainnet": "hardhat run scripts/deploy-hardhat.cjs --network hedera_mainnet",
     "deploy:hedera-local": "hardhat run scripts/deploy-hardhat.cjs --network hedera_local",
+    "deploy:hcs-governance": "hardhat run scripts/deploy-hcs-governance.js --network hedera_testnet",
+    "deploy:4-phase-factory": "hardhat run scripts/deploy-4-phase-factory.js --network hedera_testnet",
     "deploy:task-testnet": "hardhat deploy-ajo-system --network hedera_testnet",
     "deploy:task-mainnet": "hardhat deploy-ajo-system --network hedera_mainnet",
+    "demo:complete": "hardhat run scripts/hackathon-demo-complete.cjs --network hedera_testnet",
+    "demo:core": "hardhat run scripts/test-core-functions.cjs --network hedera_testnet",
     "check-balance": "hardhat show-balance --network hedera_testnet",
-    "clean": "hardhat clean"
+    "aggregator:register": "node scripts/HCSVoteAggregator.js register",
+    "aggregator:monitor": "node scripts/HCSVoteAggregator.js monitor",
+    "aggregator:stats": "node scripts/HCSVoteAggregator.js stats",
+    "vote:list": "node scripts/HCSVoteClient.js list",
+    "vote:power": "node scripts/HCSVoteClient.js power",
+    "vote:cast": "node scripts/HCSVoteClient.js vote",
+    "vote:info": "node scripts/HCSVoteClient.js info",
+    "lint": "solhint 'contracts/**/*.sol'",
+    "lint:fix": "solhint 'contracts/**/*.sol' --fix",
+    "format": "prettier --write 'contracts/**/*.sol' 'scripts/**/*.js' 'test/**/*.js'",
+    "clean": "hardhat clean",
+    "node": "hardhat node",
+    "flatten": "hardhat flatten"
   },
   "keywords": [
+    "hedera",
+    "rosca",
+    "ajo",
+    "esusu",
     "defi",
-    "invoice-financing",
-    "sei-network",
-    "erc721",
-    "erc4626",
-    "erc1155",
-    "yield-farming",
-    "protego-ai"
+    "savings-circle",
+    "rotating-savings",
+    "collateral-system",
+    "hcs",
+    "hedera-consensus-service",
+    "governance",
+    "factory-pattern",
+    "minimal-proxy",
+    "web3",
+    "blockchain",
+    "smart-contracts",
+    "traditional-finance",
+    "financial-inclusion"
   ],
-  "author": "Protego.ai Team",
+  "author": "Ajo.save Team",
   "license": "MIT",
   "devDependencies": {
     "@nomicfoundation/hardhat-chai-matchers": "^2.0.2",
@@ -71,27 +98,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/protego-ai/sei-contracts.git"
+    "url": "https://github.com/ola-893/ajo-contract.git"
   },
   "bugs": {
-    "url": "https://github.com/protego-ai/sei-contracts/issues"
+    "url": "https://github.com/ola-893/ajo-contract/issues"
   },
-  "homepage": "https://protego.ai",
-  "lint-staged": {
-    "*.sol": [
-      "prettier --write",
-      "solhint"
-    ],
-    "*.js": [
-      "prettier --write"
-    ],
-    "*.json": [
-      "prettier --write"
-    ]
-  },
-  "husky": {
-    "hooks": {
-      "pre-commit": "lint-staged"
-    }
-  }
+  "homepage": "https://github.com/ola-893/ajo-contract#readme"
 }

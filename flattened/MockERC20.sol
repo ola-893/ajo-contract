@@ -7,7 +7,9 @@
 // Original license: SPDX_License_Identifier: MIT
 // OpenZeppelin Contracts v4.4.1 (access/IAccessControl.sol)
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
+
+
 
 /**
  * @dev External interface of AccessControl declared to support ERC165 detection.
@@ -99,7 +101,9 @@ interface IAccessControl {
 // Original license: SPDX_License_Identifier: MIT
 // OpenZeppelin Contracts (last updated v4.9.4) (utils/Context.sol)
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
+
+
 
 /**
  * @dev Provides information about the current execution context, including the
@@ -131,7 +135,9 @@ abstract contract Context {
 // Original license: SPDX_License_Identifier: MIT
 // OpenZeppelin Contracts v4.4.1 (utils/introspection/IERC165.sol)
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
+
+
 
 /**
  * @dev Interface of the ERC165 standard, as defined in the
@@ -160,7 +166,9 @@ interface IERC165 {
 // Original license: SPDX_License_Identifier: MIT
 // OpenZeppelin Contracts v4.4.1 (utils/introspection/ERC165.sol)
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
+
+
 
 /**
  * @dev Implementation of the {IERC165} interface.
@@ -191,7 +199,9 @@ abstract contract ERC165 is IERC165 {
 // Original license: SPDX_License_Identifier: MIT
 // OpenZeppelin Contracts (last updated v4.9.0) (utils/math/Math.sol)
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
+
+
 
 /**
  * @dev Standard math utilities missing in the Solidity language.
@@ -534,7 +544,9 @@ library Math {
 // Original license: SPDX_License_Identifier: MIT
 // OpenZeppelin Contracts (last updated v4.8.0) (utils/math/SignedMath.sol)
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
+
+
 
 /**
  * @dev Standard signed math utilities missing in the Solidity language.
@@ -581,7 +593,9 @@ library SignedMath {
 // Original license: SPDX_License_Identifier: MIT
 // OpenZeppelin Contracts (last updated v4.9.0) (utils/Strings.sol)
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
+
+
 
 
 /**
@@ -668,7 +682,9 @@ library Strings {
 // Original license: SPDX_License_Identifier: MIT
 // OpenZeppelin Contracts (last updated v4.9.0) (access/AccessControl.sol)
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
+
+
 
 
 
@@ -918,7 +934,9 @@ abstract contract AccessControl is Context, IAccessControl, ERC165 {
 // Original license: SPDX_License_Identifier: MIT
 // OpenZeppelin Contracts (last updated v4.9.0) (access/Ownable.sol)
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
+
+
 
 /**
  * @dev Contract module which provides a basic access control mechanism, where
@@ -1003,7 +1021,9 @@ abstract contract Ownable is Context {
 // Original license: SPDX_License_Identifier: MIT
 // OpenZeppelin Contracts (last updated v4.9.0) (token/ERC20/IERC20.sol)
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
+
+
 
 /**
  * @dev Interface of the ERC20 standard as defined in the EIP.
@@ -1085,7 +1105,9 @@ interface IERC20 {
 // Original license: SPDX_License_Identifier: MIT
 // OpenZeppelin Contracts v4.4.1 (token/ERC20/extensions/IERC20Metadata.sol)
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
+
+
 
 /**
  * @dev Interface for the optional metadata functions from the ERC20 standard.
@@ -1115,7 +1137,9 @@ interface IERC20Metadata is IERC20 {
 // Original license: SPDX_License_Identifier: MIT
 // OpenZeppelin Contracts (last updated v4.9.0) (interfaces/IERC4626.sol)
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
+
+
 
 
 /**
@@ -1349,7 +1373,9 @@ interface IERC4626 is IERC20, IERC20Metadata {
 // Original license: SPDX_License_Identifier: MIT
 // OpenZeppelin Contracts (last updated v4.9.0) (token/ERC1155/IERC1155.sol)
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
+
+
 
 /**
  * @dev Required interface of an ERC1155 compliant contract, as defined in the
@@ -1470,7 +1496,9 @@ interface IERC1155 is IERC165 {
 // Original license: SPDX_License_Identifier: MIT
 // OpenZeppelin Contracts v4.4.1 (token/ERC1155/extensions/IERC1155MetadataURI.sol)
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
+
+
 
 /**
  * @dev Interface of the optional ERC1155MetadataExtension interface, as defined
@@ -1494,7 +1522,9 @@ interface IERC1155MetadataURI is IERC1155 {
 // Original license: SPDX_License_Identifier: MIT
 // OpenZeppelin Contracts (last updated v4.5.0) (token/ERC1155/IERC1155Receiver.sol)
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
+
+
 
 /**
  * @dev _Available since v3.1._
@@ -1802,7 +1832,9 @@ library Address {
 // Original license: SPDX_License_Identifier: MIT
 // OpenZeppelin Contracts (last updated v4.9.0) (token/ERC1155/ERC1155.sol)
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
+
+
 
 
 
@@ -2301,7 +2333,9 @@ contract ERC1155 is Context, ERC165, IERC1155, IERC1155MetadataURI {
 // Original license: SPDX_License_Identifier: MIT
 // OpenZeppelin Contracts (last updated v4.9.0) (token/ERC20/ERC20.sol)
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
+
+
 
 
 
@@ -2668,7 +2702,9 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
 // Original license: SPDX_License_Identifier: MIT
 // OpenZeppelin Contracts (last updated v4.9.0) (token/ERC721/IERC721.sol)
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
+
+
 
 /**
  * @dev Required interface of an ERC721 compliant contract.
@@ -2802,7 +2838,9 @@ interface IERC721 is IERC165 {
 // Original license: SPDX_License_Identifier: MIT
 // OpenZeppelin Contracts v4.4.1 (token/ERC721/extensions/IERC721Metadata.sol)
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
+
+
 
 /**
  * @title ERC-721 Non-Fungible Token Standard, optional metadata extension
@@ -2831,7 +2869,9 @@ interface IERC721Metadata is IERC721 {
 // Original license: SPDX_License_Identifier: MIT
 // OpenZeppelin Contracts (last updated v4.6.0) (token/ERC721/IERC721Receiver.sol)
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
+
+
 
 /**
  * @title ERC721 token receiver interface
@@ -2862,7 +2902,9 @@ interface IERC721Receiver {
 // Original license: SPDX_License_Identifier: MIT
 // OpenZeppelin Contracts (last updated v4.9.0) (token/ERC721/ERC721.sol)
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
+
+
 
 
 
@@ -3330,7 +3372,9 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
 // Original license: SPDX_License_Identifier: MIT
 // OpenZeppelin Contracts (last updated v4.9.0) (security/ReentrancyGuard.sol)
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
+
+
 
 /**
  * @dev Contract module that helps prevent reentrant calls to a function.
@@ -3411,7 +3455,9 @@ abstract contract ReentrancyGuard {
 // Original license: SPDX_License_Identifier: MIT
 // OpenZeppelin Contracts (last updated v4.9.0) (utils/math/SafeMath.sol)
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
+
+
 
 // CAUTION
 // This version of SafeMath should only be used with Solidity 0.8 or later,
@@ -3628,7 +3674,8 @@ library SafeMath {
 // File contracts/mocks/mockERC20.sol
 
 // Original license: SPDX_License_Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.24;
+
 
 
 

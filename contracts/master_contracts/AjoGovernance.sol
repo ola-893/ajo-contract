@@ -1,130 +1,128 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
 
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
-import "../core/LockableContract.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "../interfaces/AjoInterfaces.sol";
+import "../hedera/hedera-token-service/HederaTokenService.sol";
+import "../hedera/HederaResponseCodes.sol";
 
 /**
- * @title AjoGovernanceHCS
- * @notice Hedera Consensus Service (HCS) enabled governance for Ajo.save
- * @dev Hybrid governance: HCS for voting (off-chain), smart contract for settlement
+ * @title AjoGovernance
+ * @notice Governance using HCS for vote submission with full season management
+ * @dev Includes season completion, restart, member participation, and onboarding governance
  * 
- * Key Benefits:
- * - 90%+ cost reduction (100 votes = $0.02 vs $0.10)
- * - Immutable audit trail via HCS
- * - Scales to thousands of voters
- * - Maintains smart contract security for execution
+ * Architecture:
+ * 1. Member creates proposal on-chain
+ * 2. HCS topic is created off-chain (via SDK)
+ * 3. Members vote by submitting to HCS topic ($0.0001/vote)
+ * 4. Anyone tallies votes by reading Mirror Node + submitting on-chain
+ * 5. Contract verifies signatures and counts votes
+ * 6. After voting period, proposal can be executed
+ * 
+ * TERMINOLOGY:
+ * - Season: Full period where all members receive payout once (e.g., 10 cycles)
+ * - Cycle: Individual monthly payment slot within a season
+ * 
+ * NEW: Full season management for ROSCA continuity
+ * - Season completion governance
+ * - Member participation opt-in/opt-out
+ * - New member onboarding
+ * - Season restart with new parameters
  */
-contract AjoGovernanceHCS is Initializable, IAjoGovernance, Ownable, ReentrancyGuard, LockableContract {
-    
-    // ============ CONSTANTS ============
-    
-    uint256 public constant PROPOSAL_THRESHOLD = 1000e18; // Need 1000 voting power to propose
-    uint256 public constant VOTING_PERIOD = 3 days;
-    uint256 public constant DEFAULT_PENALTY_RATE = 500; // 5% (500 basis points)
-    uint256 public constant CHALLENGE_PERIOD = 1 days; // Time to challenge vote batch
-    
-    // ============ STRUCTS ============
-    
-    struct HCSProposal {
-        string description;
-        bytes proposalData;
-        address proposer;
-        uint256 proposalEndTime;
-        uint256 settlementDeadline;
-        bytes32 hcsTopicId; // Hedera topic ID for this proposal
-        bool executed;
-        bool settled; // Whether votes have been settled on-chain
-        ProposalStatus status;
-    }
-    
-    struct VoteBatch {
-        bytes32 merkleRoot; // Root of Merkle tree containing all votes
-        uint256 forVotes;
-        uint256 againstVotes;
-        uint256 abstainVotes;
-        uint256 totalVoters;
-        uint256 settlementTime;
-        address aggregator; // Who submitted this batch
-        bool challenged; // Whether batch was successfully challenged
-    }
-    
-    struct VoteProof {
-        address voter;
-        uint8 support; // 0=Against, 1=For, 2=Abstain
-        uint256 votingPower;
-        bytes32[] merkleProof;
-    }
-    
-    enum ProposalStatus {
-        Active,      // Voting in progress
-        Defeated,    // Voting ended, failed
-        Succeeded,   // Voting ended, passed
-        Executed,    // Successfully executed
-        Challenged   // Vote batch was challenged
-    }
+contract AjoGovernance is 
+    Initializable, 
+    IAjoGovernance, 
+    Ownable, 
+    ReentrancyGuard, 
+    Pausable,
+    HederaTokenService
+{
+    using ECDSA for bytes32;
     
     // ============ STATE VARIABLES ============
     
     address public ajoCore;
-    IAjoMembers public membersContract;
+    address public ajoSchedule;
+    address public membersContract;
+    bytes32 public hcsTopicId;
     
+    // Proposal tracking
     uint256 public proposalCount;
-    uint256 public penaltyRate = DEFAULT_PENALTY_RATE;
+    mapping(uint256 => Proposal) public proposals;
     
-    // Proposal ID => Proposal data
-    mapping(uint256 => HCSProposal) public proposals;
+    // Governance parameters
+    uint256 public votingPeriod;
+    uint256 public proposalThreshold;
+    uint256 public quorumPercentage;
+    uint256 public penaltyRate;
     
-    // Proposal ID => Vote batch data
-    mapping(uint256 => VoteBatch) public voteBatches;
+    // ============ SEASON MANAGEMENT STATE ============
     
-    // Proposal ID => Voter => Has voted (prevents double voting in challenges)
-    mapping(uint256 => mapping(address => bool)) private _hasVoted;
+    uint256 public currentSeason;
+    mapping(uint256 => mapping(address => bool)) public seasonParticipation;
+    mapping(uint256 => bool) public seasonCompleted;
+    mapping(uint256 => uint256) public seasonEndTime;
     
-    // Track aggregators for reputation/slashing
-    mapping(address => uint256) public aggregatorReputation;
-    mapping(address => uint256) public aggregatorStake;
+    // Member intentions for next season
+    mapping(address => bool) public willParticipateInNextSeason;
+    uint256 public participationDeclarationDeadline;
+    
+    // Carry-over rules
+    bool public carryReputationToNextSeason;
+    bool public carryPenaltiesToNextSeason;
+    
+    // New member proposals
+    mapping(address => uint256) public pendingNewMembers; // address => proposalId
+    
+    // ============ STRUCTS ============
+    
+    struct Proposal {
+        uint256 id;
+        address proposer;
+        string description;
+        bytes proposalData;
+        uint256 forVotes;
+        uint256 againstVotes;
+        uint256 abstainVotes;
+        uint256 startTime;
+        uint256 endTime;
+        bool executed;
+        bool canceled;
+        ProposalType proposalType;
+    }
+    
+    enum ProposalType {
+        ChangeMonthlyPayment,
+        ChangeDuration,
+        ChangeCollateralFactor,
+        RemoveMember,
+        EmergencyPause,
+        UpdatePenaltyRate,
+        FreezeAccount,
+        UnfreezeAccount,
+        Custom,
+        CompleteCurrentSeason,      // ✅ Complete current season
+        RestartNewSeason,           // ✅ Restart new season
+        AddNewMember,               // ✅ Add new member for next season
+        UpdateSeasonParameters,     // ✅ Update season parameters
+        SetParticipationDeadline,   // ✅ Set participation deadline
+        SetCarryOverRules           // ✅ Set carry-over rules
+    }
+    
+    // Vote tracking
+    mapping(uint256 => mapping(address => bool)) public hasVotedMap;
+    mapping(uint256 => mapping(address => HcsVote)) public votes;
     
     // ============ EVENTS ============
     
-    event HCSProposalCreated(
-        uint256 indexed proposalId,
-        address indexed proposer,
-        bytes32 indexed hcsTopicId,
-        string description
-    );
-    
-    event VoteBatchSubmitted(
-        uint256 indexed proposalId,
-        address indexed aggregator,
-        bytes32 merkleRoot,
-        uint256 forVotes,
-        uint256 againstVotes,
-        uint256 totalVoters
-    );
-    
-    event VoteChallenged(
-        uint256 indexed proposalId,
-        address indexed challenger,
-        address indexed voter,
-        string reason
-    );
-    
-    event VoteBatchValidated(
-        uint256 indexed proposalId,
-        bool valid
-    );
-    
-    event AggregatorSlashed(
-        address indexed aggregator,
-        uint256 amount
-    );
-    
-    event AjoCoreUpdated(address indexed oldCore, address indexed newCore);
+    event TokenFreezeAttempt(address indexed token, address indexed account, int64 responseCode, bool success);
+    event TokenUnfreezeAttempt(address indexed token, address indexed account, int64 responseCode, bool success);
+    event TokenPauseAttempt(address indexed token, int64 responseCode, bool success);
+    event TokenUnpauseAttempt(address indexed token, int64 responseCode, bool success);
     
     // ============ MODIFIERS ============
     
@@ -133,502 +131,899 @@ contract AjoGovernanceHCS is Initializable, IAjoGovernance, Ownable, ReentrancyG
         _;
     }
     
-    modifier onlyAggregator() {
-        require(aggregatorStake[msg.sender] > 0, "Not authorized aggregator");
+    modifier onlyMember() {
+        require(_isMember(msg.sender), "Not a member");
         _;
     }
     
-    // ============ CONSTRUCTOR (for master copy) ============
+    modifier proposalExists(uint256 proposalId) {
+        require(proposalId > 0 && proposalId <= proposalCount, "Proposal doesn't exist");
+        _;
+    }
+    
+    // ============ CONSTRUCTOR ============
     
     constructor() {
         _disableInitializers();
         _transferOwnership(address(1));
     }
     
-    // ============ INITIALIZER (for proxy instances) ============
+    // ============ INITIALIZATION ============
     
     function initialize(
         address _ajoCore,
-        address /* _governanceToken - kept for interface compatibility */
+        address _ajoMembers,  
+        address _ajoSchedule,
+        address _hederaTokenService,
+        bytes32 _hcsTopicId
     ) external override initializer {
         require(_ajoCore != address(0), "Invalid AjoCore");
+        require(_ajoMembers != address(0), "Invalid Members"); 
         
         _transferOwnership(msg.sender);
+        
         ajoCore = _ajoCore;
+        membersContract = _ajoMembers;  
+        ajoSchedule = _ajoSchedule;
+        hcsTopicId = _hcsTopicId;
         proposalCount = 0;
-        penaltyRate = DEFAULT_PENALTY_RATE;
-    }
-    
-    // ============ SETUP FUNCTIONS ============
-    
-    function setAjoCore(address _ajoCore) external onlyOwner onlyDuringSetup {
-        require(_ajoCore != address(0), "Zero address");
-        require(_ajoCore != ajoCore, "Already set");
+        currentSeason = 1;
         
-        address oldCore = ajoCore;
-        ajoCore = _ajoCore;
+        // Set default governance parameters
+        votingPeriod = 1 minutes;
+        proposalThreshold = 1;
+        quorumPercentage = 51;
+        penaltyRate = 5;
         
-        emit AjoCoreUpdated(oldCore, _ajoCore);
+        // Set default carry-over rules
+        carryReputationToNextSeason = true;
+        carryPenaltiesToNextSeason = false;
     }
     
-    function setMembersContract(address _membersContract) external onlyOwner onlyDuringSetup {
-        require(_membersContract != address(0), "Zero address");
-        membersContract = IAjoMembers(_membersContract);
+    function setMembersContract(address _membersContract) external onlyOwner {
+        require(_membersContract != address(0), "Invalid address");
+        membersContract = _membersContract;
     }
     
-    function verifySetup() external view override(IAjoGovernance, LockableContract) returns (bool isValid, string memory reason) {
-        if (ajoCore == address(0)) {
-            return (false, "AjoCore not set");
+    function verifySetup() external view override returns (bool isValid, string memory reason) {
+        if (ajoCore == address(0)) return (false, "AjoCore not set");
+        if (membersContract == address(0)) return (false, "Members contract not set");
+        if (hcsTopicId == bytes32(0)) return (false, "HCS topic not set");
+        return (true, "");
+    }
+    
+    function getHcsTopicId() external view override returns (bytes32) {
+        return hcsTopicId;
+    }
+    
+    function setHcsTopicId(bytes32 newTopicId) external onlyOwner {
+        hcsTopicId = newTopicId;
+    }
+    
+    // ============ INTERNAL HTS HELPER FUNCTIONS ============
+    
+    function _getHtsErrorMessage(int responseCode) internal pure returns (string memory) {
+        if (responseCode == 22) return "Success";
+        if (responseCode == 111) return "Invalid token ID";
+        if (responseCode == 15) return "Invalid account ID";
+        if (responseCode == 164) return "Insufficient token balance";
+        if (responseCode == 167) return "Token not associated to account";
+        if (responseCode == 162) return "Account frozen for token";
+        if (responseCode == 138) return "Token was deleted";
+        if (responseCode == 7) return "Invalid signature";
+        if (responseCode == 177) return "Token is paused";
+        if (responseCode == 202) return "Invalid freeze key";
+        if (responseCode == 203) return "Invalid wipe key";
+        return "Unknown error";
+    }
+    
+    function _isHtsSuccess(int responseCode) internal pure returns (bool) {
+        return responseCode == HederaResponseCodes.SUCCESS;
+    }
+    
+    // ============ SEASON MANAGEMENT - PARTICIPATION ============
+    
+    /**
+     * @notice Member declares intent to participate in next season
+     * @param participate true to continue, false to opt out
+     */
+    function declareNextSeasonParticipation(bool participate) 
+        external 
+        onlyMember 
+        whenNotPaused
+    {
+        require(participationDeclarationDeadline > 0, "No declaration period active");
+        require(block.timestamp <= participationDeclarationDeadline, "Declaration period ended");
+        
+        willParticipateInNextSeason[msg.sender] = participate;
+        
+        emit ParticipationDeclared(msg.sender, participate, currentSeason + 1);
+    }
+    
+    /**
+     * @notice Get member participation status
+     */
+    function getMemberParticipationStatus(address member) 
+        external 
+        view 
+        returns (bool willParticipate) 
+    {
+        return willParticipateInNextSeason[member];
+    }
+    
+    /**
+     * @notice Get season status
+     */
+    function getSeasonStatus() external view returns (
+        uint256 _currentSeason,
+        bool _isSeasonCompleted,
+        uint256 _participationDeadline,
+        uint256 _declaredParticipants
+    ) {
+        uint256 participantCount = 0;
+        uint256 totalMembers = _getTotalMembers();
+        
+        for (uint256 i = 0; i < totalMembers; i++) {
+            address member = _getMemberAtIndex(i);
+            if (willParticipateInNextSeason[member]) {
+                participantCount++;
+            }
         }
-        if (address(membersContract) == address(0)) {
-            return (false, "MembersContract not set");
-        }
-        return (true, "Setup valid");
+        
+        return (
+            currentSeason,
+            seasonCompleted[currentSeason],
+            participationDeclarationDeadline,
+            participantCount
+        );
     }
     
-    // ============ AGGREGATOR MANAGEMENT ============
+    // ============ SEASON MANAGEMENT - PROPOSALS ============
     
     /**
-     * @dev Register as vote aggregator with stake
-     * @notice Aggregators stake tokens to gain trust and earn fees
+     * @notice Create proposal to complete current season
      */
-    function registerAggregator() external payable override {
-        require(msg.value >= 1 ether, "Insufficient stake"); // 1 HBAR minimum
-        aggregatorStake[msg.sender] += msg.value;
-        aggregatorReputation[msg.sender] = 100; // Starting reputation
-    }
-    
-    /**
-     * @dev Withdraw aggregator stake (if no active proposals)
-     */
-    function withdrawAggregatorStake(uint256 amount) external override nonReentrant {
-        require(aggregatorStake[msg.sender] >= amount, "Insufficient stake");
-        aggregatorStake[msg.sender] -= amount;
+    function proposeSeasonCompletion(string memory description) 
+        external 
+        onlyMember 
+        whenNotPaused
+        returns (uint256 proposalId) 
+    {
+        require(!seasonCompleted[currentSeason], "Season already completed");
         
-        (bool success, ) = msg.sender.call{value: amount}("");
-        require(success, "Transfer failed");
-    }
-    
-    // ============ HCS PROPOSAL CREATION ============
-    
-    /**
-     * @dev Create proposal with HCS topic
-     * @notice This creates the on-chain proposal record and associated HCS topic
-     * @param description Human-readable proposal description
-     * @param proposalData Encoded execution data
-     * @return proposalId Unique proposal identifier
-     * 
-     * Off-chain flow:
-     * 1. User calls this function to create proposal
-     * 2. TopicCreateTransaction is called via Hedera SDK to create HCS topic
-     * 3. Topic ID is stored in proposal struct
-     * 4. Voters submit votes to HCS topic (nearly free)
-     * 5. Aggregator tallies votes and submits batch to smart contract
-     */
-    function createProposal(
-        string memory description,
-        bytes memory proposalData
-    ) external override returns (uint256) {
-        // Check voting power
-        Member memory memberInfo = membersContract.getMember(msg.sender);
-        uint256 votingPower = calculateVotingPower(msg.sender);
-        require(votingPower >= PROPOSAL_THRESHOLD, "Insufficient voting power");
+        bytes memory proposalData = abi.encode(currentSeason);
         
-        uint256 proposalId = proposalCount++;
-        HCSProposal storage proposal = proposals[proposalId];
+        proposalCount++;
+        proposalId = proposalCount;
         
+        Proposal storage proposal = proposals[proposalId];
+        proposal.id = proposalId;
+        proposal.proposer = msg.sender;
         proposal.description = description;
         proposal.proposalData = proposalData;
-        proposal.proposer = msg.sender;
-        proposal.proposalEndTime = block.timestamp + VOTING_PERIOD;
-        proposal.settlementDeadline = block.timestamp + VOTING_PERIOD + CHALLENGE_PERIOD;
-        proposal.status = ProposalStatus.Active;
+        proposal.startTime = block.timestamp;
+        proposal.endTime = block.timestamp + votingPeriod;
+        proposal.proposalType = ProposalType.CompleteCurrentSeason;
         
-        // HCS topic ID should be set by off-chain service after topic creation
-        // For now, emit event that off-chain service will listen to
-        emit ProposalCreated(proposalId, msg.sender, description);
+        emit ProposalCreated(proposalId, msg.sender, description, block.timestamp, proposal.endTime);
+        return proposalId;
+    }
+    
+    /**
+     * @notice Create proposal to restart with new season parameters
+     */
+    function proposeNewSeasonRestart(
+        string memory description,
+        uint256 newDuration,
+        uint256 newMonthlyContribution,
+        address[] memory newMembers
+    ) external onlyMember whenNotPaused returns (uint256 proposalId) {
+        require(seasonCompleted[currentSeason], "Current season not completed");
+        require(newDuration > 0, "Invalid duration");
+        require(newMonthlyContribution > 0, "Invalid contribution");
+        
+        bytes memory proposalData = abi.encode(
+            newDuration,
+            newMonthlyContribution,
+            newMembers
+        );
+        
+        proposalCount++;
+        proposalId = proposalCount;
+        
+        Proposal storage proposal = proposals[proposalId];
+        proposal.id = proposalId;
+        proposal.proposer = msg.sender;
+        proposal.description = description;
+        proposal.proposalData = proposalData;
+        proposal.startTime = block.timestamp;
+        proposal.endTime = block.timestamp + votingPeriod;
+        proposal.proposalType = ProposalType.RestartNewSeason;
+        
+        emit ProposalCreated(proposalId, msg.sender, description, block.timestamp, proposal.endTime);
+        return proposalId;
+    }
+    
+    /**
+     * @notice Propose adding a new member for next season
+     */
+    function proposeNewMember(
+        address newMember,
+        string memory description
+    ) external onlyMember whenNotPaused returns (uint256 proposalId) {
+        require(newMember != address(0), "Invalid member address");
+        require(!_isMember(newMember), "Already a member");
+        require(pendingNewMembers[newMember] == 0, "Member already proposed");
+        
+        bytes memory proposalData = abi.encode(newMember);
+        
+        proposalCount++;
+        proposalId = proposalCount;
+        
+        Proposal storage proposal = proposals[proposalId];
+        proposal.id = proposalId;
+        proposal.proposer = msg.sender;
+        proposal.description = description;
+        proposal.proposalData = proposalData;
+        proposal.startTime = block.timestamp;
+        proposal.endTime = block.timestamp + votingPeriod;
+        proposal.proposalType = ProposalType.AddNewMember;
+        
+        pendingNewMembers[newMember] = proposalId;
+        
+        emit ProposalCreated(proposalId, msg.sender, description, block.timestamp, proposal.endTime);
+        emit NewMemberProposed(newMember, proposalId, msg.sender);
         
         return proposalId;
     }
     
     /**
-     * @dev Set HCS topic ID after off-chain topic creation
-     * @param proposalId The proposal to update
-     * @param topicId Hedera topic ID (e.g., "0.0.123456")
+     * @notice Propose updating season parameters
      */
-    function setHCSTopicId(uint256 proposalId, bytes32 topicId) external override onlyOwner {
-        require(proposalId < proposalCount, "Invalid proposal");
-        require(proposals[proposalId].hcsTopicId == bytes32(0), "Topic already set");
+    function proposeUpdateSeasonParameters(
+        string memory description,
+        uint256 newDuration,
+        uint256 newMonthlyPayment
+    ) external onlyMember whenNotPaused returns (uint256 proposalId) {
+        require(newDuration > 0, "Invalid duration");
+        require(newMonthlyPayment > 0, "Invalid payment");
         
-        proposals[proposalId].hcsTopicId = topicId;
+        bytes memory proposalData = abi.encode(newDuration, newMonthlyPayment);
         
-        emit HCSProposalCreated(
-            proposalId,
-            proposals[proposalId].proposer,
-            topicId,
-            proposals[proposalId].description
-        );
+        proposalCount++;
+        proposalId = proposalCount;
+        
+        Proposal storage proposal = proposals[proposalId];
+        proposal.id = proposalId;
+        proposal.proposer = msg.sender;
+        proposal.description = description;
+        proposal.proposalData = proposalData;
+        proposal.startTime = block.timestamp;
+        proposal.endTime = block.timestamp + votingPeriod;
+        proposal.proposalType = ProposalType.UpdateSeasonParameters;
+        
+        emit ProposalCreated(proposalId, msg.sender, description, block.timestamp, proposal.endTime);
+        return proposalId;
     }
     
-    // ============ OFF-CHAIN VOTING (HCS) ============
-    
     /**
-     * @dev Vote function - kept for interface compatibility but redirects to HCS
-     * @notice Actual voting happens off-chain via HCS topic messages
-     * @param proposalId ID of proposal
-     * @param support Vote type: 0=Against, 1=For, 2=Abstain
-     * 
-     * Real implementation:
-     * Users submit votes directly to HCS topic via Hedera SDK:
-     * - Message format: {"proposalId": X, "voter": "0x...", "support": 1, "signature": "0x..."}
-     * - Cost: ~$0.0001 per vote (100 votes = $0.01)
-     * - Consensus time: 3-5 seconds
-     * - Immutable audit trail
+     * @notice Propose setting carry-over rules
      */
-    function vote(uint256 proposalId, uint8 support) external override {
-        revert("Use HCS topic for voting - see documentation");
+    function proposeCarryOverRules(
+        string memory description,
+        bool _carryReputation,
+        bool _carryPenalties
+    ) external onlyMember whenNotPaused returns (uint256 proposalId) {
+        bytes memory proposalData = abi.encode(_carryReputation, _carryPenalties);
+        
+        proposalCount++;
+        proposalId = proposalCount;
+        
+        Proposal storage proposal = proposals[proposalId];
+        proposal.id = proposalId;
+        proposal.proposer = msg.sender;
+        proposal.description = description;
+        proposal.proposalData = proposalData;
+        proposal.startTime = block.timestamp;
+        proposal.endTime = block.timestamp + votingPeriod;
+        proposal.proposalType = ProposalType.SetCarryOverRules;
+        
+        emit ProposalCreated(proposalId, msg.sender, description, block.timestamp, proposal.endTime);
+        return proposalId;
     }
     
-    // ============ VOTE AGGREGATION & SETTLEMENT ============
+    // ============ PROPOSAL CREATION (EXISTING) ============
     
-    /**
-     * @dev Submit aggregated vote batch from HCS
-     * @notice Aggregator queries Mirror Node API, builds Merkle tree, submits root
-     * @param proposalId The proposal votes are for
-     * @param merkleRoot Root of Merkle tree containing all votes
-     * @param forVotes Total voting power for
-     * @param againstVotes Total voting power against  
-     * @param abstainVotes Total abstain voting power
-     * @param totalVoters Number of unique voters
-     * 
-     * Aggregation process:
-     * 1. Query Mirror Node API for all messages in HCS topic
-     * 2. Validate signatures and voting power for each vote
-     * 3. Build Merkle tree of all valid votes
-     * 4. Submit root + tallies to smart contract
-     * 5. Enter challenge period where anyone can dispute
-     */
-    function submitVoteBatch(
-        uint256 proposalId,
-        bytes32 merkleRoot,
-        uint256 forVotes,
-        uint256 againstVotes,
-        uint256 abstainVotes,
-        uint256 totalVoters
-    ) external onlyAggregator nonReentrant {
-        HCSProposal storage proposal = proposals[proposalId];
+    function createProposal(
+        string memory description,
+        bytes memory proposalData
+    ) external override onlyMember whenNotPaused returns (uint256 proposalId) {
+        uint256 votingPower = getVotingPower(msg.sender);
+        require(votingPower >= proposalThreshold, "Insufficient voting power");
         
-        require(proposal.status == ProposalStatus.Active, "Not active");
-        require(block.timestamp > proposal.proposalEndTime, "Voting ongoing");
-        require(!proposal.settled, "Already settled");
-        require(merkleRoot != bytes32(0), "Invalid merkle root");
+        proposalCount++;
+        proposalId = proposalCount;
         
-        VoteBatch storage batch = voteBatches[proposalId];
-        batch.merkleRoot = merkleRoot;
-        batch.forVotes = forVotes;
-        batch.againstVotes = againstVotes;
-        batch.abstainVotes = abstainVotes;
-        batch.totalVoters = totalVoters;
-        batch.settlementTime = block.timestamp;
-        batch.aggregator = msg.sender;
+        Proposal storage proposal = proposals[proposalId];
+        proposal.id = proposalId;
+        proposal.proposer = msg.sender;
+        proposal.description = description;
+        proposal.proposalData = proposalData;
+        proposal.startTime = block.timestamp;
+        proposal.endTime = block.timestamp + votingPeriod;
+        proposal.proposalType = ProposalType.Custom;
         
-        proposal.settled = true;
-        
-        // Update status based on vote results
-        if (forVotes > againstVotes) {
-            proposal.status = ProposalStatus.Succeeded;
-        } else {
-            proposal.status = ProposalStatus.Defeated;
-        }
-        
-        emit VoteBatchSubmitted(
+        emit ProposalCreated(
             proposalId,
             msg.sender,
-            merkleRoot,
-            forVotes,
-            againstVotes,
-            totalVoters
+            description,
+            proposal.startTime,
+            proposal.endTime
+        );
+        
+        return proposalId;
+    }
+    
+    function cancelProposal(uint256 proposalId) 
+        external 
+        override
+        proposalExists(proposalId) 
+    {
+        Proposal storage proposal = proposals[proposalId];
+        require(
+            msg.sender == proposal.proposer || msg.sender == ajoCore,
+            "Only proposer or governance"
+        );
+        require(!proposal.executed, "Already executed");
+        require(!proposal.canceled, "Already canceled");
+        
+        proposal.canceled = true;
+        
+        // Clear pending new member if applicable
+        if (proposal.proposalType == ProposalType.AddNewMember) {
+            address newMember = abi.decode(proposal.proposalData, (address));
+            delete pendingNewMembers[newMember];
+        }
+        
+        emit ProposalCanceled(proposalId, msg.sender);
+    }
+    
+    function getProposal(uint256 proposalId) 
+        external 
+        view 
+        override
+        proposalExists(proposalId) 
+        returns (
+            string memory description,
+            uint256 forVotes,
+            uint256 againstVotes,
+            uint256 abstainVotes,
+            uint256 startTime,
+            uint256 endTime,
+            bool executed,
+            bool canceled,
+            bytes memory proposalData
+        ) 
+    {
+        Proposal storage p = proposals[proposalId];
+        return (
+            p.description,
+            p.forVotes,
+            p.againstVotes,
+            p.abstainVotes,
+            p.startTime,
+            p.endTime,
+            p.executed,
+            p.canceled,
+            p.proposalData
         );
     }
     
-    // ============ CHALLENGE MECHANISM ============
+    function getProposalStatus(uint256 proposalId) 
+        external 
+        view 
+        override
+        proposalExists(proposalId) 
+        returns (
+            bool isActive,
+            bool hasQuorum,
+            bool isPassing,
+            uint256 votesNeeded
+        ) 
+    {
+        Proposal storage p = proposals[proposalId];
+        
+        isActive = !p.executed && !p.canceled && block.timestamp <= p.endTime;
+        
+        uint256 totalVotes = p.forVotes + p.againstVotes + p.abstainVotes;
+        uint256 totalMembers = _getTotalMembers();
+        uint256 quorumRequired = (totalMembers * quorumPercentage) / 100;
+        
+        hasQuorum = totalVotes >= quorumRequired;
+        isPassing = p.forVotes > p.againstVotes;
+        votesNeeded = quorumRequired > totalVotes ? quorumRequired - totalVotes : 0;
+        
+        return (isActive, hasQuorum, isPassing, votesNeeded);
+    }
     
-    /**
-     * @dev Challenge a vote batch with proof of invalid vote
-     * @notice If challenge succeeds, aggregator is slashed
-     * @param proposalId Proposal to challenge
-     * @param proof Vote proof showing the invalid vote
-     * 
-     * Challenge scenarios:
-     * - Vote from non-member
-     * - Incorrect voting power calculation
-     * - Double voting
-     * - Invalid signature
-     * - Vote not in Merkle tree
-     */
-    function challengeVoteBatch(
+    // ============ VOTING (HCS-ENABLED) ============
+    
+    function tallyVotesFromHCS(
         uint256 proposalId,
-        VoteProof memory proof
-    ) external nonReentrant {
-        HCSProposal storage proposal = proposals[proposalId];
-        VoteBatch storage batch = voteBatches[proposalId];
+        HcsVote[] memory hcsVotes
+    ) external override proposalExists(proposalId) nonReentrant returns (
+        uint256 totalForVotes,
+        uint256 totalAgainstVotes,
+        uint256 totalAbstainVotes
+    ) {
+        Proposal storage proposal = proposals[proposalId];
+        require(!proposal.executed, "Already executed");
+        require(!proposal.canceled, "Proposal canceled");
         
-        require(proposal.settled, "Not settled");
-        require(!batch.challenged, "Already challenged");
-        require(
-            block.timestamp <= batch.settlementTime + CHALLENGE_PERIOD,
-            "Challenge period ended"
-        );
-        
-        // Verify vote is in Merkle tree
-        bytes32 leaf = keccak256(abi.encodePacked(
-            proof.voter,
-            proof.support,
-            proof.votingPower
-        ));
-        
-        bool validProof = MerkleProof.verify(
-            proof.merkleProof,
-            batch.merkleRoot,
-            leaf
-        );
-        
-        require(validProof, "Invalid merkle proof");
-        
-        // Now validate the vote itself
-        bool isInvalid = false;
-        string memory reason;
-        
-        // Check 1: Is voter a member?
-        Member memory memberInfo = membersContract.getMember(proof.voter);
-        if (!memberInfo.isActive) {
-            isInvalid = true;
-            reason = "Voter not active member";
-        }
-        
-        // Check 2: Is voting power correct?
-        if (!isInvalid) {
-            uint256 actualPower = calculateVotingPower(proof.voter);
-            if (actualPower != proof.votingPower) {
-                isInvalid = true;
-                reason = "Incorrect voting power";
+        for (uint256 i = 0; i < hcsVotes.length; i++) {
+            HcsVote memory hcsVote = hcsVotes[i];
+            
+            if (hasVotedMap[proposalId][hcsVote.voter]) {
+                continue;
+            }
+            
+            if (!_verifyVoteSignature(proposalId, hcsVote)) {
+                continue;
+            }
+            
+            if (!_isMember(hcsVote.voter)) {
+                continue;
+            }
+            
+            uint256 actualVotingPower = getVotingPower(hcsVote.voter);
+            if (actualVotingPower == 0) {
+                continue;
+            }
+            
+            hasVotedMap[proposalId][hcsVote.voter] = true;
+            votes[proposalId][hcsVote.voter] = hcsVote;
+            
+            if (hcsVote.support == 1) {
+                proposal.forVotes += actualVotingPower;
+            } else if (hcsVote.support == 0) {
+                proposal.againstVotes += actualVotingPower;
+            } else if (hcsVote.support == 2) {
+                proposal.abstainVotes += actualVotingPower;
             }
         }
         
-        // Check 3: Double voting?
-        if (!isInvalid && _hasVoted[proposalId][proof.voter]) {
-            isInvalid = true;
-            reason = "Double vote detected";
-        }
+        emit VotesTallied(
+            proposalId,
+            proposal.forVotes,
+            proposal.againstVotes,
+            proposal.abstainVotes,
+            msg.sender
+        );
         
-        if (isInvalid) {
-            // Challenge successful - slash aggregator
-            batch.challenged = true;
-            proposal.status = ProposalStatus.Challenged;
-            
-            uint256 slashAmount = aggregatorStake[batch.aggregator] / 10; // 10% slash
-            aggregatorStake[batch.aggregator] -= slashAmount;
-            aggregatorReputation[batch.aggregator] = aggregatorReputation[batch.aggregator] >= 50 
-                ? aggregatorReputation[batch.aggregator] - 50 
-                : 0;
-            
-            // Reward challenger
-            (bool success, ) = msg.sender.call{value: slashAmount}("");
-            require(success, "Reward transfer failed");
-            
-            emit VoteChallenged(proposalId, msg.sender, proof.voter, reason);
-            emit AggregatorSlashed(batch.aggregator, slashAmount);
-        } else {
-            revert("Challenge failed - vote is valid");
-        }
+        return (proposal.forVotes, proposal.againstVotes, proposal.abstainVotes);
+    }
+    
+    function hasVoted(uint256 proposalId, address voter) external view override returns (bool) {
+        return hasVotedMap[proposalId][voter];
+    }
+    
+    function getVotingPower(address member) public view override returns (uint256) {
+        if (!_isMember(member)) return 0;
+        return 100;
+    }
+    
+    function _verifyVoteSignature(
+        uint256 proposalId,
+        HcsVote memory hcsVote
+    ) internal pure returns (bool) {
+        bytes32 messageHash = keccak256(abi.encodePacked(
+            proposalId,
+            hcsVote.voter,
+            hcsVote.support,
+            hcsVote.hcsMessageId,
+            hcsVote.hcsSequenceNumber
+        ));
+        
+        bytes32 ethSignedHash = messageHash.toEthSignedMessageHash();
+        address recovered = ethSignedHash.recover(hcsVote.signature);
+        
+        return recovered == hcsVote.voter;
     }
     
     // ============ PROPOSAL EXECUTION ============
     
-    /**
-     * @dev Execute a successful proposal after challenge period
-     * @param proposalId Proposal to execute
-     */
-    function executeProposal(uint256 proposalId) external override nonReentrant {
-        HCSProposal storage proposal = proposals[proposalId];
-        VoteBatch storage batch = voteBatches[proposalId];
+    function executeProposal(uint256 proposalId) 
+        external 
+        override
+        proposalExists(proposalId) 
+        nonReentrant 
+        returns (bool success) 
+    {
+        Proposal storage proposal = proposals[proposalId];
         
-        require(proposal.status == ProposalStatus.Succeeded, "Not succeeded");
         require(!proposal.executed, "Already executed");
-        require(
-            block.timestamp > batch.settlementTime + CHALLENGE_PERIOD,
-            "Challenge period active"
-        );
-        require(!batch.challenged, "Batch was challenged");
+        require(!proposal.canceled, "Proposal canceled");
+        require(block.timestamp > proposal.endTime, "Voting ongoing");
+        
+        uint256 totalVotes = proposal.forVotes + proposal.againstVotes + proposal.abstainVotes;
+        uint256 totalMembers = _getTotalMembers();
+        uint256 quorumRequired = (totalMembers * quorumPercentage) / 100;
+        
+        require(totalVotes >= quorumRequired, "Quorum not reached");
+        require(proposal.forVotes > proposal.againstVotes, "Proposal failed");
         
         proposal.executed = true;
-        proposal.status = ProposalStatus.Executed;
         
-        // Execute proposal
-        if (proposal.proposalData.length > 0) {
-            (bool success, ) = ajoCore.call(proposal.proposalData);
-            require(success, "Execution failed");
-        }
+        bytes memory returnData;
+        (success, returnData) = _executeProposalAction(proposalId, proposal);
         
-        // Reward aggregator
-        aggregatorReputation[batch.aggregator] += 10;
+        emit ProposalExecuted(proposalId, success, returnData);
         
-        emit ProposalExecuted(proposalId);
+        return success;
     }
     
-    // ============ GOVERNANCE FUNCTIONS ============
+    function _executeProposalAction(
+        uint256 proposalId,
+        Proposal storage proposal
+    ) internal returns (bool, bytes memory) {
+        // ✅ Season Management Execution
+        if (proposal.proposalType == ProposalType.CompleteCurrentSeason) {
+            return _executeSeasonCompletion(proposalId);
+        }
+        
+        if (proposal.proposalType == ProposalType.RestartNewSeason) {
+            return _executeSeasonRestart(proposalId, proposal);
+        }
+        
+        if (proposal.proposalType == ProposalType.AddNewMember) {
+            address newMember = abi.decode(proposal.proposalData, (address));
+            delete pendingNewMembers[newMember];
+            return ajoCore.call(
+                abi.encodeWithSignature("addMemberForNextSeason(address)", newMember)
+            );
+        }
+        
+        if (proposal.proposalType == ProposalType.UpdateSeasonParameters) {
+            (uint256 newDuration, uint256 newMonthlyPayment) = 
+                abi.decode(proposal.proposalData, (uint256, uint256));
+            emit SeasonParametersUpdated(newDuration, newMonthlyPayment);
+            return ajoCore.call(
+                abi.encodeWithSignature("updateSeasonParameters(uint256,uint256)", newDuration, newMonthlyPayment)
+            );
+        }
+        
+        if (proposal.proposalType == ProposalType.SetCarryOverRules) {
+            (bool _carryReputation, bool _carryPenalties) = 
+                abi.decode(proposal.proposalData, (bool, bool));
+            carryReputationToNextSeason = _carryReputation;
+            carryPenaltiesToNextSeason = _carryPenalties;
+            emit CarryOverRulesUpdated(_carryReputation, _carryPenalties);
+            return (true, "");
+        }
+        
+        // Existing proposal types
+        if (proposal.proposalType == ProposalType.UpdatePenaltyRate) {
+            uint256 newRate = abi.decode(proposal.proposalData, (uint256));
+            require(newRate <= 50, "Rate too high");
+            penaltyRate = newRate;
+            return (true, "");
+        }
+        
+        if (proposal.proposalType == ProposalType.ChangeMonthlyPayment) {
+            return ajoCore.call(proposal.proposalData);
+        }
+        
+        if (proposal.proposalType == ProposalType.RemoveMember) {
+            address member = abi.decode(proposal.proposalData, (address));
+            return ajoCore.call(
+                abi.encodeWithSignature("removeMember(address)", member)
+            );
+        }
+        
+        if (proposal.proposalType == ProposalType.EmergencyPause) {
+            return ajoCore.call(
+                abi.encodeWithSignature("emergencyPause()")
+            );
+        }
+        
+        if (proposal.proposalType == ProposalType.Custom) {
+            return ajoCore.call(proposal.proposalData);
+        }
+        
+        return (false, "Unknown proposal type");
+    }
     
-    function updatePenaltyRate(uint256 newPenaltyRate) external override {
-        require(msg.sender == address(this), "Only governance");
-        require(newPenaltyRate <= 2000, "Rate too high");
+    // ============ SEASON EXECUTION LOGIC ============
+    
+    function _executeSeasonCompletion(uint256 /* proposalId */) internal returns (bool, bytes memory) {
+        seasonCompleted[currentSeason] = true;
+        seasonEndTime[currentSeason] = block.timestamp;
+        
+        // Set declaration period for next season (7 days)
+        participationDeclarationDeadline = block.timestamp + 7 days;
+        
+        emit SeasonCompleted(currentSeason, block.timestamp);
+        emit ParticipationDeadlineSet(participationDeclarationDeadline, currentSeason + 1);
+        
+        return (true, "");
+    }
+    
+    function _executeSeasonRestart(uint256 /* proposalId */, Proposal storage proposal) 
+        internal 
+        returns (bool, bytes memory) 
+    {
+        (uint256 newDuration, uint256 newMonthlyContribution, address[] memory newMembers) = 
+            abi.decode(proposal.proposalData, (uint256, uint256, address[]));
+        
+        // Filter out members who opted out
+        address[] memory continuingMembers = _getContinuingMembers();
+        
+        // Combine continuing members with new members
+        address[] memory allMembers = new address[](continuingMembers.length + newMembers.length);
+        
+        for (uint256 i = 0; i < continuingMembers.length; i++) {
+            allMembers[i] = continuingMembers[i];
+        }
+        
+        for (uint256 i = 0; i < newMembers.length; i++) {
+            allMembers[continuingMembers.length + i] = newMembers[i];
+        }
+        
+        // Call AjoCore to restart with new parameters
+        (bool success, ) = ajoCore.call(
+            abi.encodeWithSignature(
+                "restartSeason(uint256,uint256,address[])",
+                newDuration,
+                newMonthlyContribution,
+                allMembers
+            )
+        );
+        
+        if (success) {
+            currentSeason++;
+            participationDeclarationDeadline = 0; // Reset declaration period
+            
+            // Reset participation flags for all members
+            for (uint256 i = 0; i < allMembers.length; i++) {
+                willParticipateInNextSeason[allMembers[i]] = false;
+            }
+            
+            emit NewSeasonStarted(currentSeason, newDuration, newMonthlyContribution, allMembers);
+        }
+        
+        return (success, "");
+    }
+    
+    function _getContinuingMembers() internal view returns (address[] memory) {
+        uint256 continuingCount = 0;
+        uint256 totalMembers = _getTotalMembers();
+        
+        // First pass: count continuing members
+        for (uint256 i = 0; i < totalMembers; i++) {
+            address member = _getMemberAtIndex(i);
+            if (willParticipateInNextSeason[member]) {
+                continuingCount++;
+            }
+        }
+        
+        // Second pass: create array
+        address[] memory continuingMembers = new address[](continuingCount);
+        uint256 index = 0;
+        
+        for (uint256 i = 0; i < totalMembers; i++) {
+            address member = _getMemberAtIndex(i);
+            if (willParticipateInNextSeason[member]) {
+                continuingMembers[index] = member;
+                index++;
+            }
+        }
+        
+        return continuingMembers;
+    }
+    
+    // ============ HTS ADMIN FUNCTIONS ============
+    
+    function freezeMemberToken(
+        address token,
+        address member
+    ) external override onlyAjoCore returns (int64 responseCode) {
+        int response = freezeToken(token, member);
+        responseCode = int64(response);
+        bool success = _isHtsSuccess(response);
+        
+        emit TokenFrozen(token, member, responseCode);
+        emit TokenFreezeAttempt(token, member, responseCode, success);
+        
+        return responseCode;
+    }
+    
+    function unfreezeMemberToken(
+        address token,
+        address member
+    ) external override onlyAjoCore returns (int64 responseCode) {
+        int response = unfreezeToken(token, member);
+        responseCode = int64(response);
+        bool success = _isHtsSuccess(response);
+        
+        emit TokenUnfrozen(token, member, responseCode);
+        emit TokenUnfreezeAttempt(token, member, responseCode, success);
+        
+        return responseCode;
+    }
+    
+    // ============ GOVERNANCE PARAMETER UPDATES ============
+    
+    function updatePenaltyRate(uint256 newPenaltyRate) external override onlyAjoCore {
+        require(newPenaltyRate <= 50, "Rate too high");
         penaltyRate = newPenaltyRate;
+    }
+    
+    function updateVotingPeriod(uint256 newVotingPeriod) external override onlyAjoCore {
+        require(newVotingPeriod >= 1 days && newVotingPeriod <= 30 days, "Invalid period");
+        votingPeriod = newVotingPeriod;
+    }
+    
+    function updateProposalThreshold(uint256 newThreshold) external override onlyAjoCore {
+        proposalThreshold = newThreshold;
     }
     
     function updateReputationAndVotingPower(
         address member,
         bool positive
     ) external override onlyAjoCore {
-        Member memory memberInfo = membersContract.getMember(member);
-        uint256 newReputation = memberInfo.reputationScore;
+        (bool success,) = membersContract.call(
+            abi.encodeWithSignature(
+                "updateReputation(address,uint256)",
+                member,
+                positive ? 10 : 0
+            )
+        );
         
-        if (positive && newReputation < 1000) {
-            newReputation += 10;
-            if (newReputation > 1000) newReputation = 1000;
-        } else if (!positive && newReputation > 100) {
-            newReputation = newReputation >= 50 ? newReputation - 50 : 100;
-        }
-        
-        membersContract.updateReputation(member, newReputation);
-        emit ReputationUpdated(member, newReputation);
-    }
-    
-    function updateVotingPower(address member, uint256 newPower) public override onlyAjoCore {
-        // In HCS model, voting power is calculated on-demand, not stored as tokens
-        // This function is kept for interface compatibility
-        emit VotingPowerUpdated(member, newPower);
+        require(success, "Reputation update failed");
     }
     
     // ============ VIEW FUNCTIONS ============
     
-    function getProposal(uint256 proposalId)
-        external
-        view
-        override
-        returns (
-            string memory description,
-            uint256 forVotes,
-            uint256 againstVotes,
-            uint256 abstainVotes,
-            uint256 proposalEndTime,
-            bool executed,
-            bytes memory proposalData
-        )
-    {
-        HCSProposal storage proposal = proposals[proposalId];
-        VoteBatch storage batch = voteBatches[proposalId];
-        
-        return (
-            proposal.description,
-            batch.forVotes,
-            batch.againstVotes,
-            batch.abstainVotes,
-            proposal.proposalEndTime,
-            proposal.executed,
-            proposal.proposalData
-        );
-    }
-    
-    function hasVoted(uint256 proposalId, address voter) 
+    function getGovernanceSettings() 
         external 
         view 
-        override 
-        returns (bool) 
-    {
-        return _hasVoted[proposalId][voter];
-    }
-    
-    function getGovernanceSettings()
-        external
-        view
         override
         returns (
-            uint256 proposalThreshold,
-            uint256 votingPeriod,
-            uint256 currentPenaltyRate,
+            uint256 _proposalThreshold, 
+            uint256 _votingPeriod, 
+            uint256 _quorumPercentage, 
+            uint256 currentPenaltyRate, 
             uint256 totalProposals
         )
     {
         return (
-            PROPOSAL_THRESHOLD,
-            VOTING_PERIOD,
+            proposalThreshold,
+            votingPeriod,
+            quorumPercentage,
             penaltyRate,
             proposalCount
         );
     }
     
-    /**
-     * @dev Calculate voting power based on collateral and reputation
-     */
-    function calculateVotingPower(address member) public view returns (uint256) {
-        Member memory memberInfo = membersContract.getMember(member);
+    function getAllProposals(uint256 offset, uint256 limit) 
+        external 
+        view 
+        override
+        returns (uint256[] memory proposalIds, bool hasMore) 
+    {
+        uint256 remaining = proposalCount > offset ? proposalCount - offset : 0;
+        uint256 size = remaining < limit ? remaining : limit;
         
-        if (!memberInfo.isActive) return 0;
+        proposalIds = new uint256[](size);
         
-        return memberInfo.lockedCollateral > 0 ? 
-            (memberInfo.lockedCollateral * memberInfo.reputationScore) / 1000 : 
-            memberInfo.reputationScore;
+        for (uint256 i = 0; i < size; i++) {
+            proposalIds[i] = offset + i + 1;
+        }
+        
+        hasMore = remaining > limit;
     }
     
-    /**
-     * @dev Get full proposal details including HCS info
-     */
-    function getHCSProposalDetails(uint256 proposalId)
-        external
-        view
-        returns (
-            HCSProposal memory proposal,
-            VoteBatch memory batch,
-            bool canExecute,
-            bool inChallengePeriod
-        )
-    {
-        proposal = proposals[proposalId];
-        batch = voteBatches[proposalId];
+    function getActiveProposals() external view override returns (uint256[] memory proposalIds) {
+        uint256 activeCount = 0;
         
-        inChallengePeriod = proposal.settled && 
-            block.timestamp <= batch.settlementTime + CHALLENGE_PERIOD;
+        for (uint256 i = 1; i <= proposalCount; i++) {
+            Proposal storage p = proposals[i];
+            if (!p.executed && !p.canceled && block.timestamp <= p.endTime) {
+                activeCount++;
+            }
+        }
         
-        canExecute = proposal.status == ProposalStatus.Succeeded &&
-            !proposal.executed &&
-            !inChallengePeriod &&
-            !batch.challenged;
+        proposalIds = new uint256[](activeCount);
+        uint256 index = 0;
         
-        return (proposal, batch, canExecute, inChallengePeriod);
+        for (uint256 i = 1; i <= proposalCount; i++) {
+            Proposal storage p = proposals[i];
+            if (!p.executed && !p.canceled && block.timestamp <= p.endTime) {
+                proposalIds[index] = i;
+                index++;
+            }
+        }
+        
+        return proposalIds;
     }
     
-    /**
-     * @dev Get aggregator information
-     */
-    function getAggregatorInfo(address aggregator)
-        external
-        view
-        returns (
-            uint256 stake,
-            uint256 reputation,
-            bool isActive
-        )
-    {
-        return (
-            aggregatorStake[aggregator],
-            aggregatorReputation[aggregator],
-            aggregatorStake[aggregator] > 0
+    // ✅ NEW: Season Management View Functions
+    
+    function getCarryOverRules() external view returns (bool _carryReputation, bool _carryPenalties) {
+        return (carryReputationToNextSeason, carryPenaltiesToNextSeason);
+    }
+    
+    function getContinuingMembersCount() external view returns (uint256) {
+        uint256 count = 0;
+        uint256 totalMembers = _getTotalMembers();
+        
+        for (uint256 i = 0; i < totalMembers; i++) {
+            address member = _getMemberAtIndex(i);
+            if (willParticipateInNextSeason[member]) {
+                count++;
+            }
+        }
+        
+        return count;
+    }
+    
+    function getContinuingMembersList() external view returns (address[] memory) {
+        return _getContinuingMembers();
+    }
+    
+    function getOptOutMembersList() external view returns (address[] memory) {
+        uint256 optOutCount = 0;
+        uint256 totalMembers = _getTotalMembers();
+        
+        // Count opt-out members
+        for (uint256 i = 0; i < totalMembers; i++) {
+            address member = _getMemberAtIndex(i);
+            if (!willParticipateInNextSeason[member] && participationDeclarationDeadline > 0) {
+                optOutCount++;
+            }
+        }
+        
+        // Create array
+        address[] memory optOutMembers = new address[](optOutCount);
+        uint256 index = 0;
+        
+        for (uint256 i = 0; i < totalMembers; i++) {
+            address member = _getMemberAtIndex(i);
+            if (!willParticipateInNextSeason[member] && participationDeclarationDeadline > 0) {
+                optOutMembers[index] = member;
+                index++;
+            }
+        }
+        
+        return optOutMembers;
+    }
+    
+    // ============ INTERNAL HELPERS ============
+    
+    function _isMember(address account) internal view returns (bool) {
+        (bool success, bytes memory data) = membersContract.staticcall(
+            abi.encodeWithSignature("isMember(address)", account)
         );
+        
+        if (!success || data.length == 0) return false;
+        return abi.decode(data, (bool));
     }
     
-    /**
-     * @dev Get HCS topic ID for proposal
-     */
-    function getHCSTopicId(uint256 proposalId) external view returns (bytes32) {
-        return proposals[proposalId].hcsTopicId;
+    function _getTotalMembers() internal view returns (uint256) {
+        (bool success, bytes memory data) = membersContract.staticcall(
+            abi.encodeWithSignature("getTotalActiveMembers()")
+        );
+        
+        if (!success || data.length == 0) return 0;
+        return abi.decode(data, (uint256));
+    }
+    
+    function _getMemberAtIndex(uint256 index) internal view returns (address) {
+        (bool success, bytes memory data) = membersContract.staticcall(
+            abi.encodeWithSignature("getMemberAtIndex(uint256)", index)
+        );
+        
+        if (!success || data.length == 0) return address(0);
+        return abi.decode(data, (address));
     }
 }
