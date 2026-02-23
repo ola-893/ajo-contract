@@ -1,0 +1,12 @@
+# StarkNet Foundry Configuration
+
+[snforge]
+# Exit first on test failure
+exit_first = false
+
+# Number of fuzzer runs
+fuzzer_runs = 256
+
+# Maximum number of steps for a single test
+max_n_steps = 10000000
+
