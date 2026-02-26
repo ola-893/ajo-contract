@@ -14,7 +14,6 @@ import { useParams, useNavigate } from "react-router-dom";
 import Header from "@/components/header/Header";
 import { toast } from "sonner";
 import { useStarknetWallet } from "@/contexts/StarknetWalletContext";
-import { useTokenBalance } from "@/hooks/useTokenBalance";
 
 const Profile = () => {
   // const { ajoId, ajoCore } = useParams<{ ajoId: string; ajoCore: string }>();
@@ -22,96 +21,71 @@ const Profile = () => {
   //   ajoCore ? ajoCore : ""
   // );
   const navigate = useNavigate();
-  const { isConnected, address: walletAddress } = useStarknetWallet();
+  const { isConnected } = useStarknetWallet();
   const [isVisible, setIsVisible] = useState(false);
   const [activeTab, setActiveTab] = useState("ajo");
-  const { setStrk, setEth, setUsdc, setAddress, setLoading } = useTokenStore();
+  const { hbar, usdc, loading, address } = useTokenStore();
   const [copied, setCopied] = useState(false);
-  const [strkPrice, setStrkPrice] = useState<number | null>(null);
-  const [ethPrice, setEthPrice] = useState<number | null>(null);
-
-  // Fetch token balances using the hook
-  const strkBalance = useTokenBalance("STRK");
-  const ethBalance = useTokenBalance("ETH");
-  const usdcBalance = useTokenBalance("USDC");
-
-  // Update token store when balances change
-  useEffect(() => {
-    if (walletAddress) {
-      setAddress(walletAddress);
-    }
-  }, [walletAddress, setAddress]);
-
-  useEffect(() => {
-    setStrk(strkBalance.balance.formatted);
-    setEth(ethBalance.balance.formatted);
-    setUsdc(usdcBalance.balance.formatted);
-    setLoading(strkBalance.loading || ethBalance.loading || usdcBalance.loading);
-    
-    console.log("STRK balance:", strkBalance.balance.formatted);
-    console.log("ETH balance:", ethBalance.balance.formatted);
-    console.log("USDC balance:", usdcBalance.balance.formatted);
-  }, [
-    strkBalance.balance.formatted,
-    ethBalance.balance.formatted,
-    usdcBalance.balance.formatted,
-    strkBalance.loading,
-    ethBalance.loading,
-    usdcBalance.loading,
-    setStrk,
-    setEth,
-    setUsdc,
-    setLoading,
-  ]);
+  const [hbarPrice, setHbarPrice] = useState<number | null>(null);
 
   // Redirect to homepage if wallet is not connected
   useEffect(() => {
     if (!isConnected) {
       toast.error("Please connect your wallet first");
-      navigate("/");
+      navigate("/dashboard");
       return;
     }
     setIsVisible(true);
+    console.log("hbar balance:", hbar);
   }, [isConnected, navigate]);
 
   useEffect(() => {
     const fetchPrices = async () => {
       try {
-        const [strkRes, ethRes] = await Promise.all([
+        const [hbarRes, hbarUsdRes, usdcRes] = await Promise.all([
           fetch(
-            "https://api.coingecko.com/api/v3/simple/price?ids=starknet&vs_currencies=usd",
+            "https://api.coingecko.com/api/v3/simple/price?ids=hedera-hashgraph&vs_currencies=ngn",
           ),
           fetch(
-            "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd",
+            "https://api.coingecko.com/api/v3/simple/price?ids=hedera-hashgraph&vs_currencies=usd",
+          ),
+          fetch(
+            "https://api.coingecko.com/api/v3/simple/price?ids=usd-coin&vs_currencies=ngn",
           ),
         ]);
 
-        const [strkData, ethData] = await Promise.all([
-          strkRes.json(),
-          ethRes.json(),
+        const [hbarData, hbarUsdData, usdcData] = await Promise.all([
+          hbarRes.json(),
+          hbarUsdRes.json(),
+          usdcRes.json(),
         ]);
 
-        const strkUsdPrice = strkData?.["starknet"]?.usd ?? 0;
-        const ethUsdPrice = ethData?.["ethereum"]?.usd ?? 0;
+        const hbarPrice = hbarData?.["hedera-hashgraph"]?.ngn ?? 0;
+        const hbarUsdPrice = hbarUsdData?.["hedera-hashgraph"]?.usd ?? 0;
+        const usdcPrice = usdcData?.["usd-coin"]?.ngn ?? 0;
 
-        console.log("STRK Price USD:", strkUsdPrice);
-        console.log("ETH Price USD:", ethUsdPrice);
+        // console.log("HBAR Price NGN:", hbarPrice);
+        // console.log("HBAR Price USD:", hbarUsdPrice);
+        // console.log("USDC Price NGN:", usdcPrice);
 
-        setStrkPrice(parseFloat(strkUsdPrice));
-        setEthPrice(parseFloat(ethUsdPrice));
+        // if you already have balances
+        if (hbar) setHbarPrice(parseFloat(hbarUsdPrice));
       } catch (error) {
         console.error("Failed to fetch prices:", error);
       }
     };
+    // if (address) {
+    //   getMemberInfo(address);
+    //   needsToPayThisCycle(address);
+    // }
 
     fetchPrices();
-  }, []);
+  }, [hbar, usdc]);
 
   const handleCopy = async () => {
-    if (walletAddress) {
-      await navigator.clipboard.writeText(walletAddress);
+    if (address) {
+      await navigator.clipboard.writeText(address);
       setCopied(true);
-      toast.success("Address copied!");
       setTimeout(() => setCopied(false), 1500);
     }
   };
@@ -125,14 +99,12 @@ const Profile = () => {
         {/* Profile Header */}
 
         <UserProfileCard
-          address={walletAddress}
+          address={address}
           isVisible={isVisible}
-          strk={strkBalance.balance.formatted}
-          eth={ethBalance.balance.formatted}
-          usdc={usdcBalance.balance.formatted}
-          strkPrice={strkPrice}
-          ethPrice={ethPrice}
-          loading={strkBalance.loading || ethBalance.loading || usdcBalance.loading}
+          hbar={hbar}
+          usdc={usdc}
+          hbarPrice={hbarPrice}
+          loading={loading}
           copied={copied}
           handleCopy={handleCopy}
         />

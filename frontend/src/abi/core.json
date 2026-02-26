@@ -1,0 +1,899 @@
+[
+  {
+    "type": "impl",
+    "name": "AjoCoreImpl",
+    "interface_name": "ajo_save::interfaces::i_ajo_core::IAjoCore"
+  },
+  {
+    "type": "struct",
+    "name": "core::integer::u256",
+    "members": [
+      {
+        "name": "low",
+        "type": "core::integer::u128"
+      },
+      {
+        "name": "high",
+        "type": "core::integer::u128"
+      }
+    ]
+  },
+  {
+    "type": "enum",
+    "name": "ajo_save::interfaces::types::PaymentToken",
+    "variants": [
+      {
+        "name": "USDC",
+        "type": "()"
+      },
+      {
+        "name": "BTC",
+        "type": "()"
+      }
+    ]
+  },
+  {
+    "type": "struct",
+    "name": "ajo_save::interfaces::types::AjoConfig",
+    "members": [
+      {
+        "name": "name",
+        "type": "core::felt252"
+      },
+      {
+        "name": "monthly_contribution",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "total_participants",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "cycle_duration",
+        "type": "core::integer::u64"
+      },
+      {
+        "name": "payment_token",
+        "type": "ajo_save::interfaces::types::PaymentToken"
+      },
+      {
+        "name": "creator",
+        "type": "core::starknet::contract_address::ContractAddress"
+      }
+    ]
+  },
+  {
+    "type": "enum",
+    "name": "core::bool",
+    "variants": [
+      {
+        "name": "False",
+        "type": "()"
+      },
+      {
+        "name": "True",
+        "type": "()"
+      }
+    ]
+  },
+  {
+    "type": "struct",
+    "name": "ajo_save::interfaces::types::AjoStatus",
+    "members": [
+      {
+        "name": "ajo_id",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "name",
+        "type": "core::felt252"
+      },
+      {
+        "name": "is_active",
+        "type": "core::bool"
+      },
+      {
+        "name": "current_cycle",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "total_participants",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "current_member_count",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "monthly_contribution",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "cycle_duration",
+        "type": "core::integer::u64"
+      },
+      {
+        "name": "payment_token",
+        "type": "ajo_save::interfaces::types::PaymentToken"
+      },
+      {
+        "name": "total_collateral_locked",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "next_payout_position",
+        "type": "core::integer::u256"
+      }
+    ]
+  },
+  {
+    "type": "enum",
+    "name": "ajo_save::interfaces::types::MemberStatus",
+    "variants": [
+      {
+        "name": "Active",
+        "type": "()"
+      },
+      {
+        "name": "Defaulted",
+        "type": "()"
+      },
+      {
+        "name": "Completed",
+        "type": "()"
+      },
+      {
+        "name": "Removed",
+        "type": "()"
+      }
+    ]
+  },
+  {
+    "type": "struct",
+    "name": "ajo_save::interfaces::types::MemberInfo",
+    "members": [
+      {
+        "name": "address",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "position",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "status",
+        "type": "ajo_save::interfaces::types::MemberStatus"
+      },
+      {
+        "name": "collateral_deposited",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "required_collateral",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "has_received_payout",
+        "type": "core::bool"
+      },
+      {
+        "name": "total_paid",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "has_paid_current_cycle",
+        "type": "core::bool"
+      },
+      {
+        "name": "guarantor",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "join_timestamp",
+        "type": "core::integer::u64"
+      }
+    ]
+  },
+  {
+    "type": "struct",
+    "name": "ajo_save::interfaces::types::CycleInfo",
+    "members": [
+      {
+        "name": "cycle_number",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "cycle_start_time",
+        "type": "core::integer::u64"
+      },
+      {
+        "name": "cycle_duration",
+        "type": "core::integer::u64"
+      },
+      {
+        "name": "next_payout_position",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "next_payout_recipient",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "total_contributions_this_cycle",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "expected_total_contributions",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "all_members_paid",
+        "type": "core::bool"
+      },
+      {
+        "name": "payout_amount",
+        "type": "core::integer::u256"
+      }
+    ]
+  },
+  {
+    "type": "interface",
+    "name": "ajo_save::interfaces::i_ajo_core::IAjoCore",
+    "items": [
+      {
+        "type": "function",
+        "name": "initialize",
+        "inputs": [
+          {
+            "name": "config",
+            "type": "ajo_save::interfaces::types::AjoConfig"
+          },
+          {
+            "name": "members_address",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
+          {
+            "name": "collateral_address",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
+          {
+            "name": "payments_address",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
+          {
+            "name": "governance_address",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
+          {
+            "name": "schedule_address",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "join_ajo",
+        "inputs": [
+          {
+            "name": "token_index",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "start_ajo",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "process_payment",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "process_cycle",
+        "inputs": [
+          {
+            "name": "cycle_number",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "handle_default",
+        "inputs": [
+          {
+            "name": "defaulter",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "exit_ajo",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "finalize_ajo",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "get_config",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "ajo_save::interfaces::types::AjoConfig"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_current_cycle",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "is_active",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::bool"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_members_address",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_collateral_address",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_payments_address",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_governance_address",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_schedule_address",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_ajo_status",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "ajo_save::interfaces::types::AjoStatus"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_member_info",
+        "inputs": [
+          {
+            "name": "member",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "ajo_save::interfaces::types::MemberInfo"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_cycle_info",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "ajo_save::interfaces::types::CycleInfo"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "pause",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "unpause",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      }
+    ]
+  },
+  {
+    "type": "impl",
+    "name": "OwnableImpl",
+    "interface_name": "ajo_save::components::ownable::IOwnable"
+  },
+  {
+    "type": "interface",
+    "name": "ajo_save::components::ownable::IOwnable",
+    "items": [
+      {
+        "type": "function",
+        "name": "owner",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "transfer_ownership",
+        "inputs": [
+          {
+            "name": "new_owner",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "renounce_ownership",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::components::ownable::OwnableComponent::OwnershipTransferred",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "previous_owner",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      },
+      {
+        "name": "new_owner",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::components::ownable::OwnableComponent::Event",
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "OwnershipTransferred",
+        "type": "ajo_save::components::ownable::OwnableComponent::OwnershipTransferred",
+        "kind": "nested"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::components::pausable::PausableComponent::Paused",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "account",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::components::pausable::PausableComponent::Unpaused",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "account",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::components::pausable::PausableComponent::Event",
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "Paused",
+        "type": "ajo_save::components::pausable::PausableComponent::Paused",
+        "kind": "nested"
+      },
+      {
+        "name": "Unpaused",
+        "type": "ajo_save::components::pausable::PausableComponent::Unpaused",
+        "kind": "nested"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::components::reentrancy_guard::ReentrancyGuardComponent::Event",
+    "kind": "enum",
+    "variants": []
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::core::ajo_core::AjoCore::AjoInitialized",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "ajo_id",
+        "type": "core::integer::u256",
+        "kind": "key"
+      },
+      {
+        "name": "name",
+        "type": "core::felt252",
+        "kind": "data"
+      },
+      {
+        "name": "monthly_contribution",
+        "type": "core::integer::u256",
+        "kind": "data"
+      },
+      {
+        "name": "total_participants",
+        "type": "core::integer::u256",
+        "kind": "data"
+      },
+      {
+        "name": "cycle_duration",
+        "type": "core::integer::u64",
+        "kind": "data"
+      },
+      {
+        "name": "members_address",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "data"
+      },
+      {
+        "name": "collateral_address",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "data"
+      },
+      {
+        "name": "payments_address",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "data"
+      },
+      {
+        "name": "governance_address",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "data"
+      },
+      {
+        "name": "schedule_address",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::core::ajo_core::AjoCore::AjoStarted",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "ajo_id",
+        "type": "core::integer::u256",
+        "kind": "key"
+      },
+      {
+        "name": "cycle",
+        "type": "core::integer::u256",
+        "kind": "data"
+      },
+      {
+        "name": "member_count",
+        "type": "core::integer::u256",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::core::ajo_core::AjoCore::MemberJoined",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "ajo_id",
+        "type": "core::integer::u256",
+        "kind": "key"
+      },
+      {
+        "name": "member",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      },
+      {
+        "name": "position",
+        "type": "core::integer::u256",
+        "kind": "data"
+      },
+      {
+        "name": "collateral_amount",
+        "type": "core::integer::u256",
+        "kind": "data"
+      },
+      {
+        "name": "guarantor",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::core::ajo_core::AjoCore::PaymentProcessed",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "ajo_id",
+        "type": "core::integer::u256",
+        "kind": "key"
+      },
+      {
+        "name": "member",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      },
+      {
+        "name": "cycle",
+        "type": "core::integer::u256",
+        "kind": "data"
+      },
+      {
+        "name": "amount",
+        "type": "core::integer::u256",
+        "kind": "data"
+      },
+      {
+        "name": "all_paid",
+        "type": "core::bool",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::core::ajo_core::AjoCore::PayoutDistributed",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "ajo_id",
+        "type": "core::integer::u256",
+        "kind": "key"
+      },
+      {
+        "name": "recipient",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      },
+      {
+        "name": "cycle",
+        "type": "core::integer::u256",
+        "kind": "data"
+      },
+      {
+        "name": "amount",
+        "type": "core::integer::u256",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::core::ajo_core::AjoCore::DefaultHandled",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "ajo_id",
+        "type": "core::integer::u256",
+        "kind": "key"
+      },
+      {
+        "name": "defaulter",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      },
+      {
+        "name": "guarantor",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      },
+      {
+        "name": "defaulter_collateral_seized",
+        "type": "core::integer::u256",
+        "kind": "data"
+      },
+      {
+        "name": "guarantor_collateral_seized",
+        "type": "core::integer::u256",
+        "kind": "data"
+      },
+      {
+        "name": "defaulter_past_payments_seized",
+        "type": "core::integer::u256",
+        "kind": "data"
+      },
+      {
+        "name": "guarantor_past_payments_seized",
+        "type": "core::integer::u256",
+        "kind": "data"
+      },
+      {
+        "name": "total_seized",
+        "type": "core::integer::u256",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::core::ajo_core::AjoCore::MemberExited",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "ajo_id",
+        "type": "core::integer::u256",
+        "kind": "key"
+      },
+      {
+        "name": "member",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      },
+      {
+        "name": "penalty_amount",
+        "type": "core::integer::u256",
+        "kind": "data"
+      },
+      {
+        "name": "refund_amount",
+        "type": "core::integer::u256",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::core::ajo_core::AjoCore::Event",
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "OwnableEvent",
+        "type": "ajo_save::components::ownable::OwnableComponent::Event",
+        "kind": "flat"
+      },
+      {
+        "name": "PausableEvent",
+        "type": "ajo_save::components::pausable::PausableComponent::Event",
+        "kind": "flat"
+      },
+      {
+        "name": "ReentrancyGuardEvent",
+        "type": "ajo_save::components::reentrancy_guard::ReentrancyGuardComponent::Event",
+        "kind": "flat"
+      },
+      {
+        "name": "AjoInitialized",
+        "type": "ajo_save::core::ajo_core::AjoCore::AjoInitialized",
+        "kind": "nested"
+      },
+      {
+        "name": "AjoStarted",
+        "type": "ajo_save::core::ajo_core::AjoCore::AjoStarted",
+        "kind": "nested"
+      },
+      {
+        "name": "MemberJoined",
+        "type": "ajo_save::core::ajo_core::AjoCore::MemberJoined",
+        "kind": "nested"
+      },
+      {
+        "name": "PaymentProcessed",
+        "type": "ajo_save::core::ajo_core::AjoCore::PaymentProcessed",
+        "kind": "nested"
+      },
+      {
+        "name": "PayoutDistributed",
+        "type": "ajo_save::core::ajo_core::AjoCore::PayoutDistributed",
+        "kind": "nested"
+      },
+      {
+        "name": "DefaultHandled",
+        "type": "ajo_save::core::ajo_core::AjoCore::DefaultHandled",
+        "kind": "nested"
+      },
+      {
+        "name": "MemberExited",
+        "type": "ajo_save::core::ajo_core::AjoCore::MemberExited",
+        "kind": "nested"
+      }
+    ]
+  }
+]
