@@ -1,0 +1,29 @@
+[package]
+name = "ajo_save"
+version = "0.1.0"
+edition = "2023_11"
+cairo-version = "2.8.4"
+
+[profile.dev]
+target-dir = "target"
+
+[profile.release]
+target-dir = "target"
+
+[dependencies]
+starknet = "2.8.4"
+
+[dev-dependencies]
+snforge_std = { git = "https://github.com/foundry-rs/starknet-foundry", tag = "v0.56.0" }
+
+[[target.starknet-contract]]
+casm = true
+allowed-libfuncs-list.name = "all"
+
+[scripts]
+test = "snforge test"
+format = "scarb fmt"
+
+[[tool.snforge.fork]]
+name = "SEPOLIA"
+url = "https://starknet-sepolia.public.blastapi.io/rpc/v0_7"

@@ -1,0 +1,60 @@
+   Compiling ajo_save v0.1.0 (/Users/ola/Documents/Github/ajo-contract/ajo-save-cairo/Scarb.toml)
+warn[E2100]: Unused import: `ajo_save::interfaces::i_ajo_factory::AjoConfig`
+ --> /Users/ola/Documents/Github/ajo-contract/ajo-save-cairo/src/interfaces/i_ajo_factory.cairo:2:35
+use ajo_save::interfaces::types::{AjoConfig, AjoInfo, PaymentToken};
+                                  ^^^^^^^^^
+
+warn[E2100]: Unused import: `ajo_save::interfaces::i_ajo_core::Member`
+ --> /Users/ola/Documents/Github/ajo-contract/ajo-save-cairo/src/interfaces/i_ajo_core.cairo:2:46
+use ajo_save::interfaces::types::{AjoConfig, Member, AjoStatus, MemberInfo, CycleInfo};
+                                             ^^^^^^
+
+warn[E2100]: Unused import: `ajo_save::components::ownable::get_caller_address`
+ --> /Users/ola/Documents/Github/ajo-contract/ajo-save-cairo/src/components/ownable.cairo:2:15
+use starknet::get_caller_address;
+              ^^^^^^^^^^^^^^^^^^
+
+warn[E2100]: Unused import: `ajo_save::factory::ajo_factory::AjoFactory::IOwnable`
+ --> /Users/ola/Documents/Github/ajo-contract/ajo-save-cairo/src/factory/ajo_factory.cairo:14:59
+    use ajo_save::components::ownable::{OwnableComponent, IOwnable};
+                                                          ^^^^^^^^
+
+warn[E2100]: Unused import: `ajo_save::factory::ajo_factory::AjoFactory::IPausable`
+ --> /Users/ola/Documents/Github/ajo-contract/ajo-save-cairo/src/factory/ajo_factory.cairo:15:61
+    use ajo_save::components::pausable::{PausableComponent, IPausable};
+                                                            ^^^^^^^^^
+
+warn[E2200]: Plugin diagnostic: Failed to generate ABI: Duplicate entry point: 'pause'. This is not currently supported.
+ --> /Users/ola/Documents/Github/ajo-contract/ajo-save-cairo/src/core/ajo_core.cairo:28:5-29:71
+      #[abi(embed_v0)]
+ _____^
+|     impl PausableImpl = PausableComponent::PausableImpl<ContractState>;
+|_______________________________________________________________________^
+
+warn[E0001]: Unused variable. Consider ignoring by prefixing with `_`.
+ --> /Users/ola/Documents/Github/ajo-contract/ajo-save-cairo/src/core/ajo_core.cairo:445:17
+            let member = members_dispatcher.get_member(caller);
+                ^^^^^^
+
+warn[E2100]: Unused import: `ajo_save::members::ajo_members::AjoMembers::IOwnable`
+ --> /Users/ola/Documents/Github/ajo-contract/ajo-save-cairo/src/members/ajo_members.cairo:10:59
+    use ajo_save::components::ownable::{OwnableComponent, IOwnable};
+                                                          ^^^^^^^^
+
+warn[E2100]: Unused import: `ajo_save::governance::ajo_governance::AjoGovernance::IOwnable`
+ --> /Users/ola/Documents/Github/ajo-contract/ajo-save-cairo/src/governance/ajo_governance.cairo:17:59
+    use ajo_save::components::ownable::{OwnableComponent, IOwnable};
+                                                          ^^^^^^^^
+
+warn[E2100]: Unused import: `ajo_save::schedule::ajo_schedule::AjoSchedule::IAjoCoreDispatcher`
+ --> /Users/ola/Documents/Github/ajo-contract/ajo-save-cairo/src/schedule/ajo_schedule.cairo:16:44
+    use ajo_save::interfaces::i_ajo_core::{IAjoCoreDispatcher, IAjoCoreDispatcherTrait};
+                                           ^^^^^^^^^^^^^^^^^^
+
+warn[E2100]: Unused import: `ajo_save::schedule::ajo_schedule::AjoSchedule::IAjoPaymentsDispatcher`
+ --> /Users/ola/Documents/Github/ajo-contract/ajo-save-cairo/src/schedule/ajo_schedule.cairo:17:48
+    use ajo_save::interfaces::i_ajo_payments::{IAjoPaymentsDispatcher, IAjoPaymentsDispatcherTrait};
+                                               ^^^^^^^^^^^^^^^^^^^^^^
+
+error: Could not create ABI from contract submodule: Duplicate entry point: 'pause'. This is not currently supported.
+error: could not compile `ajo_save` due to 1 previous error and 11 warnings

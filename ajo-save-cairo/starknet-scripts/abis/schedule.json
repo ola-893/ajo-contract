@@ -1,0 +1,416 @@
+[
+  {
+    "type": "impl",
+    "name": "AjoScheduleImpl",
+    "interface_name": "ajo_save::interfaces::i_ajo_schedule::IAjoSchedule"
+  },
+  {
+    "type": "enum",
+    "name": "ajo_save::interfaces::i_ajo_schedule::ScheduleType",
+    "variants": [
+      {
+        "name": "Payment",
+        "type": "()"
+      },
+      {
+        "name": "Payout",
+        "type": "()"
+      },
+      {
+        "name": "CycleStart",
+        "type": "()"
+      },
+      {
+        "name": "CycleEnd",
+        "type": "()"
+      },
+      {
+        "name": "CollateralCheck",
+        "type": "()"
+      }
+    ]
+  },
+  {
+    "type": "struct",
+    "name": "core::integer::u256",
+    "members": [
+      {
+        "name": "low",
+        "type": "core::integer::u128"
+      },
+      {
+        "name": "high",
+        "type": "core::integer::u128"
+      }
+    ]
+  },
+  {
+    "type": "enum",
+    "name": "core::bool",
+    "variants": [
+      {
+        "name": "False",
+        "type": "()"
+      },
+      {
+        "name": "True",
+        "type": "()"
+      }
+    ]
+  },
+  {
+    "type": "struct",
+    "name": "ajo_save::interfaces::i_ajo_schedule::ScheduledTask",
+    "members": [
+      {
+        "name": "id",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "schedule_type",
+        "type": "ajo_save::interfaces::i_ajo_schedule::ScheduleType"
+      },
+      {
+        "name": "execution_time",
+        "type": "core::integer::u64"
+      },
+      {
+        "name": "target",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "calldata",
+        "type": "core::felt252"
+      },
+      {
+        "name": "is_executed",
+        "type": "core::bool"
+      },
+      {
+        "name": "is_cancelled",
+        "type": "core::bool"
+      }
+    ]
+  },
+  {
+    "type": "struct",
+    "name": "core::array::Span::<ajo_save::interfaces::i_ajo_schedule::ScheduledTask>",
+    "members": [
+      {
+        "name": "snapshot",
+        "type": "@core::array::Array::<ajo_save::interfaces::i_ajo_schedule::ScheduledTask>"
+      }
+    ]
+  },
+  {
+    "type": "interface",
+    "name": "ajo_save::interfaces::i_ajo_schedule::IAjoSchedule",
+    "items": [
+      {
+        "type": "function",
+        "name": "schedule_task",
+        "inputs": [
+          {
+            "name": "schedule_type",
+            "type": "ajo_save::interfaces::i_ajo_schedule::ScheduleType"
+          },
+          {
+            "name": "execution_time",
+            "type": "core::integer::u64"
+          },
+          {
+            "name": "target",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
+          {
+            "name": "calldata",
+            "type": "core::felt252"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "execute_task",
+        "inputs": [
+          {
+            "name": "task_id",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "cancel_task",
+        "inputs": [
+          {
+            "name": "task_id",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "schedule_cycle_payments",
+        "inputs": [
+          {
+            "name": "cycle",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "start_time",
+            "type": "core::integer::u64"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "schedule_payout",
+        "inputs": [
+          {
+            "name": "cycle",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "recipient",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
+          {
+            "name": "payout_time",
+            "type": "core::integer::u64"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "get_task",
+        "inputs": [
+          {
+            "name": "task_id",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "ajo_save::interfaces::i_ajo_schedule::ScheduledTask"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_pending_tasks",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::array::Span::<ajo_save::interfaces::i_ajo_schedule::ScheduledTask>"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "is_task_ready",
+        "inputs": [
+          {
+            "name": "task_id",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::bool"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_next_execution_time",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::integer::u64"
+          }
+        ],
+        "state_mutability": "view"
+      }
+    ]
+  },
+  {
+    "type": "impl",
+    "name": "OwnableImpl",
+    "interface_name": "ajo_save::components::ownable::IOwnable"
+  },
+  {
+    "type": "interface",
+    "name": "ajo_save::components::ownable::IOwnable",
+    "items": [
+      {
+        "type": "function",
+        "name": "owner",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "transfer_ownership",
+        "inputs": [
+          {
+            "name": "new_owner",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "renounce_ownership",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      }
+    ]
+  },
+  {
+    "type": "constructor",
+    "name": "constructor",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "core::starknet::contract_address::ContractAddress"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::schedule::ajo_schedule::AjoSchedule::TaskScheduled",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "task_id",
+        "type": "core::integer::u256",
+        "kind": "key"
+      },
+      {
+        "name": "schedule_type",
+        "type": "ajo_save::interfaces::i_ajo_schedule::ScheduleType",
+        "kind": "data"
+      },
+      {
+        "name": "execution_time",
+        "type": "core::integer::u64",
+        "kind": "data"
+      },
+      {
+        "name": "target",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::schedule::ajo_schedule::AjoSchedule::TaskExecuted",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "task_id",
+        "type": "core::integer::u256",
+        "kind": "key"
+      },
+      {
+        "name": "executed_at",
+        "type": "core::integer::u64",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::schedule::ajo_schedule::AjoSchedule::TaskCancelled",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "task_id",
+        "type": "core::integer::u256",
+        "kind": "key"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::components::ownable::OwnableComponent::OwnershipTransferred",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "previous_owner",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      },
+      {
+        "name": "new_owner",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::components::ownable::OwnableComponent::Event",
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "OwnershipTransferred",
+        "type": "ajo_save::components::ownable::OwnableComponent::OwnershipTransferred",
+        "kind": "nested"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::schedule::ajo_schedule::AjoSchedule::Event",
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "TaskScheduled",
+        "type": "ajo_save::schedule::ajo_schedule::AjoSchedule::TaskScheduled",
+        "kind": "nested"
+      },
+      {
+        "name": "TaskExecuted",
+        "type": "ajo_save::schedule::ajo_schedule::AjoSchedule::TaskExecuted",
+        "kind": "nested"
+      },
+      {
+        "name": "TaskCancelled",
+        "type": "ajo_save::schedule::ajo_schedule::AjoSchedule::TaskCancelled",
+        "kind": "nested"
+      },
+      {
+        "name": "OwnableEvent",
+        "type": "ajo_save::components::ownable::OwnableComponent::Event",
+        "kind": "flat"
+      }
+    ]
+  }
+]

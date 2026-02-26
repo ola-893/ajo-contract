@@ -1,0 +1,17 @@
+{
+  "name": "deploy-scripts",
+  "version": "1.0.0",
+  "description": "Starknet deployment scripts for AjoFactory",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "declare-deploy": "node declare_and_deploy_factory.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "starknet": "^6.11.0"
+  }
+}

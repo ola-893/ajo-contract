@@ -1,0 +1,25 @@
+# Cairo/Scarb
+target/
+Scarb.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log
+
+# Build artifacts
+*.sierra
+*.casm

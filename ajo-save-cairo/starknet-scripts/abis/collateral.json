@@ -1,0 +1,417 @@
+[
+  {
+    "type": "impl",
+    "name": "AjoCollateralImpl",
+    "interface_name": "ajo_save::interfaces::i_ajo_collateral::IAjoCollateral"
+  },
+  {
+    "type": "struct",
+    "name": "core::integer::u256",
+    "members": [
+      {
+        "name": "low",
+        "type": "core::integer::u128"
+      },
+      {
+        "name": "high",
+        "type": "core::integer::u128"
+      }
+    ]
+  },
+  {
+    "type": "enum",
+    "name": "core::bool",
+    "variants": [
+      {
+        "name": "False",
+        "type": "()"
+      },
+      {
+        "name": "True",
+        "type": "()"
+      }
+    ]
+  },
+  {
+    "type": "interface",
+    "name": "ajo_save::interfaces::i_ajo_collateral::IAjoCollateral",
+    "items": [
+      {
+        "type": "function",
+        "name": "calculate_required_collateral",
+        "inputs": [
+          {
+            "name": "position",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "monthly_payment",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "total_participants",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "calculate_debt",
+        "inputs": [
+          {
+            "name": "position",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "monthly_payment",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "total_participants",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "deposit_collateral",
+        "inputs": [
+          {
+            "name": "amount",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "withdraw_collateral",
+        "inputs": [
+          {
+            "name": "amount",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "slash_collateral",
+        "inputs": [
+          {
+            "name": "member",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
+          {
+            "name": "amount",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "seize_collateral",
+        "inputs": [
+          {
+            "name": "member",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "get_member_collateral",
+        "inputs": [
+          {
+            "name": "member",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_total_collateral",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "is_collateral_sufficient",
+        "inputs": [
+          {
+            "name": "member",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::bool"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "calculate_recovery_assets",
+        "inputs": [
+          {
+            "name": "position",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "monthly_payment",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "total_participants",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_coverage_ratio",
+        "inputs": [
+          {
+            "name": "position",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "monthly_payment",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "total_participants",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      }
+    ]
+  },
+  {
+    "type": "impl",
+    "name": "OwnableImpl",
+    "interface_name": "ajo_save::components::ownable::IOwnable"
+  },
+  {
+    "type": "interface",
+    "name": "ajo_save::components::ownable::IOwnable",
+    "items": [
+      {
+        "type": "function",
+        "name": "owner",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "transfer_ownership",
+        "inputs": [
+          {
+            "name": "new_owner",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "renounce_ownership",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      }
+    ]
+  },
+  {
+    "type": "constructor",
+    "name": "constructor",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "monthly_contribution",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "total_participants",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "payment_token",
+        "type": "core::starknet::contract_address::ContractAddress"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::collateral::ajo_collateral::AjoCollateral::CollateralDeposited",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "member",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      },
+      {
+        "name": "amount",
+        "type": "core::integer::u256",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::collateral::ajo_collateral::AjoCollateral::CollateralWithdrawn",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "member",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      },
+      {
+        "name": "amount",
+        "type": "core::integer::u256",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::collateral::ajo_collateral::AjoCollateral::CollateralSeized",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "member",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      },
+      {
+        "name": "amount",
+        "type": "core::integer::u256",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::components::ownable::OwnableComponent::OwnershipTransferred",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "previous_owner",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      },
+      {
+        "name": "new_owner",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::components::ownable::OwnableComponent::Event",
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "OwnershipTransferred",
+        "type": "ajo_save::components::ownable::OwnableComponent::OwnershipTransferred",
+        "kind": "nested"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::components::reentrancy_guard::ReentrancyGuardComponent::Event",
+    "kind": "enum",
+    "variants": []
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::collateral::ajo_collateral::AjoCollateral::Event",
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "CollateralDeposited",
+        "type": "ajo_save::collateral::ajo_collateral::AjoCollateral::CollateralDeposited",
+        "kind": "nested"
+      },
+      {
+        "name": "CollateralWithdrawn",
+        "type": "ajo_save::collateral::ajo_collateral::AjoCollateral::CollateralWithdrawn",
+        "kind": "nested"
+      },
+      {
+        "name": "CollateralSeized",
+        "type": "ajo_save::collateral::ajo_collateral::AjoCollateral::CollateralSeized",
+        "kind": "nested"
+      },
+      {
+        "name": "OwnableEvent",
+        "type": "ajo_save::components::ownable::OwnableComponent::Event",
+        "kind": "flat"
+      },
+      {
+        "name": "ReentrancyGuardEvent",
+        "type": "ajo_save::components::reentrancy_guard::ReentrancyGuardComponent::Event",
+        "kind": "flat"
+      }
+    ]
+  }
+]

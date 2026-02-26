@@ -1,0 +1,535 @@
+[
+  {
+    "type": "impl",
+    "name": "AjoGovernanceImpl",
+    "interface_name": "ajo_save::interfaces::i_ajo_governance::IAjoGovernance"
+  },
+  {
+    "type": "enum",
+    "name": "ajo_save::interfaces::i_ajo_governance::ProposalType",
+    "variants": [
+      {
+        "name": "AddMember",
+        "type": "()"
+      },
+      {
+        "name": "RemoveMember",
+        "type": "()"
+      },
+      {
+        "name": "ChangeConfig",
+        "type": "()"
+      },
+      {
+        "name": "HandleDefault",
+        "type": "()"
+      },
+      {
+        "name": "Emergency",
+        "type": "()"
+      }
+    ]
+  },
+  {
+    "type": "struct",
+    "name": "core::array::Span::<core::felt252>",
+    "members": [
+      {
+        "name": "snapshot",
+        "type": "@core::array::Array::<core::felt252>"
+      }
+    ]
+  },
+  {
+    "type": "struct",
+    "name": "core::integer::u256",
+    "members": [
+      {
+        "name": "low",
+        "type": "core::integer::u128"
+      },
+      {
+        "name": "high",
+        "type": "core::integer::u128"
+      }
+    ]
+  },
+  {
+    "type": "enum",
+    "name": "core::bool",
+    "variants": [
+      {
+        "name": "False",
+        "type": "()"
+      },
+      {
+        "name": "True",
+        "type": "()"
+      }
+    ]
+  },
+  {
+    "type": "enum",
+    "name": "ajo_save::interfaces::i_ajo_governance::ProposalStatus",
+    "variants": [
+      {
+        "name": "Pending",
+        "type": "()"
+      },
+      {
+        "name": "Active",
+        "type": "()"
+      },
+      {
+        "name": "Passed",
+        "type": "()"
+      },
+      {
+        "name": "Rejected",
+        "type": "()"
+      },
+      {
+        "name": "Executed",
+        "type": "()"
+      },
+      {
+        "name": "Cancelled",
+        "type": "()"
+      }
+    ]
+  },
+  {
+    "type": "struct",
+    "name": "ajo_save::interfaces::i_ajo_governance::Proposal",
+    "members": [
+      {
+        "name": "id",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "proposer",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "proposal_type",
+        "type": "ajo_save::interfaces::i_ajo_governance::ProposalType"
+      },
+      {
+        "name": "description",
+        "type": "core::felt252"
+      },
+      {
+        "name": "votes_for",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "votes_against",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "status",
+        "type": "ajo_save::interfaces::i_ajo_governance::ProposalStatus"
+      },
+      {
+        "name": "created_at",
+        "type": "core::integer::u64"
+      },
+      {
+        "name": "voting_ends_at",
+        "type": "core::integer::u64"
+      }
+    ]
+  },
+  {
+    "type": "interface",
+    "name": "ajo_save::interfaces::i_ajo_governance::IAjoGovernance",
+    "items": [
+      {
+        "type": "function",
+        "name": "create_proposal",
+        "inputs": [
+          {
+            "name": "proposal_type",
+            "type": "ajo_save::interfaces::i_ajo_governance::ProposalType"
+          },
+          {
+            "name": "description",
+            "type": "core::felt252"
+          },
+          {
+            "name": "target",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
+          {
+            "name": "calldata",
+            "type": "core::array::Span::<core::felt252>"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "cast_vote",
+        "inputs": [
+          {
+            "name": "proposal_id",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "support",
+            "type": "core::bool"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "get_voting_power",
+        "inputs": [
+          {
+            "name": "voter",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "execute_proposal",
+        "inputs": [
+          {
+            "name": "proposal_id",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "cancel_proposal",
+        "inputs": [
+          {
+            "name": "proposal_id",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "get_proposal",
+        "inputs": [
+          {
+            "name": "proposal_id",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "ajo_save::interfaces::i_ajo_governance::Proposal"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_proposal_status",
+        "inputs": [
+          {
+            "name": "proposal_id",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "ajo_save::interfaces::i_ajo_governance::ProposalStatus"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "has_voted",
+        "inputs": [
+          {
+            "name": "proposal_id",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "voter",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::bool"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_total_proposals",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_quorum",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_voting_period",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::integer::u64"
+          }
+        ],
+        "state_mutability": "view"
+      }
+    ]
+  },
+  {
+    "type": "impl",
+    "name": "OwnableImpl",
+    "interface_name": "ajo_save::components::ownable::IOwnable"
+  },
+  {
+    "type": "interface",
+    "name": "ajo_save::components::ownable::IOwnable",
+    "items": [
+      {
+        "type": "function",
+        "name": "owner",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "transfer_ownership",
+        "inputs": [
+          {
+            "name": "new_owner",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "renounce_ownership",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      }
+    ]
+  },
+  {
+    "type": "constructor",
+    "name": "constructor",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "members_contract",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "voting_period",
+        "type": "core::integer::u64"
+      },
+      {
+        "name": "quorum_percentage",
+        "type": "core::integer::u256"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::governance::ajo_governance::AjoGovernance::ProposalCreated",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "proposal_id",
+        "type": "core::integer::u256",
+        "kind": "key"
+      },
+      {
+        "name": "proposer",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "data"
+      },
+      {
+        "name": "proposal_type",
+        "type": "ajo_save::interfaces::i_ajo_governance::ProposalType",
+        "kind": "data"
+      },
+      {
+        "name": "description",
+        "type": "core::felt252",
+        "kind": "data"
+      },
+      {
+        "name": "voting_ends_at",
+        "type": "core::integer::u64",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::governance::ajo_governance::AjoGovernance::VoteCast",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "proposal_id",
+        "type": "core::integer::u256",
+        "kind": "key"
+      },
+      {
+        "name": "voter",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      },
+      {
+        "name": "support",
+        "type": "core::bool",
+        "kind": "data"
+      },
+      {
+        "name": "voting_power",
+        "type": "core::integer::u256",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::governance::ajo_governance::AjoGovernance::ProposalExecuted",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "proposal_id",
+        "type": "core::integer::u256",
+        "kind": "key"
+      },
+      {
+        "name": "executor",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::governance::ajo_governance::AjoGovernance::ProposalCancelled",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "proposal_id",
+        "type": "core::integer::u256",
+        "kind": "key"
+      },
+      {
+        "name": "canceller",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::components::ownable::OwnableComponent::OwnershipTransferred",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "previous_owner",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      },
+      {
+        "name": "new_owner",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::components::ownable::OwnableComponent::Event",
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "OwnershipTransferred",
+        "type": "ajo_save::components::ownable::OwnableComponent::OwnershipTransferred",
+        "kind": "nested"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::governance::ajo_governance::AjoGovernance::Event",
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "ProposalCreated",
+        "type": "ajo_save::governance::ajo_governance::AjoGovernance::ProposalCreated",
+        "kind": "nested"
+      },
+      {
+        "name": "VoteCast",
+        "type": "ajo_save::governance::ajo_governance::AjoGovernance::VoteCast",
+        "kind": "nested"
+      },
+      {
+        "name": "ProposalExecuted",
+        "type": "ajo_save::governance::ajo_governance::AjoGovernance::ProposalExecuted",
+        "kind": "nested"
+      },
+      {
+        "name": "ProposalCancelled",
+        "type": "ajo_save::governance::ajo_governance::AjoGovernance::ProposalCancelled",
+        "kind": "nested"
+      },
+      {
+        "name": "OwnableEvent",
+        "type": "ajo_save::components::ownable::OwnableComponent::Event",
+        "kind": "flat"
+      }
+    ]
+  }
+]
