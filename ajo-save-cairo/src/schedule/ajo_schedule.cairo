@@ -267,6 +267,7 @@ pub mod AjoSchedule {
         fn get_next_execution_time(self: @ContractState) -> u64 {
             // TODO: Implement get_next_execution_time
             panic!("Not implemented");
+            0_u64
         }
     }
 }
