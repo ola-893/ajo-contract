@@ -11,16 +11,16 @@ const ERC20_ABI = [
     inputs: [
       {
         name: "account",
-        type: "felt",
-      },
+        type: "felt"
+      }
     ],
     outputs: [
       {
         name: "balance",
-        type: "Uint256",
-      },
+        type: "Uint256"
+      }
     ],
-    stateMutability: "view",
+    stateMutability: "view"
   },
   {
     name: "decimals",
@@ -29,11 +29,11 @@ const ERC20_ABI = [
     outputs: [
       {
         name: "decimals",
-        type: "felt",
-      },
+        type: "felt"
+      }
     ],
-    stateMutability: "view",
-  },
+    stateMutability: "view"
+  }
 ];
 
 interface TokenBalance {
@@ -44,11 +44,11 @@ interface TokenBalance {
 
 export const useTokenBalance = (tokenSymbol: "STRK" | "USDC" | "ETH") => {
   const { account, address } = useStarknetWallet();
-
+  
   const [balance, setBalance] = useState<TokenBalance>({
     raw: "0",
     formatted: "0.00",
-    decimals: 18,
+    decimals: 18
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,18 +63,16 @@ export const useTokenBalance = (tokenSymbol: "STRK" | "USDC" | "ETH") => {
     setError(null);
 
     try {
+      // Always use our own RPC provider to avoid SSL issues with wallet providers
       const provider = new RpcProvider({
-        nodeUrl:
-          "https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_7/W7Jx4ZJo0o9FaoLXaNRG4",
+        nodeUrl: "https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_7/W7Jx4ZJo0o9FaoLXaNRG4"
       });
 
       // Get token address
       const tokenAddress = TOKEN_ADDRESSES.sepolia[tokenSymbol];
-
-      console.log(
-        `Fetching ${tokenSymbol} balance for ${address} from ${tokenAddress}`,
-      );
-
+      
+      console.log(`Fetching ${tokenSymbol} balance for ${address} from ${tokenAddress}`);
+      
       if (!tokenAddress) {
         throw new Error(`Token address not found for ${tokenSymbol}`);
       }
@@ -88,22 +86,19 @@ export const useTokenBalance = (tokenSymbol: "STRK" | "USDC" | "ETH") => {
       const balancePromise = tokenContract.balanceOf(address);
       const decimalsPromise = tokenContract.decimals();
 
-      const [balanceResult, decimalsResult] = (await Promise.race([
+      const [balanceResult, decimalsResult] = await Promise.race([
         Promise.all([balancePromise, decimalsPromise]),
-        new Promise((_, reject) =>
-          setTimeout(
-            () => reject(new Error("Request timeout after 10s")),
-            10000,
-          ),
-        ),
-      ])) as any;
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Request timeout after 10s')), 10000)
+        )
+      ]) as any;
 
       console.log(`${tokenSymbol} - Balance result:`, balanceResult);
       console.log(`${tokenSymbol} - Decimals result:`, decimalsResult);
 
       // Parse balance - handle different return formats
       let rawBalance: bigint;
-      if (typeof balanceResult === "bigint") {
+      if (typeof balanceResult === 'bigint') {
         rawBalance = balanceResult;
       } else if (balanceResult.balance !== undefined) {
         rawBalance = BigInt(balanceResult.balance);
@@ -118,7 +113,7 @@ export const useTokenBalance = (tokenSymbol: "STRK" | "USDC" | "ETH") => {
 
       // Get decimals - handle different return formats
       let decimals: number;
-      if (typeof decimalsResult === "bigint") {
+      if (typeof decimalsResult === 'bigint') {
         decimals = Number(decimalsResult);
       } else if (decimalsResult.decimals !== undefined) {
         decimals = Number(decimalsResult.decimals);
@@ -131,16 +126,14 @@ export const useTokenBalance = (tokenSymbol: "STRK" | "USDC" | "ETH") => {
 
       // Format balance
       const divisor = BigInt(10 ** decimals);
-      const formattedBalance = (Number(rawBalance) / Number(divisor)).toFixed(
-        2,
-      );
+      const formattedBalance = (Number(rawBalance) / Number(divisor)).toFixed(2);
 
       console.log(`${tokenSymbol} - Formatted balance:`, formattedBalance);
 
       setBalance({
         raw: rawBalance.toString(),
         formatted: formattedBalance,
-        decimals,
+        decimals
       });
     } catch (err) {
       console.error(`Error fetching ${tokenSymbol} balance:`, err);
@@ -159,6 +152,6 @@ export const useTokenBalance = (tokenSymbol: "STRK" | "USDC" | "ETH") => {
     balance,
     loading,
     error,
-    refetch: fetchBalance,
+    refetch: fetchBalance
   };
 };

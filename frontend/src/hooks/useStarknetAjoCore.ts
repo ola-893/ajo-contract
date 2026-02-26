@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useCallback } from 'react';
-import { Contract } from 'starknet';
+import { useCallback, useState } from 'react';
+import { Contract, RpcProvider } from 'starknet';
 import { useStarknetWallet } from '@/contexts/StarknetWalletContext';
 import { ajoCoreAbi } from '@/abi/placeholders';
 
@@ -9,119 +9,275 @@ import { ajoCoreAbi } from '@/abi/placeholders';
  * This handles the main Ajo logic for a specific group
  */
 const useStarknetAjoCore = (ajoCoreAddress: string) => {
-  const { account, provider, isConnected } = useStarknetWallet();
+  const { account, isConnected } = useStarknetWallet();
+  const [loading, setLoading] = useState(false);
+
+  // Create provider instance
+  const getProvider = () => {
+    return new RpcProvider({
+      nodeUrl: "https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_7/W7Jx4ZJo0o9FaoLXaNRG4"
+    });
+  };
 
   /**
-   * Get Ajo details
+   * Get Ajo configuration
    */
-  const getAjoDetails = useCallback(async () => {
-    if (!provider || !ajoCoreAddress) {
-      throw new Error('Provider or contract address not available');
+  const getConfig = useCallback(async () => {
+    if (!ajoCoreAddress) {
+      throw new Error('Contract address not available');
     }
 
     try {
+      const provider = getProvider();
       const ajoCoreContract = new Contract(
-        ajoCoreAbi,
+        ajoCoreAbi as any,
         ajoCoreAddress,
         provider
       );
 
-      const details = await ajoCoreContract.get_ajo_details();
+      const config = await ajoCoreContract.get_config();
       
-      console.log('Ajo details:', details);
-      return details;
+      console.log('Ajo config:', config);
+      return config;
     } catch (error) {
-      console.error('Error fetching Ajo details:', error);
+      console.error('Error fetching Ajo config:', error);
       throw error;
     }
-  }, [provider, ajoCoreAddress]);
+  }, [ajoCoreAddress]);
 
   /**
-   * Get Ajo operational status
+   * Get current cycle number
    */
-  const getOperationalStatus = useCallback(async () => {
-    if (!provider || !ajoCoreAddress) {
-      throw new Error('Provider or contract address not available');
+  const getCurrentCycle = useCallback(async () => {
+    if (!ajoCoreAddress) {
+      throw new Error('Contract address not available');
     }
 
     try {
+      const provider = getProvider();
       const ajoCoreContract = new Contract(
-        ajoCoreAbi,
+        ajoCoreAbi as any,
         ajoCoreAddress,
         provider
       );
 
-      const status = await ajoCoreContract.get_operational_status();
+      const cycle = await ajoCoreContract.get_current_cycle();
       
-      console.log('Operational status:', status);
+      console.log('Current cycle:', cycle);
+      return cycle;
+    } catch (error) {
+      console.error('Error fetching current cycle:', error);
+      throw error;
+    }
+  }, [ajoCoreAddress]);
+
+  /**
+   * Get Ajo status
+   */
+  const getAjoStatus = useCallback(async () => {
+    if (!ajoCoreAddress) {
+      throw new Error('Contract address not available');
+    }
+
+    try {
+      const provider = getProvider();
+      const ajoCoreContract = new Contract(
+        ajoCoreAbi as any,
+        ajoCoreAddress,
+        provider
+      );
+
+      const status = await ajoCoreContract.get_ajo_status();
+      
+      console.log('Ajo status:', status);
       return status;
     } catch (error) {
-      console.error('Error fetching operational status:', error);
+      console.error('Error fetching Ajo status:', error);
       throw error;
     }
-  }, [provider, ajoCoreAddress]);
+  }, [ajoCoreAddress]);
 
   /**
-   * Initialize Ajo (only by creator)
+   * Check if Ajo is active
    */
-  const initializeAjo = useCallback(async () => {
-    if (!account || !isConnected || !ajoCoreAddress) {
-      throw new Error('Wallet not connected or contract address not available');
+  const isActive = useCallback(async () => {
+    if (!ajoCoreAddress) {
+      throw new Error('Contract address not available');
     }
 
     try {
+      const provider = getProvider();
       const ajoCoreContract = new Contract(
-        ajoCoreAbi,
+        ajoCoreAbi as any,
         ajoCoreAddress,
         provider
       );
 
-      ajoCoreContract.connect(account);
-
-      const result = await ajoCoreContract.initialize();
-      await provider.waitForTransaction(result.transaction_hash);
-
-      console.log('Ajo initialized successfully:', result);
-      return result;
+      const active = await ajoCoreContract.is_active();
+      
+      console.log('Is active:', active);
+      return active;
     } catch (error) {
-      console.error('Error initializing Ajo:', error);
+      console.error('Error checking if active:', error);
       throw error;
     }
-  }, [account, provider, isConnected, ajoCoreAddress]);
+  }, [ajoCoreAddress]);
 
   /**
-   * Start Ajo cycle
+   * Start Ajo (begins the first cycle)
    */
-  const startCycle = useCallback(async () => {
+  const startAjo = useCallback(async () => {
     if (!account || !isConnected || !ajoCoreAddress) {
       throw new Error('Wallet not connected or contract address not available');
     }
 
+    setLoading(true);
     try {
+      const provider = getProvider();
       const ajoCoreContract = new Contract(
-        ajoCoreAbi,
+        ajoCoreAbi as any,
         ajoCoreAddress,
         provider
       );
 
-      ajoCoreContract.connect(account);
+      ajoCoreContract.connect(account as any);
 
-      const result = await ajoCoreContract.start_cycle();
+      const result = await ajoCoreContract.start_ajo();
       await provider.waitForTransaction(result.transaction_hash);
 
-      console.log('Cycle started successfully:', result);
-      return result;
+      console.log('Ajo started successfully:', result);
+      return {
+        transactionHash: result.transaction_hash,
+        success: true,
+      };
     } catch (error) {
-      console.error('Error starting cycle:', error);
+      console.error('Error starting Ajo:', error);
       throw error;
+    } finally {
+      setLoading(false);
     }
-  }, [account, provider, isConnected, ajoCoreAddress]);
+  }, [account, isConnected, ajoCoreAddress]);
+
+  /**
+   * Process payment for current cycle
+   */
+  const processPayment = useCallback(async () => {
+    if (!account || !isConnected || !ajoCoreAddress) {
+      throw new Error('Wallet not connected or contract address not available');
+    }
+
+    setLoading(true);
+    try {
+      const provider = getProvider();
+      const ajoCoreContract = new Contract(
+        ajoCoreAbi as any,
+        ajoCoreAddress,
+        provider
+      );
+
+      ajoCoreContract.connect(account as any);
+
+      const result = await ajoCoreContract.process_payment();
+      await provider.waitForTransaction(result.transaction_hash);
+
+      console.log('Payment processed successfully:', result);
+      return {
+        transactionHash: result.transaction_hash,
+        success: true,
+      };
+    } catch (error) {
+      console.error('Error processing payment:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  }, [account, isConnected, ajoCoreAddress]);
+
+  /**
+   * Exit from the Ajo
+   */
+  const exitAjo = useCallback(async () => {
+    if (!account || !isConnected || !ajoCoreAddress) {
+      throw new Error('Wallet not connected or contract address not available');
+    }
+
+    setLoading(true);
+    try {
+      const provider = getProvider();
+      const ajoCoreContract = new Contract(
+        ajoCoreAbi as any,
+        ajoCoreAddress,
+        provider
+      );
+
+      ajoCoreContract.connect(account as any);
+
+      const result = await ajoCoreContract.exit_ajo();
+      await provider.waitForTransaction(result.transaction_hash);
+
+      console.log('Exited Ajo successfully:', result);
+      return {
+        transactionHash: result.transaction_hash,
+        success: true,
+      };
+    } catch (error) {
+      console.error('Error exiting Ajo:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  }, [account, isConnected, ajoCoreAddress]);
+
+  /**
+   * Finalize Ajo (complete all cycles)
+   */
+  const finalizeAjo = useCallback(async () => {
+    if (!account || !isConnected || !ajoCoreAddress) {
+      throw new Error('Wallet not connected or contract address not available');
+    }
+
+    setLoading(true);
+    try {
+      const provider = getProvider();
+      const ajoCoreContract = new Contract(
+        ajoCoreAbi as any,
+        ajoCoreAddress,
+        provider
+      );
+
+      ajoCoreContract.connect(account as any);
+
+      const result = await ajoCoreContract.finalize_ajo();
+      await provider.waitForTransaction(result.transaction_hash);
+
+      console.log('Ajo finalized successfully:', result);
+      return {
+        transactionHash: result.transaction_hash,
+        success: true,
+      };
+    } catch (error) {
+      console.error('Error finalizing Ajo:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  }, [account, isConnected, ajoCoreAddress]);
 
   return {
-    getAjoDetails,
-    getOperationalStatus,
-    initializeAjo,
-    startCycle,
+    // View functions
+    getConfig,
+    getCurrentCycle,
+    getAjoStatus,
+    isActive,
+    
+    // Write functions
+    startAjo,
+    processPayment,
+    exitAjo,
+    finalizeAjo,
+    
+    // State
+    loading,
   };
 };
 

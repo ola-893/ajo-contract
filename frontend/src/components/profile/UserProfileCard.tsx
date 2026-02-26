@@ -13,8 +13,10 @@ interface UserProfileCardProps {
   isVisible: boolean;
   address?: string | null;
   network?: string | null;
-  hbar?: string | null;
-  hbarPrice: number | null;
+  strk?: string | null;
+  eth?: string | null;
+  strkPrice?: number | null;
+  ethPrice?: number | null;
   usdc?: string | null;
   loading?: boolean;
   copied?: boolean;
@@ -26,16 +28,18 @@ const UserProfileCard = ({
   isVisible,
   address,
   network,
-  hbar,
+  strk,
+  eth,
   usdc,
   loading,
   copied,
-  hbarPrice,
+  strkPrice,
+  ethPrice,
   handleCopy,
   onRefresh,
 }: UserProfileCardProps) => {
   const [refreshing, setRefreshing] = useState(false);
-  const isMetaMask = address?.startsWith("0x");
+  const isStarknet = address && !address.startsWith("0x");
 
   const handleRefreshClick = async () => {
     if (onRefresh) {
@@ -44,9 +48,10 @@ const UserProfileCard = ({
       setTimeout(() => setRefreshing(false), 1000);
     }
   };
-  const hbarInUsd = Number(hbar) * (hbarPrice ?? 0);
+  const strkInUsd = Number(strk) * (strkPrice ?? 0);
+  const ethInUsd = Number(eth) * (ethPrice ?? 0);
   // Calculate total balance in USD (if available)
-  const totalBalanceUSD = (Number(usdc) || 0) + (hbarInUsd || 0);
+  const totalBalanceUSD = (Number(usdc) || 0) + (strkInUsd || 0) + (ethInUsd || 0);
 
   return (
     <div
@@ -82,9 +87,9 @@ const UserProfileCard = ({
                   </p>
                   <div className="flex items-center gap-2">
                     <span className="text-white font-mono text-sm sm:text-base font-semibold">
-                      {isMetaMask
+                      {address
                         ? `${address?.slice(0, 6)}...${address?.slice(-4)}`
-                        : address}
+                        : "Not Connected"}
                     </span>
                     <button
                       onClick={handleCopy}
@@ -105,7 +110,7 @@ const UserProfileCard = ({
               <div className="flex items-center gap-2 bg-white/20 backdrop-blur-sm border border-white/30 px-4 py-2 rounded-full">
                 <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
                 <span className="text-white font-semibold text-sm">
-                  Hedera Testnet
+                  Starknet Sepolia
                 </span>
               </div>
             </div>
@@ -135,11 +140,75 @@ const UserProfileCard = ({
             </div>
 
             {/* Balance Cards Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* USDC Card */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* STRK Card */}
+              <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-4 hover:bg-white/15 transition-all duration-300">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-purple-400 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+                    <Coins className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-white/60 text-xs font-medium">STRK</p>
+                    <p className="text-white/40 text-[10px]">Starknet</p>
+                  </div>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  {loading ? (
+                    <div className="h-8 w-24 bg-white/20 rounded-lg animate-pulse"></div>
+                  ) : (
+                    <>
+                      <span className="text-white text-2xl sm:text-3xl font-bold">
+                        {strk || "0.00"}
+                      </span>
+                      <span className="text-white/60 text-sm font-medium">
+                        STRK
+                      </span>
+                    </>
+                  )}
+                </div>
+                {strk !== null && (
+                  <p className="text-white/50 text-xs mt-2">
+                    ≈ {formatCurrencyUSD(strk ? strkInUsd : 0)}
+                  </p>
+                )}
+              </div>
+
+              {/* ETH Card */}
               <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-4 hover:bg-white/15 transition-all duration-300">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
+                    <Wallet className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-white/60 text-xs font-medium">ETH</p>
+                    <p className="text-white/40 text-[10px]">Ethereum</p>
+                  </div>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  {loading ? (
+                    <div className="h-8 w-24 bg-white/20 rounded-lg animate-pulse"></div>
+                  ) : (
+                    <>
+                      <span className="text-white text-2xl sm:text-3xl font-bold">
+                        {eth || "0.00"}
+                      </span>
+                      <span className="text-white/60 text-sm font-medium">
+                        ETH
+                      </span>
+                    </>
+                  )}
+                </div>
+                {eth !== null && (
+                  <p className="text-white/50 text-xs mt-2">
+                    ≈ {formatCurrencyUSD(eth ? ethInUsd : 0)}
+                  </p>
+                )}
+              </div>
+
+              {/* USDC Card */}
+              <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-4 hover:bg-white/15 transition-all duration-300">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-green-400 to-green-600 rounded-xl flex items-center justify-center shadow-lg">
                     <img
                       src="/images/profile/usdc.png"
                       alt="USDC"
@@ -171,45 +240,6 @@ const UserProfileCard = ({
                 {usdc !== null && (
                   <p className="text-white/50 text-xs mt-2">
                     ≈{formatCurrencyUSD(usdc ? Number(usdc) : 0)}
-                  </p>
-                )}
-              </div>
-
-              {/* HBAR Card */}
-              <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-4 hover:bg-white/15 transition-all duration-300">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-purple-400 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-                    <img
-                      src="/images/profile/hedera.png"
-                      alt="HBAR"
-                      className="w-6 h-6"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = "none";
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <p className="text-white/60 text-xs font-medium">HBAR</p>
-                    <p className="text-white/40 text-[10px]">Hedera</p>
-                  </div>
-                </div>
-                <div className="flex items-baseline gap-2">
-                  {loading ? (
-                    <div className="h-8 w-24 bg-white/20 rounded-lg animate-pulse"></div>
-                  ) : (
-                    <>
-                      <span className="text-white text-2xl sm:text-3xl font-bold">
-                        {hbar || "0.00"}
-                      </span>
-                      <span className="text-white/60 text-sm font-medium">
-                        HBAR
-                      </span>
-                    </>
-                  )}
-                </div>
-                {hbar !== null && (
-                  <p className="text-white/50 text-xs mt-2">
-                    ≈ {formatCurrencyUSD(hbar ? hbarInUsd : 0)}
                   </p>
                 )}
               </div>

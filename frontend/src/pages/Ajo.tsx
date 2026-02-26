@@ -1,27 +1,45 @@
 import { useState, useEffect } from "react";
 import Header from "@/components/header/Header";
 import formatCurrency from "@/utils/formatCurrency";
-import { TrendingUp, Zap } from "lucide-react";
+import { TrendingUp, Zap, RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-
-interface AjoGroup {
-  id: string;
-  name: string;
-  members: number;
-  totalPool: number;
-  nextPayout: string;
-  myTurn: number;
-  yieldGenerated: number;
-}
+import { useStarknetWallet } from "@/contexts/StarknetWalletContext";
+import useStarknetAjoFactory from "@/hooks/useStarknetAjoFactory";
+import { toast } from "sonner";
 
 const Ajo = () => {
   const navigate = useNavigate();
   const [isVisible, setIsVisible] = useState(false);
+  const { address, isConnected } = useStarknetWallet();
+  const { getUserAjos, loading } = useStarknetAjoFactory();
+  const [userAjos, setUserAjos] = useState<any[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Fetch user's Ajos
+  const fetchAjos = async () => {
+    if (!address || !isConnected) return;
+
+    try {
+      setIsRefreshing(true);
+      const ajos = await getUserAjos(address);
+      setUserAjos(ajos || []);
+    } catch (error) {
+      console.error("Failed to fetch Ajos:", error);
+      toast.error("Failed to load Ajos");
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   useEffect(() => {
-    // Trigger animation on mount
     setIsVisible(true);
   }, []);
+
+  useEffect(() => {
+    if (isConnected && address) {
+      fetchAjos();
+    }
+  }, [isConnected, address]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -60,19 +78,30 @@ const Ajo = () => {
                 : "translate-y-10 opacity-0"
             }`}
           >
-            <h3 className="text-lg font-semibold mb-2">
-              AI-Powered Yield Optimization
-            </h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-lg font-semibold">
+                Starknet-Powered Savings
+              </h3>
+              <button
+                onClick={fetchAjos}
+                disabled={isRefreshing || loading}
+                className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors disabled:opacity-50"
+              >
+                <RefreshCw
+                  className={`h-4 w-4 ${isRefreshing || loading ? "animate-spin" : ""}`}
+                />
+              </button>
+            </div>
             <p className="text-sm text-white/80 mb-3">
-              Your idle Ajo funds are earning 8.5% APY through smart staking
+              Transparent, on-chain savings groups powered by Cairo smart contracts
             </p>
             <div className="flex items-center gap-4 text-sm">
               <div className="bg-background/20 px-3 py-1 rounded-full">
                 <Zap className="h-3 w-3 inline mr-1" />
-                Auto-staked
+                Blockchain-secured
               </div>
               <div className="bg-background/20 px-3 py-1 rounded-full">
-                Risk: Low
+                {userAjos.length} Active
               </div>
             </div>
           </div>
@@ -85,69 +114,70 @@ const Ajo = () => {
                 : "translate-y-10 opacity-0"
             }`}
           >
-            {mockAjoGroups.map((ajo, index) => (
-              <div
-                key={ajo.id}
-                className={`bg-card/60 rounded-xl shadow-sm border border-border/30 p-6 transition-all duration-700 ${
-                  isVisible
-                    ? "opacity-100 translate-y-0"
-                    : "opacity-0 translate-y-10"
-                }`}
-                style={{ transitionDelay: `${400 + index * 150}ms` }}
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h3 className="text-lg font-semibold text-card-foreground">
-                      {ajo.name}
-                    </h3>
-                    <p className="text-sm text-muted-foreground">
-                      {ajo.members} members • Next payout: {ajo.nextPayout}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm text-muted-foreground">Pool Size</p>
-                    <p className="text-xl font-bold text-card-foreground">
-                      {formatCurrency(ajo.totalPool)}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="bg-accent/10 rounded-lg p-4 mb-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-accent">Yield Generated</p>
-                      <p className="text-lg font-semibold text-card-foreground">
-                        {formatCurrency(ajo.yieldGenerated)}
-                      </p>
-                    </div>
-                    <TrendingUp className="h-5 w-5 text-accent" />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div className="bg-background/30 rounded-lg p-3">
-                    <p className="text-xs text-muted-foreground">Your Turn</p>
-                    <p className="text-lg font-bold text-card-foreground">
-                      #{ajo.myTurn}
-                    </p>
-                  </div>
-                  <div className="bg-background/30 rounded-lg p-3">
-                    <p className="text-xs text-muted-foreground">
-                      Expected Amount
-                    </p>
-                    <p className="text-lg font-bold text-card-foreground">
-                      {formatCurrency(
-                        (ajo.totalPool + ajo.yieldGenerated) / ajo.members
-                      )}
-                    </p>
-                  </div>
-                </div>
-
-                <button className="w-full bg-primary text-primary-foreground py-2 rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium">
-                  Make Monthly Contribution
+            {loading || isRefreshing ? (
+              <div className="flex items-center justify-center py-12">
+                <RefreshCw className="h-8 w-8 animate-spin text-primary" />
+                <span className="ml-3 text-muted-foreground">Loading Ajos...</span>
+              </div>
+            ) : !isConnected ? (
+              <div className="text-center py-12 bg-card rounded-xl border border-border">
+                <p className="text-muted-foreground mb-4">
+                  Connect your wallet to view your Ajos
+                </p>
+              </div>
+            ) : userAjos.length === 0 ? (
+              <div className="text-center py-12 bg-card rounded-xl border border-border">
+                <p className="text-muted-foreground mb-4">
+                  You haven't joined or created any Ajos yet
+                </p>
+                <button
+                  onClick={() => navigate("/ajo/create-ajo")}
+                  className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
+                >
+                  Create Your First Ajo
                 </button>
               </div>
-            ))}
+            ) : (
+              userAjos.map((ajo, index) => (
+                <div
+                  key={index}
+                  className={`bg-card/60 rounded-xl shadow-sm border border-border/30 p-6 transition-all duration-700 cursor-pointer hover:shadow-md hover:border-primary/30 ${
+                    isVisible
+                      ? "opacity-100 translate-y-0"
+                      : "opacity-0 translate-y-10"
+                  }`}
+                  style={{ transitionDelay: `${400 + index * 150}ms` }}
+                  onClick={() => navigate(`/ajo/${index}`)}
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <h3 className="text-lg font-semibold text-card-foreground">
+                        Ajo #{index + 1}
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        On Starknet Sepolia
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-muted-foreground">Status</p>
+                      <p className="text-sm font-bold text-primary">
+                        Active
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-primary/10 rounded-lg p-4 mb-4">
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Click to view details and manage your Ajo
+                    </p>
+                  </div>
+
+                  <button className="w-full bg-primary text-primary-foreground py-2 rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium">
+                    View Details
+                  </button>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </main>
@@ -156,24 +186,3 @@ const Ajo = () => {
 };
 
 export default Ajo;
-
-const mockAjoGroups: AjoGroup[] = [
-  {
-    id: "1",
-    name: "Tech Bros Ajo",
-    members: 10,
-    totalPool: 5000000,
-    nextPayout: "Dec 15, 2024",
-    myTurn: 3,
-    yieldGenerated: 125000,
-  },
-  {
-    id: "2",
-    name: "Market Vendors Union",
-    members: 25,
-    totalPool: 12500000,
-    nextPayout: "Jan 5, 2025",
-    myTurn: 8,
-    yieldGenerated: 312500,
-  },
-];

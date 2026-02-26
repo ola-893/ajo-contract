@@ -1,63 +1,47 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useWallet } from "@/auth/WalletContext";
 import { EmptyState } from "@/components/dashboard/EmptyState";
 import Header from "@/components/header/Header";
 import AjoCard from "@/components/shared/AjoCard";
-// import { useAjoFactory } from "@/hooks/useAjoFactory";
-import { useTokenHook } from "@/hooks/useTokenHook";
 import { useAjoStore } from "@/store/ajoStore";
 import { Shield, Users, Star, RefreshCw } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
-import { getNaira } from "@/utils/utils";
-import { useTokenStore } from "@/store/tokenStore";
 import { useNavigate } from "react-router-dom";
 import formatCurrency from "@/utils/formatCurrency";
 import { toast } from "sonner";
-import { useAjoCore } from "@/hooks/useAjoCore";
-import { useWalletInterface } from "@/services/wallets/useWalletInterface";
-import { useAjoFactory } from "@/hooks/useAjoFactory";
+import useStarknetAjoFactory from "@/hooks/useStarknetAjoFactory";
+import { useStarknetWallet } from "@/contexts/StarknetWalletContext";
 
 const Dashboard = () => {
-  const ajoCore = useAjoCore();
-  const ajoFactory = useAjoFactory();
-  const { accountId } = useWalletInterface();
-  const { getBalance } = useWallet();
-  const [contractStats, setContractStats] = useState(null);
-
+  const { address, isConnected } = useStarknetWallet();
+  const { getUserAjos, loading: factoryLoading } = useStarknetAjoFactory();
   const navigate = useNavigate();
 
-  const { setNaira } = useTokenStore();
   const [isVisible, setIsVisible] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-  const { ajoInfos } = useAjoStore();
+  const [userAjos, setUserAjos] = useState<any[]>([]);
 
-  const getHbarBalance = async () => {
-    const balance = await getBalance();
-    console.log("My Hbar Balance:", balance);
-  };
-
-  const loadContractStats = async () => {
-    try {
-      const stats: any = await ajoCore.getContractStats();
-      setContractStats(stats);
-      // console.log("Contract stats:", stats);
-    } catch (error) {
-      console.error("Failed to load contract stats:", error);
-    }
-  };
-
-  // Fetch Ajos function
+  // Fetch user's Ajos from Starknet
   const fetchAjos = useCallback(
     async (showToast = false) => {
+      if (!address || !isConnected) {
+        console.log("Wallet not connected");
+        return;
+      }
+
       try {
         setIsRefreshing(true);
-        console.log("🔄 Fetching Ajos...");
-        const ajos = await ajoFactory.getAllAjos(0, 100);
+        console.log("🔄 Fetching user Ajos from Starknet...");
+        
+        const ajos = await getUserAjos(address);
         console.log("✅ Fetched Ajos:", ajos);
-        const naira = await getNaira();
-        setNaira(naira);
+        
+        setUserAjos(ajos || []);
         setLastUpdate(new Date());
+        
+        if (showToast) {
+          toast.success("Ajos refreshed successfully");
+        }
       } catch (err) {
         console.error("❌ Failed to fetch ajos:", err);
         if (showToast) {
@@ -67,7 +51,7 @@ const Dashboard = () => {
         setIsRefreshing(false);
       }
     },
-    [ajoFactory, setNaira]
+    [address, isConnected, getUserAjos]
   );
 
   // Initial load animation
@@ -76,11 +60,12 @@ const Dashboard = () => {
     return () => clearTimeout(timer);
   }, []);
 
-  // Initial fetch + wallet balances
+  // Initial fetch when wallet connects
   useEffect(() => {
-    fetchAjos();
-    getHbarBalance();
-  }, [accountId]);
+    if (isConnected && address) {
+      fetchAjos();
+    }
+  }, [isConnected, address, fetchAjos]);
 
   const handleRoute = () => {
     navigate("/ajo/create-ajo");
@@ -146,9 +131,9 @@ const Dashboard = () => {
             <div className="bg-card p-6 rounded-xl shadow-sm border border-border hover:shadow-md transition-all hover:scale-105 hover:border-primary/30">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-muted-foreground text-sm">Ajos Tracked</p>
+                  <p className="text-muted-foreground text-sm">My Ajos</p>
                   <p className="text-2xl font-bold text-foreground">
-                    {ajoInfos.length}
+                    {userAjos.length}
                   </p>
                 </div>
                 <Shield className="h-8 w-8 text-primary" />
@@ -181,11 +166,31 @@ const Dashboard = () => {
           </div>
 
           {/* Ajo Cards */}
-          {ajoInfos.length !== 0 ? (
+          {isRefreshing || factoryLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <RefreshCw className="h-8 w-8 animate-spin text-primary" />
+              <span className="ml-3 text-muted-foreground">Loading your Ajos...</span>
+            </div>
+          ) : userAjos.length > 0 ? (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {ajoInfos.map((ajo) => (
-                <AjoCard key={ajo.ajoCore} ajo={ajo} isVisible={isVisible} />
+              {userAjos.map((ajo, index) => (
+                <div
+                  key={index}
+                  className="bg-card p-6 rounded-xl shadow-sm border border-border hover:shadow-md transition-all hover:scale-105"
+                >
+                  <h3 className="text-lg font-semibold mb-2">Ajo #{index + 1}</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Click to view details
+                  </p>
+                  {/* TODO: Add more Ajo details once we fetch from getAjoInfo */}
+                </div>
               ))}
+            </div>
+          ) : !isConnected ? (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground mb-4">
+                Connect your wallet to view your Ajos
+              </p>
             </div>
           ) : (
             <EmptyState onCreateAjo={handleRoute} />

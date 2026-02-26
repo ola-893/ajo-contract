@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useCallback } from 'react';
-import { Contract, CallData } from 'starknet';
+import { useCallback, useState } from 'react';
+import { Contract, RpcProvider, cairo } from 'starknet';
 import { useStarknetWallet } from '@/contexts/StarknetWalletContext';
 import { ajoMembersAbi } from '@/abi/placeholders';
 
@@ -8,63 +8,73 @@ import { ajoMembersAbi } from '@/abi/placeholders';
  * Hook for interacting with Ajo Members Cairo contract
  */
 const useStarknetAjoMembers = (ajoMembersAddress: string) => {
-  const { account, provider, isConnected } = useStarknetWallet();
+  const { account, isConnected } = useStarknetWallet();
+  const [loading, setLoading] = useState(false);
+
+  // Create provider instance
+  const getProvider = () => {
+    return new RpcProvider({
+      nodeUrl: "https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_7/W7Jx4ZJo0o9FaoLXaNRG4"
+    });
+  };
 
   /**
-   * Join an Ajo group
+   * Add a member to the Ajo
    */
-  const joinAjo = useCallback(
-    async (params: {
-      preferredToken: number;
-      guarantor?: string;
-    }) => {
+  const addMember = useCallback(
+    async (memberAddress: string, position: number) => {
       if (!account || !isConnected || !ajoMembersAddress) {
         throw new Error('Wallet not connected or contract address not available');
       }
 
+      setLoading(true);
       try {
+        const provider = getProvider();
         const membersContract = new Contract(
-          ajoMembersAbi,
+          ajoMembersAbi as any,
           ajoMembersAddress,
           provider
         );
 
-        membersContract.connect(account);
+        membersContract.connect(account as any);
 
-        const callData = CallData.compile({
-          preferred_token: params.preferredToken,
-          guarantor: params.guarantor || '0x0',
-        });
+        const positionU256 = cairo.uint256(position);
 
-        const result = await membersContract.join_ajo(callData);
+        const result = await membersContract.add_member(memberAddress, positionU256);
         await provider.waitForTransaction(result.transaction_hash);
 
-        console.log('Joined Ajo successfully:', result);
-        return result;
+        console.log('Member added successfully:', result);
+        return {
+          transactionHash: result.transaction_hash,
+          success: true,
+        };
       } catch (error) {
-        console.error('Error joining Ajo:', error);
+        console.error('Error adding member:', error);
         throw error;
+      } finally {
+        setLoading(false);
       }
     },
-    [account, provider, isConnected, ajoMembersAddress]
+    [account, isConnected, ajoMembersAddress]
   );
 
   /**
-   * Get all members details
+   * Get all members
    */
-  const getAllMembersDetails = useCallback(async () => {
-    if (!provider || !ajoMembersAddress) {
-      throw new Error('Provider or contract address not available');
+  const getAllMembers = useCallback(async () => {
+    if (!ajoMembersAddress) {
+      throw new Error('Contract address not available');
     }
 
     try {
+      const provider = getProvider();
       const membersContract = new Contract(
-        ajoMembersAbi,
+        ajoMembersAbi as any,
         ajoMembersAddress,
         provider
       );
 
-      const members = await membersContract.get_all_members_details();
+      const members = await membersContract.get_all_members();
       
       console.log('All members:', members);
       return members;
@@ -72,25 +82,26 @@ const useStarknetAjoMembers = (ajoMembersAddress: string) => {
       console.error('Error fetching members:', error);
       throw error;
     }
-  }, [provider, ajoMembersAddress]);
+  }, [ajoMembersAddress]);
 
   /**
    * Get specific member info
    */
-  const getMemberInfo = useCallback(
+  const getMember = useCallback(
     async (memberAddress: string) => {
-      if (!provider || !ajoMembersAddress) {
-        throw new Error('Provider or contract address not available');
+      if (!ajoMembersAddress) {
+        throw new Error('Contract address not available');
       }
 
       try {
+        const provider = getProvider();
         const membersContract = new Contract(
-          ajoMembersAbi,
+          ajoMembersAbi as any,
           ajoMembersAddress,
           provider
         );
 
-        const memberInfo = await membersContract.get_member_info(memberAddress);
+        const memberInfo = await membersContract.get_member(memberAddress);
         
         console.log('Member info:', memberInfo);
         return memberInfo;
@@ -99,42 +110,73 @@ const useStarknetAjoMembers = (ajoMembersAddress: string) => {
         throw error;
       }
     },
-    [provider, ajoMembersAddress]
+    [ajoMembersAddress]
   );
 
   /**
-   * Leave Ajo group
+   * Get total number of members
    */
-  const leaveAjo = useCallback(async () => {
-    if (!account || !isConnected || !ajoMembersAddress) {
-      throw new Error('Wallet not connected or contract address not available');
+  const getTotalMembers = useCallback(async () => {
+    if (!ajoMembersAddress) {
+      throw new Error('Contract address not available');
     }
 
     try {
+      const provider = getProvider();
       const membersContract = new Contract(
-        ajoMembersAbi,
+        ajoMembersAbi as any,
         ajoMembersAddress,
         provider
       );
 
-      membersContract.connect(account);
-
-      const result = await membersContract.leave_ajo();
-      await provider.waitForTransaction(result.transaction_hash);
-
-      console.log('Left Ajo successfully:', result);
-      return result;
+      const total = await membersContract.get_total_members();
+      
+      console.log('Total members:', total);
+      return total;
     } catch (error) {
-      console.error('Error leaving Ajo:', error);
+      console.error('Error fetching total members:', error);
       throw error;
     }
-  }, [account, provider, isConnected, ajoMembersAddress]);
+  }, [ajoMembersAddress]);
+
+  /**
+   * Get member count
+   */
+  const getMemberCount = useCallback(async () => {
+    if (!ajoMembersAddress) {
+      throw new Error('Contract address not available');
+    }
+
+    try {
+      const provider = getProvider();
+      const membersContract = new Contract(
+        ajoMembersAbi as any,
+        ajoMembersAddress,
+        provider
+      );
+
+      const count = await membersContract.get_member_count();
+      
+      console.log('Member count:', count);
+      return count;
+    } catch (error) {
+      console.error('Error fetching member count:', error);
+      throw error;
+    }
+  }, [ajoMembersAddress]);
 
   return {
-    joinAjo,
-    getAllMembersDetails,
-    getMemberInfo,
-    leaveAjo,
+    // View functions
+    getAllMembers,
+    getMember,
+    getTotalMembers,
+    getMemberCount,
+    
+    // Write functions
+    addMember,
+    
+    // State
+    loading,
   };
 };
 

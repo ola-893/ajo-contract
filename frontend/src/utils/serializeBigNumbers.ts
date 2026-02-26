@@ -1,13 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { BigNumber } from "ethers";
 
-// Recursively convert BigNumber/BigInt → string
+// Recursively convert BigInt → string
 export function serializeBigNumbers(obj: any): any {
   if (obj == null) return obj;
 
-  if (BigNumber.isBigNumber(obj)) {
-    return obj.toString(); // ✅ string only
-  }
   if (typeof obj === "bigint") {
     return obj.toString();
   }

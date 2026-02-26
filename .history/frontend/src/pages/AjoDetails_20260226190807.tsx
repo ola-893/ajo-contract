@@ -16,28 +16,43 @@ import useStarknetAjoPayments from "@/hooks/useStarknetAjoPayments";
 import { toast } from "sonner";
 import { RefreshCw } from "lucide-react";
 
+interface AjoInfo {
+  id: string;
+  name?: string;
+  description?: string;
+  [key: string]: unknown;
+}
+
+interface AjoConfig {
+  [key: string]: unknown;
+}
+
+interface AjoMember {
+  [key: string]: unknown;
+}
+
 const AjoDetails = () => {
   const { ajoId } = useParams<{ ajoId: string }>();
   const navigate = useNavigate();
   const { address, isConnected } = useStarknetWallet();
-
+  
   const [isVisible, setIsVisible] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [loading, setLoading] = useState(true);
-
+  
   // Ajo data state
-  const [ajoInfo, setAjoInfo] = useState<any>(null);
-  const [ajoConfig, setAjoConfig] = useState<any>(null);
-  const [members, setMembers] = useState<any[]>([]);
+  const [ajoInfo, setAjoInfo] = useState<AjoInfo | null>(null);
+  const [ajoConfig, setAjoConfig] = useState<AjoConfig | null>(null);
+  const [members, setMembers] = useState<AjoMember[]>([]);
   const [currentCycle, setCurrentCycle] = useState<number>(0);
-
+  
   // TODO: These addresses will come from the factory contract
   // For now, we'll use placeholder addresses
   const ajoCoreAddress = ""; // Will be fetched from factory
   const ajoMembersAddress = ""; // Will be fetched from factory
   const ajoPaymentsAddress = ""; // Will be fetched from factory
-
+  
   const { getAjoInfo } = useStarknetAjoFactory();
   const ajoCore = useStarknetAjoCore(ajoCoreAddress);
   const ajoMembers = useStarknetAjoMembers(ajoMembersAddress);
@@ -50,7 +65,7 @@ const AjoDetails = () => {
     setLoading(true);
     try {
       console.log("📡 Fetching Ajo details for ID:", ajoId);
-
+      
       // Fetch basic Ajo info from factory
       const info = await getAjoInfo(ajoId);
       setAjoInfo(info);
@@ -59,10 +74,10 @@ const AjoDetails = () => {
       // TODO: Once we have the contract addresses from factory, fetch more details
       // const config = await ajoCore.getConfig();
       // setAjoConfig(config);
-
+      
       // const allMembers = await ajoMembers.getAllMembers();
       // setMembers(allMembers);
-
+      
       // const cycle = await ajoPayments.getCurrentCycle();
       // setCurrentCycle(cycle);
 
@@ -108,9 +123,7 @@ const AjoDetails = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
           <div className="flex items-center justify-center py-12">
             <RefreshCw className="h-8 w-8 animate-spin text-primary" />
-            <span className="ml-3 text-muted-foreground">
-              Loading Ajo details...
-            </span>
+            <span className="ml-3 text-muted-foreground">Loading Ajo details...</span>
           </div>
         </div>
       </div>
@@ -130,15 +143,15 @@ const AjoDetails = () => {
               <h1 className="text-3xl font-bold text-card-foreground mb-2">
                 Ajo #{ajoId}
               </h1>
-              <p className="text-muted-foreground">On Starknet Sepolia</p>
+              <p className="text-muted-foreground">
+                On Starknet Sepolia
+              </p>
             </div>
             <button
               onClick={fetchAjoDetails}
               className="p-2 bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors"
             >
-              <RefreshCw
-                className={`h-5 w-5 text-primary ${loading ? "animate-spin" : ""}`}
-              />
+              <RefreshCw className={`h-5 w-5 text-primary ${loading ? "animate-spin" : ""}`} />
             </button>
           </div>
 

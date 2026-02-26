@@ -14,35 +14,25 @@ import {
   DollarSign,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useAjoFactory } from "@/hooks/useAjoFactory";
+import useStarknetAjoFactory from "@/hooks/useStarknetAjoFactory";
 import { toast } from "sonner";
-import { useHcsTopicCreation } from "@/hooks/useHcsTopicCreation";
-import { useWalletInterface } from "@/services/wallets/useWalletInterface";
+import { useStarknetWallet } from "@/contexts/StarknetWalletContext";
+import Header from "@/components/header/Header";
 
 const CreateAjo = () => {
   const navigate = useNavigate();
   const [isVisible, setIsVisible] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [currentPhase, setCurrentPhase] = useState(0);
-  const {
-    createAjo,
-    initializeAjoPhase2,
-    initializeAjoPhase3,
-    initializeAjoPhase4,
-    initializeAjoPhase5,
-  } = useAjoFactory();
-  const { accountId } = useWalletInterface();
-  const { createHcsTopic, creating: creatingTopic } = useHcsTopicCreation();
+  const { createAjo, deployAjoContracts, loading } = useStarknetAjoFactory();
+  const { address, isConnected } = useStarknetWallet();
 
-  // Form state - Updated with new fields
+  // Form state - Updated for Starknet
   const [formData, setFormData] = useState({
     name: "",
-    cycleDuration: "30", // days - will convert to seconds
-    monthlyPaymentUSDC: "",
-    monthlyPaymentHBAR: "",
-    usesHtsTokens: true,
-    usesScheduledPayments: true,
+    cycleDuration: "30", // days (1-62 allowed)
+    monthlyContribution: "",
+    totalParticipants: "3", // minimum 3 participants required
+    paymentToken: "USDC" as 'USDC' | 'BTC',
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
@@ -86,37 +76,29 @@ const CreateAjo = () => {
       errors.name = "Ajo name is required";
     } else if (formData.name.length < 3) {
       errors.name = "Name must be at least 3 characters";
+    } else if (formData.name.length > 31) {
+      errors.name = "Name must be 31 characters or less (Cairo felt252 limit)";
     }
 
     const cycleDays = parseInt(formData.cycleDuration);
     if (isNaN(cycleDays) || cycleDays < 1) {
       errors.cycleDuration = "Cycle duration must be at least 1 day";
-    } else if (cycleDays > 365) {
-      errors.cycleDuration = "Cycle duration cannot exceed 365 days";
+    } else if (cycleDays > 62) {
+      errors.cycleDuration = "Cycle duration cannot exceed 62 days (Cairo contract limit)";
     }
 
-    const usdcAmount = parseFloat(formData.monthlyPaymentUSDC);
-    const hbarAmount = parseFloat(formData.monthlyPaymentHBAR);
-
-    if (!formData.monthlyPaymentUSDC && !formData.monthlyPaymentHBAR) {
-      errors.monthlyPaymentUSDC = "At least one payment amount is required";
-      errors.monthlyPaymentHBAR = "At least one payment amount is required";
+    const contribution = parseFloat(formData.monthlyContribution);
+    if (!formData.monthlyContribution || isNaN(contribution) || contribution <= 0) {
+      errors.monthlyContribution = "Monthly contribution must be greater than 0";
+    } else if (contribution > 1000000) {
+      errors.monthlyContribution = "Contribution amount is too large";
     }
 
-    if (formData.monthlyPaymentUSDC) {
-      if (isNaN(usdcAmount) || usdcAmount <= 0) {
-        errors.monthlyPaymentUSDC = "USDC amount must be greater than 0";
-      } else if (usdcAmount > 1000000) {
-        errors.monthlyPaymentUSDC = "USDC amount is too large";
-      }
-    }
-
-    if (formData.monthlyPaymentHBAR) {
-      if (isNaN(hbarAmount) || hbarAmount <= 0) {
-        errors.monthlyPaymentHBAR = "HBAR amount must be greater than 0";
-      } else if (hbarAmount > 1000000) {
-        errors.monthlyPaymentHBAR = "HBAR amount is too large";
-      }
+    const participants = parseInt(formData.totalParticipants);
+    if (isNaN(participants) || participants < 3) {
+      errors.totalParticipants = "Must have at least 3 participants (Cairo contract requirement)";
+    } else if (participants > 100) {
+      errors.totalParticipants = "Cannot exceed 100 participants";
     }
 
     setFormErrors(errors);
@@ -125,108 +107,32 @@ const CreateAjo = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!isConnected || !address) {
+      toast.error("Please connect your wallet first");
+      return;
+    }
+
     if (!validateForm()) return;
 
-    setIsSubmitting(true);
-
     try {
-      if (!accountId) throw new Error("Wallet not connected");
+      toast.info("Creating Ajo on Starknet...");
 
-      // Convert form data to contract parameters
-      const cycleDurationSeconds = parseInt(formData.cycleDuration);
-      const monthlyPaymentUSDC = formData.monthlyPaymentUSDC
-        ? Math.floor(parseFloat(formData.monthlyPaymentUSDC) * 1e6)
-        : 0;
-      const monthlyPaymentHBAR = formData.monthlyPaymentHBAR
-        ? Math.floor(parseFloat(formData.monthlyPaymentHBAR) * 1e8)
-        : 0;
+      const result = await createAjo({
+        name: formData.name,
+        monthlyContribution: formData.monthlyContribution,
+        totalParticipants: parseInt(formData.totalParticipants),
+        cycleDuration: parseInt(formData.cycleDuration),
+        paymentToken: formData.paymentToken,
+      });
 
-      // ✅ Phase 1 - Create Ajo Core
-      setCurrentPhase(1);
-      toast.info("Creating Ajo core...");
-
-      const { ajoId, receipt } = await createAjo(
-        formData.name,
-        true, // usesHtsTokens
-        formData.usesScheduledPayments,
-        cycleDurationSeconds,
-        monthlyPaymentUSDC,
-        0
-      );
-
-      console.log("✅ Phase 1 complete. Ajo ID:", ajoId);
-      toast.success("Phase 1: Ajo core created!");
-
-      // ✅ CREATE HCS TOPIC (Frontend operation)
-      toast.info("Creating HCS governance topic...");
-
-      const hcsTopicInfo = await createHcsTopic(formData.name, "testnet");
-
-      console.log("✅ HCS Topic created:", hcsTopicInfo);
-
-      if (hcsTopicInfo.simulated) {
-        toast.warning("Using simulated HCS topic for development");
-      } else {
-        toast.success(`HCS Topic created: ${hcsTopicInfo.topicId}`);
-      }
-
-      // ✅ Phase 2 - Initialize Members + Governance + HCS (Pass topic ID)
-      setCurrentPhase(2);
-      toast.info("Initializing members, governance, and HCS...");
-
-      await initializeAjoPhase2(ajoId, hcsTopicInfo.bytes32TopicId);
-
-      console.log("✅ Phase 2 complete with HCS topic:", hcsTopicInfo.topicId);
-      toast.success("Phase 2: Members & Governance initialized!");
-
-      // ✅ Phase 3 - Initialize Collateral + Payments
-      setCurrentPhase(3);
-      toast.info("Initializing collateral and payments...");
-
-      await initializeAjoPhase3(ajoId);
-
-      console.log("✅ Phase 3 complete");
-      toast.success("Phase 3: Collateral & Payments initialized!");
-
-      // ✅ Phase 4 - Initialize Core + Cross-link
-      setCurrentPhase(4);
-      toast.info("Cross-linking contracts...");
-
-      await initializeAjoPhase4(ajoId);
-
-      console.log("✅ Phase 4 complete");
-      toast.success("Phase 4: Cross-linking complete!");
-
-      // ✅ Phase 5 - Finalize (if using scheduled payments)
-      if (formData.usesScheduledPayments) {
-        setCurrentPhase(5);
-        toast.info("Finalizing with scheduled payments...");
-
-        await initializeAjoPhase5(ajoId);
-
-        console.log("✅ Phase 5 complete - Ajo active");
-        toast.success("Phase 5: Ajo fully initialized!");
-      }
-
-      setIsSubmitting(false);
-      setCurrentPhase(0);
-
+      console.log("✅ Ajo created successfully!", result);
+      
       toast.success(
-        `🎉 Ajo created successfully! ${
-          !hcsTopicInfo.simulated ? `HCS Topic: ${hcsTopicInfo.topicId}` : ""
-        }`
+        `🎉 Ajo created successfully! Transaction: ${result.transactionHash.slice(0, 10)}...`
       );
 
       setShowSuccess(true);
-
-      // Store HCS topic info for later use
-      console.log("Full Ajo Details:", {
-        ajoId,
-        name: formData.name,
-        hcsTopicId: hcsTopicInfo.topicId,
-        hcsTopicIdBytes32: hcsTopicInfo.bytes32TopicId,
-        simulated: hcsTopicInfo.simulated,
-      });
 
       // Reset form after success
       setTimeout(() => {
@@ -234,19 +140,15 @@ const CreateAjo = () => {
         setFormData({
           name: "",
           cycleDuration: "30",
-          monthlyPaymentUSDC: "",
-          monthlyPaymentHBAR: "",
-          usesHtsTokens: true,
-          usesScheduledPayments: true,
+          monthlyContribution: "",
+          totalParticipants: "10",
+          paymentToken: "USDC",
         });
-        // navigate(`/ajo/${ajoId}`);
+        navigate("/dashboard");
       }, 3000);
     } catch (err: any) {
       console.error("Failed to create Ajo:", err);
-      toast.error(err?.message || "Failed to create Ajo.");
-      setCurrentPhase(0);
-    } finally {
-      setIsSubmitting(false);
+      toast.error(err?.message || "Failed to create Ajo. Please try again.");
     }
   };
   return (
@@ -318,32 +220,22 @@ const CreateAjo = () => {
                   </div>
                 )}
 
-                {/* Phase Progress Indicator */}
-                {isSubmitting && currentPhase > 0 && (
+                {/* Loading Indicator */}
+                {loading && (
                   <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
-                        Initialization Progress
+                        Creating Ajo on Starknet
                       </span>
                       <span className="text-sm font-bold text-blue-900 dark:text-blue-100">
-                        Phase {currentPhase}/
-                        {formData.usesScheduledPayments ? 5 : 4}
+                        Processing...
                       </span>
                     </div>
-                    <div className="w-full bg-blue-200 dark:bg-blue-900 rounded-full h-2">
-                      <div
-                        className="bg-blue-600 h-2 rounded-full transition-all duration-500"
-                        style={{
-                          width: `${
-                            (currentPhase /
-                              (formData.usesScheduledPayments ? 5 : 4)) *
-                            100
-                          }%`,
-                        }}
-                      ></div>
+                    <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2">
+                      <div className="bg-blue-600 dark:bg-blue-400 h-2 rounded-full transition-all duration-500 animate-pulse w-full"></div>
                     </div>
                     <p className="text-xs text-blue-800 dark:text-blue-200 mt-2">
-                      Please approve each transaction in your wallet
+                      Please approve the transaction in your wallet
                     </p>
                   </div>
                 )}
@@ -371,7 +263,7 @@ const CreateAjo = () => {
                             ? "border-destructive"
                             : "border-border"
                         }`}
-                        disabled={isSubmitting}
+                        disabled={loading}
                       />
                       {formErrors.name && (
                         <p className="mt-1 text-sm text-destructive flex items-center space-x-1">
@@ -406,7 +298,7 @@ const CreateAjo = () => {
                             ? "border-destructive"
                             : "border-border"
                         }`}
-                        disabled={isSubmitting}
+                        disabled={loading}
                       />
                       {formErrors.cycleDuration && (
                         <p className="mt-1 text-sm text-destructive flex items-center space-x-1">
@@ -420,137 +312,112 @@ const CreateAjo = () => {
                     </div>
                   </div>
 
-                  {/* Payment Amounts */}
+                  {/* Payment Configuration */}
                   <div className="space-y-4">
                     <h3 className="text-lg font-semibold text-card-foreground flex items-center space-x-2">
                       <DollarSign className="w-5 h-5 text-accent" />
-                      <span>Monthly Payment Amounts</span>
+                      <span>Payment Configuration</span>
                     </h3>
 
                     <div className="grid md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-card-foreground mb-2">
-                          USDC Amount
+                          Monthly Contribution *
                         </label>
                         <input
                           type="number"
-                          name="monthlyPaymentUSDC"
-                          value={formData.monthlyPaymentUSDC}
+                          name="monthlyContribution"
+                          value={formData.monthlyContribution}
                           onChange={handleInputChange}
-                          placeholder="0.00"
+                          placeholder="100.00"
                           step="0.01"
                           min="0"
                           className={`w-full px-4 py-3 bg-background border rounded-lg focus:ring-0 outline-none focus:ring-primary focus:border-primary transition-colors text-foreground ${
-                            formErrors.monthlyPaymentUSDC
+                            formErrors.monthlyContribution
                               ? "border-destructive"
                               : "border-border"
                           }`}
-                          disabled={isSubmitting}
+                          disabled={loading}
                         />
-                        {formErrors.monthlyPaymentUSDC && (
+                        {formErrors.monthlyContribution && (
                           <p className="mt-1 text-sm text-destructive flex items-center space-x-1">
                             <AlertCircle className="w-4 h-4" />
-                            <span>{formErrors.monthlyPaymentUSDC}</span>
+                            <span>{formErrors.monthlyContribution}</span>
                           </p>
                         )}
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Amount each member contributes per cycle
+                        </p>
                       </div>
 
-                      {/* <div>
+                      <div>
                         <label className="block text-sm font-medium text-card-foreground mb-2">
-                          HBAR Amount
+                          Payment Token *
                         </label>
-                        <input
-                          type="number"
-                          name="monthlyPaymentHBAR"
-                          value={formData.monthlyPaymentHBAR}
+                        <select
+                          name="paymentToken"
+                          value={formData.paymentToken}
                           onChange={handleInputChange}
-                          placeholder="0.00"
-                          step="0.01"
-                          min="0"
-                          className={`w-full px-4 py-3 bg-background border rounded-lg focus:ring-0 outline-none focus:ring-primary focus:border-primary transition-colors text-foreground ${
-                            formErrors.monthlyPaymentHBAR
-                              ? "border-destructive"
-                              : "border-border"
-                          }`}
-                          disabled={isSubmitting}
-                        />
-                        {formErrors.monthlyPaymentHBAR && (
-                          <p className="mt-1 text-sm text-destructive flex items-center space-x-1">
-                            <AlertCircle className="w-4 h-4" />
-                            <span>{formErrors.monthlyPaymentHBAR}</span>
-                          </p>
-                        )}
-                      </div> */}
+                          className="w-full px-4 py-3 bg-background border border-border rounded-lg focus:ring-0 outline-none focus:ring-primary focus:border-primary transition-colors text-foreground"
+                          disabled={loading}
+                        >
+                          <option value="USDC">USDC</option>
+                          <option value="BTC">BTC</option>
+                        </select>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Token used for contributions
+                        </p>
+                      </div>
                     </div>
-                    {/* <p className="text-xs text-muted-foreground">
-                      * At least one payment amount is required
-                    </p> */}
-                  </div>
 
-                  {/* Options */}
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-card-foreground">
-                      Options
-                    </h3>
-
-                    <div className="space-y-3">
-                      {/* <label className="flex items-center space-x-3 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          name="usesHtsTokens"
-                          checked={formData.usesHtsTokens}
-                          onChange={handleInputChange}
-                          className="w-5 h-5 text-primary border-border rounded focus:ring-primary"
-                          disabled={isSubmitting}
-                        />
-                        <div>
-                          <span className="text-sm font-medium text-card-foreground">
-                            Use HTS Tokens
-                          </span>
-                          <p className="text-xs text-muted-foreground">
-                            Enable Hedera Token Service for payments
-                          </p>
-                        </div>
-                      </label> */}
-
-                      <label className="flex items-center space-x-3 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          name="usesScheduledPayments"
-                          checked={formData.usesScheduledPayments}
-                          onChange={handleInputChange}
-                          className="w-5 h-5 text-primary border-border rounded focus:ring-primary"
-                          disabled={isSubmitting}
-                        />
-                        <div>
-                          <span className="text-sm font-medium text-card-foreground">
-                            Use Scheduled Payments
-                          </span>
-                          <p className="text-xs text-muted-foreground">
-                            Automate payments with Hedera Schedule Service
-                          </p>
-                        </div>
+                    <div>
+                      <label className="block text-sm font-medium text-card-foreground mb-2">
+                        Total Participants *
                       </label>
+                      <input
+                        type="number"
+                        name="totalParticipants"
+                        value={formData.totalParticipants}
+                        onChange={handleInputChange}
+                        placeholder="3"
+                        min="3"
+                        max="100"
+                        className={`w-full px-4 py-3 bg-background border rounded-lg focus:ring-0 outline-none focus:ring-primary focus:border-primary transition-colors text-foreground ${
+                          formErrors.totalParticipants
+                            ? "border-destructive"
+                            : "border-border"
+                        }`}
+                        disabled={loading}
+                      />
+                      {formErrors.totalParticipants && (
+                        <p className="mt-1 text-sm text-destructive flex items-center space-x-1">
+                          <AlertCircle className="w-4 h-4" />
+                          <span>{formErrors.totalParticipants}</span>
+                        </p>
+                      )}
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Maximum number of members in the Ajo
+                      </p>
                     </div>
                   </div>
+
 
                   {/* Submit Button */}
                   <div className="pt-6 border-t border-border">
                     <button
                       type="submit"
-                      disabled={isSubmitting}
+                      disabled={loading || !isConnected}
                       className="w-full bg-primary hover:bg-primary/90 disabled:bg-primary/50 text-primary-foreground px-8 py-4 rounded-lg font-semibold text-lg transition-all hover:scale-105 hover:shadow-lg flex items-center justify-center space-x-2 cursor-pointer disabled:cursor-not-allowed"
                     >
-                      {isSubmitting ? (
+                      {loading ? (
                         <>
                           <div className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin"></div>
-                          <span>
-                            {currentPhase > 0
-                              ? `Processing Phase ${currentPhase}/${
-                                  formData.usesScheduledPayments ? 5 : 4
-                                }...`
-                              : "Creating Ajo..."}
-                          </span>
+                          <span>Creating Ajo on Starknet...</span>
+                        </>
+                      ) : !isConnected ? (
+                        <>
+                          <AlertCircle className="w-5 h-5" />
+                          <span>Connect Wallet to Continue</span>
                         </>
                       ) : (
                         <>

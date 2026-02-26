@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useCallback, useState } from 'react';
-import { Contract, cairo, RpcProvider, CairoCustomEnum } from 'starknet';
-import { useStarknetWallet } from '@/contexts/StarknetWalletContext';
-import { ajoFactoryAbi } from '@/abi/placeholders';
-import { CONTRACT_ADDRESSES } from '@/config/constants';
+import { useCallback, useState } from "react";
+import { Contract, cairo, RpcProvider } from "starknet";
+import { useStarknetWallet } from "@/contexts/StarknetWalletContext";
+import { ajoFactoryAbi } from "@/abi/placeholders";
+import { CONTRACT_ADDRESSES } from "@/config/constants";
 
 /**
  * Hook for interacting with the Ajo Factory Cairo contract
@@ -47,109 +47,57 @@ const useStarknetAjoFactory = () => {
         }
 
         console.log("Creating Ajo with factory at:", factoryAddress);
-        
-        // First, check if the contract is paused
-        try {
-          const checkProvider = getProvider();
-          const checkContract = new Contract(
-            ajoFactoryAbi as any,
-            factoryAddress,
-            checkProvider,
-          );
-          
-          const isPaused = await checkContract.is_paused();
-          console.log("Factory contract paused status:", isPaused);
-          
-          if (isPaused) {
-            throw new Error("The Ajo Factory contract is currently paused. Please contact the administrator to unpause it.");
-          }
-        } catch (pauseCheckError) {
-          console.warn("Could not check paused status:", pauseCheckError);
-          // Continue anyway - might not have is_paused function
-        }
 
-        // Enable the wallet to get the actual account
-        if (!account) {
-          throw new Error('Wallet not connected');
-        }
+        const provider = getProvider();
 
-        // Call enable() to ensure wallet is properly connected
-        await (account as any).enable();
-        
-        // Now get the actual account from the wallet
-        const walletAccount = (account as any).account;
-        
-        if (!walletAccount) {
-          throw new Error('Failed to get wallet account. Please reconnect your wallet.');
-        }
-
-        console.log('Using wallet account:', walletAccount);
-
-        // Create contract instance with the wallet account
+        // Create contract instance
         const factoryContract = new Contract(
           ajoFactoryAbi as any,
           factoryAddress,
-          walletAccount,
+          provider,
         );
+
+        // Connect with account for write operations
+        factoryContract.connect(account as any);
 
         // Convert name to felt252 (short string)
         const nameFelt = cairo.felt(params.name);
 
         // Convert contribution amount to u256 (assuming 6 decimals for USDC)
         const contributionAmount = cairo.uint256(
-          parseFloat(params.monthlyContribution) * 1_000_000
+          parseFloat(params.monthlyContribution) * 1_000_000,
         );
 
         // Convert total participants to u256
         const totalParticipants = cairo.uint256(params.totalParticipants);
 
-        // Convert cycle duration from days to seconds
-        // For u64, pass as string or number - Starknet.js will handle it
-        const cycleDuration = (params.cycleDuration * 24 * 60 * 60).toString();
+        // Convert cycle duration from days to seconds (u64)
+        const cycleDurationSeconds = params.cycleDuration * 24 * 60 * 60;
 
-        // Payment token enum - Starknet.js expects: new CairoCustomEnum({ variant_name: {} })
-        // For enums without data, pass the variant as a property with empty object
-        const paymentToken = params.paymentToken === 'USDC' 
-          ? new CairoCustomEnum({ USDC: {} })
-          : new CairoCustomEnum({ BTC: {} });
+        // Payment token enum: 0 = USDC, 1 = BTC
+        const paymentToken = params.paymentToken === "USDC" ? 0 : 1;
 
-        console.log('Contract call parameters:', {
+        console.log("Contract call parameters:", {
           name: params.name,
           nameFelt,
           contributionAmount,
           totalParticipants,
-          cycleDuration,
+          cycleDurationSeconds,
           paymentToken,
-          paymentTokenVariant: paymentToken.activeVariant(),
         });
 
-        // Try using populate transaction to see the calldata
-        const populatedTx = await factoryContract.populate('create_ajo', [
-          nameFelt,
-          contributionAmount,
-          totalParticipants,
-          cycleDuration,
-          paymentToken
-        ]);
-        
-        console.log('Populated transaction:', populatedTx);
-        console.log('Calldata:', populatedTx.calldata);
-
-        // Execute transaction using the contract instance
-        // Let Starknet.js handle the serialization
+        // Execute transaction
         const result = await factoryContract.create_ajo(
           nameFelt,
           contributionAmount,
           totalParticipants,
-          cycleDuration,
-          paymentToken
+          cycleDurationSeconds,
+          paymentToken,
         );
-        
-        console.log("Transaction result:", result);
+
         console.log("Transaction submitted:", result.transaction_hash);
 
         // Wait for transaction confirmation
-        const provider = getProvider();
         await provider.waitForTransaction(result.transaction_hash);
 
         console.log("Ajo created successfully!");
@@ -160,13 +108,8 @@ const useStarknetAjoFactory = () => {
           transactionHash: result.transaction_hash,
           success: true,
         };
-      } catch (error: any) {
+      } catch (error) {
         console.error("Error creating Ajo:", error);
-        console.error("Error details:", {
-          message: error?.message,
-          code: error?.code,
-          data: error?.data,
-        });
         throw error;
       } finally {
         setLoading(false);

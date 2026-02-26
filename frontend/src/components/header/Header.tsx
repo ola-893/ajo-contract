@@ -29,8 +29,7 @@ const formatStarknetAddress = (address: string): string => {
 };
 
 const Header = () => {
-  const { hbar, usdc, whbar, setHbar, setAddress, setUsdc, setWhbar } =
-    useTokenStore();
+  const { setAddress, setUsdc } = useTokenStore();
   const navigate = useNavigate();
   const location = useLocation();
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -89,9 +88,8 @@ const Header = () => {
     try {
       await disconnectWallet();
       setUsdc("");
-      setWhbar("");
-      setHbar("");
       toast.success("Wallet disconnected");
+      navigate("/");
     } catch (error) {
       console.error("Disconnect failed:", error);
       toast.error("Failed to disconnect wallet");
@@ -242,14 +240,6 @@ const Header = () => {
                             {loadingBalances ? '...' : usdcBalance.formatted}
                           </span>
                         </div>
-                        {/* <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
-                          <span className="text-sm text-muted-foreground">
-                            WHBAR Balance
-                          </span>
-                          <span className="text-lg font-bold text-foreground">
-                            {whbar}
-                          </span>
-                        </div> */}
                         <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
                           <span className="text-sm text-muted-foreground">
                             STRK Balance
@@ -398,21 +388,13 @@ const Header = () => {
                   </div>
 
                   {/* Balances */}
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <div className="bg-background/50 p-3 rounded-lg">
                       <span className="text-xs text-muted-foreground block mb-1">
                         USDC
                       </span>
                       <span className="text-sm font-bold text-foreground">
                         {loadingBalances ? '...' : usdcBalance.formatted}
-                      </span>
-                    </div>
-                    <div className="bg-background/50 p-3 rounded-lg">
-                      <span className="text-xs text-muted-foreground block mb-1">
-                        WHBAR
-                      </span>
-                      <span className="text-sm font-bold text-foreground">
-                        {whbar}
                       </span>
                     </div>
                     <div className="bg-background/50 p-3 rounded-lg">
