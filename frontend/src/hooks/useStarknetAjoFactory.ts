@@ -68,28 +68,11 @@ const useStarknetAjoFactory = () => {
           // Continue anyway - might not have is_paused function
         }
 
-        // Enable the wallet to get the actual account
-        if (!account) {
-          throw new Error('Wallet not connected');
-        }
-
-        // Call enable() to ensure wallet is properly connected
-        await (account as any).enable();
-        
-        // Now get the actual account from the wallet
-        const walletAccount = (account as any).account;
-        
-        if (!walletAccount) {
-          throw new Error('Failed to get wallet account. Please reconnect your wallet.');
-        }
-
-        console.log('Using wallet account:', walletAccount);
-
-        // Create contract instance with the wallet account
+        // Create contract instance with the account
         const factoryContract = new Contract(
           ajoFactoryAbi as any,
           factoryAddress,
-          walletAccount,
+          account,
         );
 
         // Convert name to felt252 (short string)

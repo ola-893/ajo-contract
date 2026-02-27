@@ -2,9 +2,10 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import type { ReactNode } from "react";
 import { connect, disconnect } from "starknetkit";
 import type { StarknetWindowObject } from "starknetkit";
+import { WalletAccount, RpcProvider } from "starknet";
 
 interface StarknetWalletContextType {
-  account: StarknetWindowObject | null;
+  account: WalletAccount | null;
   address: string | null;
   isConnected: boolean;
   isConnecting: boolean;
@@ -13,6 +14,8 @@ interface StarknetWalletContextType {
   chainId: string | null;
 }
 
+const RPC_URL = "https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_7/W7Jx4ZJo0o9FaoLXaNRG4";
+
 const StarknetWalletContext = createContext<
   StarknetWalletContextType | undefined
 >(undefined);
@@ -20,7 +23,7 @@ const StarknetWalletContext = createContext<
 export const StarknetWalletProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
-  const [account, setAccount] = useState<StarknetWindowObject | null>(null);
+  const [account, setAccount] = useState<WalletAccount | null>(null);
   const [address, setAddress] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -36,8 +39,9 @@ export const StarknetWalletProvider: React.FC<{ children: ReactNode }> = ({
         });
 
         if (wallet && connectorData && connectorData.account) {
-          // The wallet object from StarknetKit is already the connected wallet
-          setAccount(wallet as StarknetWindowObject);
+          const provider = new RpcProvider({ nodeUrl: RPC_URL });
+          const walletAccount = new WalletAccount(provider, wallet as StarknetWindowObject);
+          setAccount(walletAccount);
           setAddress(connectorData.account);
           setIsConnected(true);
 
@@ -73,9 +77,9 @@ export const StarknetWalletProvider: React.FC<{ children: ReactNode }> = ({
         );
       }
 
-      // The wallet object from StarknetKit is already the connected wallet
-      // The wallet is a StarknetWindowObject which implements the account interface
-      setAccount(wallet as StarknetWindowObject);
+      const provider = new RpcProvider({ nodeUrl: RPC_URL });
+      const walletAccount = new WalletAccount(provider, wallet as StarknetWindowObject);
+      setAccount(walletAccount);
       setAddress(connectorData.account);
       setIsConnected(true);
 
