@@ -1,21 +1,53 @@
-import { Contract } from 'starknet';
+import { Contract, CairoCustomEnum } from 'starknet';
 import { ABIS } from '../abis/index.js';
 import { waitForTransaction } from '../utils/starknet.js';
 import { colors } from '../utils/formatting.js';
 import { retryWithBackoff } from '../utils/retry.js';
 
+function toU256(v) {
+  return BigInt(v);
+}
+
+function normalizePaymentToken(token) {
+  const value = String(token ?? 'USDC').toUpperCase();
+  return value === 'BTC'
+    ? new CairoCustomEnum({ BTC: {} })
+    : new CairoCustomEnum({ USDC: {} });
+}
+
+function decodeAjoInfo(info, fallbackId = 0) {
+  return {
+    id: Number(info?.id ?? fallbackId),
+    name: info?.config?.name ?? info?.name ?? '',
+    owner: info?.config?.creator ?? info?.owner ?? '',
+    ajo_core: info?.core_address ?? info?.ajo_core ?? '',
+    ajo_members: info?.members_address ?? info?.ajo_members ?? '',
+    ajo_collateral: info?.collateral_address ?? info?.ajo_collateral ?? '',
+    ajo_payments: info?.payments_address ?? info?.ajo_payments ?? '',
+    ajo_governance: info?.governance_address ?? info?.ajo_governance ?? '',
+    ajo_schedule: info?.schedule_address ?? info?.ajo_schedule ?? '',
+    is_initialized: Boolean(info?.is_initialized ?? info?.is_active ?? false),
+    raw: info
+  };
+}
+
+async function executeFactoryStep(account, factory, method, args) {
+  const call = factory.populate(method, args);
+  const tx = await account.execute(call);
+  await waitForTransaction(account.provider, tx.transaction_hash);
+  return tx.transaction_hash;
+}
+
 /**
- * Get factory statistics
- * @param {Contract} factoryContract - Factory contract instance
- * @returns {Promise<Object>} Factory statistics
+ * Get factory statistics.
  */
 export async function getFactoryStats(factoryContract) {
   return await retryWithBackoff(
     async () => {
-      const stats = await factoryContract.get_factory_stats();
+      const total = await factoryContract.get_total_ajos();
       return {
-        totalCreated: Number(stats.total_created || stats[0] || 0),
-        activeCount: Number(stats.active_count || stats[1] || 0)
+        totalCreated: Number(total ?? 0),
+        activeCount: Number(total ?? 0)
       };
     },
     'Get factory stats'
@@ -23,84 +55,103 @@ export async function getFactoryStats(factoryContract) {
 }
 
 /**
- * Create new Ajo group
- * @param {Account} account - Starknet account
- * @param {string} factoryAddress - Factory contract address
- * @param {Object} config - Ajo configuration
- * @returns {Promise<Object>} Created Ajo info
+ * Create and fully deploy an Ajo using phased deployment.
+ * Order: members -> collateral/payments -> governance/schedule -> core.
  */
 export async function createAjo(account, factoryAddress, config) {
   return await retryWithBackoff(
     async () => {
-      const factory = new Contract(ABIS.factory, factoryAddress, account);
-      
-      console.log(colors.dim(`  📝 Creating Ajo with config:`));
-      console.log(colors.dim(`     Name: ${config.name}`));
-      console.log(colors.dim(`     Owner: ${config.owner}`));
-      
-      const call = factory.populate('create_ajo', [
-        config.name,
-        config.owner,
-        config.core_class_hash,
-        config.members_class_hash,
-        config.collateral_class_hash,
-        config.payments_class_hash,
-        config.governance_class_hash,
-        config.schedule_class_hash
+      const factory = new Contract(ABIS.FACTORY_ABI, factoryAddress, account);
+
+      // Optional token registry updates before creating pool instances.
+      if (config.usdcTokenAddress) {
+        console.log(colors.dim('  ⏳ Configuring factory USDC token...'));
+        await executeFactoryStep(account, factory, 'set_usdc_token_address', [
+          config.usdcTokenAddress
+        ]);
+      }
+      if (config.btcTokenAddress) {
+        console.log(colors.dim('  ⏳ Configuring factory BTC token...'));
+        await executeFactoryStep(account, factory, 'set_btc_token_address', [
+          config.btcTokenAddress
+        ]);
+      }
+
+      const name = config.name;
+      const monthlyContribution = toU256(
+        config.monthlyContribution ?? config.monthly_contribution ?? 50_000000
+      );
+      const totalParticipants = toU256(
+        config.totalParticipants ?? config.total_participants ?? 10
+      );
+      const cycleDuration = Number(config.cycleDuration ?? config.cycle_duration ?? 2_592_000);
+      const paymentToken = normalizePaymentToken(config.paymentToken ?? config.payment_token ?? 'USDC');
+
+      console.log(colors.dim('  📝 Creating Ajo with config:'));
+      console.log(colors.dim(`     Name: ${name}`));
+      console.log(colors.dim(`     Monthly: ${monthlyContribution.toString()}`));
+      console.log(colors.dim(`     Participants: ${totalParticipants.toString()}`));
+
+      const beforeTotal = await factory.get_total_ajos();
+      const createCall = factory.populate('create_ajo', [
+        name,
+        monthlyContribution,
+        totalParticipants,
+        cycleDuration,
+        paymentToken
       ]);
-      
-      const tx = await account.execute(call);
-      console.log(colors.dim(`  ⏳ Transaction hash: ${tx.transaction_hash}`));
-      
-      const receipt = await waitForTransaction(account.provider, tx.transaction_hash);
-      
-      // Parse events to get Ajo ID
-      const ajoId = parseAjoCreatedEvent(receipt);
-      
-      return { ajoId, receipt, transactionHash: tx.transaction_hash };
+
+      const createTx = await account.execute(createCall);
+      await waitForTransaction(account.provider, createTx.transaction_hash);
+
+      const ajoId = Number(beforeTotal) + 1;
+
+      const deploymentSteps = [
+        ['deploy_members', [ajoId]],
+        ['deploy_collateral_and_payments', [ajoId]],
+        ['deploy_governance_and_schedule', [ajoId]],
+        ['deploy_core', [ajoId]]
+      ];
+
+      const deploymentTxs = [];
+      for (const [method, args] of deploymentSteps) {
+        console.log(colors.dim(`  ⏳ ${method}...`));
+        const txHash = await executeFactoryStep(account, factory, method, args);
+        deploymentTxs.push({ method, txHash });
+      }
+
+      return {
+        ajoId,
+        transactionHash: createTx.transaction_hash,
+        deploymentTxs
+      };
     },
     'Create Ajo'
   );
 }
 
 /**
- * Get Ajo information by ID
- * @param {Contract} factoryContract - Factory contract instance
- * @param {number} ajoId - Ajo ID
- * @returns {Promise<Object>} Ajo information
+ * Get Ajo information by ID.
  */
 export async function getAjoInfo(factoryContract, ajoId) {
   return await retryWithBackoff(
     async () => {
-      const info = await factoryContract.get_ajo(ajoId);
-      return {
-        id: Number(info.id || info[0] || ajoId),
-        name: info.name || info[1] || '',
-        owner: info.owner || info[2] || '',
-        ajo_core: info.ajo_core || info[3] || '',
-        ajo_members: info.ajo_members || info[4] || '',
-        ajo_collateral: info.ajo_collateral || info[5] || '',
-        ajo_payments: info.ajo_payments || info[6] || '',
-        ajo_governance: info.ajo_governance || info[7] || '',
-        ajo_schedule: info.ajo_schedule || info[8] || '',
-        is_active: info.is_active || info[9] || false
-      };
+      const info = await factoryContract.get_ajo_info(ajoId);
+      return decodeAjoInfo(info, ajoId);
     },
     `Get Ajo info for ID ${ajoId}`
   );
 }
 
 /**
- * Get all Ajos from factory
- * @param {Contract} factoryContract - Factory contract instance
- * @returns {Promise<Array>} Array of all Ajos
+ * Get all Ajos from factory.
  */
 export async function getAllAjos(factoryContract) {
   return await retryWithBackoff(
     async () => {
       const stats = await getFactoryStats(factoryContract);
       const ajos = [];
-      
+
       for (let i = 1; i <= stats.totalCreated; i++) {
         try {
           const ajoInfo = await getAjoInfo(factoryContract, i);
@@ -109,7 +160,7 @@ export async function getAllAjos(factoryContract) {
           console.log(colors.yellow(`  ⚠️ Could not fetch Ajo ${i}: ${error.message}`));
         }
       }
-      
+
       return ajos;
     },
     'Get all Ajos'
@@ -117,51 +168,11 @@ export async function getAllAjos(factoryContract) {
 }
 
 /**
- * Parse AjoCreated event from transaction receipt
- * @param {Object} receipt - Transaction receipt
- * @returns {number} Ajo ID
- */
-function parseAjoCreatedEvent(receipt) {
-  try {
-    // Look for AjoCreated event in the receipt
-    const events = receipt.events || [];
-    
-    for (const event of events) {
-      // Check if this is an AjoCreated event
-      // The event structure may vary, so we check multiple possible formats
-      if (event.keys && event.keys.length > 0) {
-        // The first key is typically the event selector
-        // For AjoCreated, we expect the ajo_id in the data
-        if (event.data && event.data.length > 0) {
-          // Try to extract ajo_id from event data
-          // Typically it's the first data element
-          const ajoId = Number(event.data[0]);
-          if (ajoId > 0) {
-            console.log(colors.dim(`  🎯 Parsed Ajo ID from event: ${ajoId}`));
-            return ajoId;
-          }
-        }
-      }
-    }
-    
-    // If we couldn't parse the event, log a warning and return 0
-    console.log(colors.yellow(`  ⚠️ Could not parse AjoCreated event, returning ID 0`));
-    console.log(colors.dim(`  📋 Receipt events: ${JSON.stringify(events, null, 2)}`));
-    return 0;
-    
-  } catch (error) {
-    console.log(colors.yellow(`  ⚠️ Error parsing event: ${error.message}`));
-    return 0;
-  }
-}
-
-/**
- * Display factory statistics
- * @param {Contract} factoryContract - Factory contract instance
+ * Display factory statistics.
  */
 export async function displayFactoryStats(factoryContract) {
   const stats = await getFactoryStats(factoryContract);
-  
+
   console.log(colors.cyan('\n  📊 Factory Statistics:'));
   console.log(colors.dim(`     Total Created: ${stats.totalCreated}`));
   console.log(colors.dim(`     Active Count:  ${stats.activeCount}`));

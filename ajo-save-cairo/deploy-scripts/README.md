@@ -1,58 +1,75 @@
 # Starknet Deployment Scripts
 
-This directory contains Node.js scripts for declaring and deploying Starknet contracts using starknet.js.
+This directory contains deployment and verification scripts for the AJO Cairo contracts.
 
-## Setup
+## Scripts
 
-Dependencies are already installed. If you need to reinstall:
+- `npm run deploy:sepolia`
+  - Declares all contract classes (Factory, modules, adapters)
+  - Writes `../declared_class_hashes.json`
+  - Deploys `AjoFactory` + adapter contracts
+  - Sets Factory class hashes (and optional token addresses)
+  - Writes `../deployment_info.json`
+  - Exports ABIs to `../deployment_artifacts/abis/`
+
+- `npm run verify:deployment`
+  - Loads `../deployment_info.json` + `../declared_class_hashes.json`
+  - Verifies class hashes exist on-chain
+  - Verifies deployed contracts are accessible
+  - Runs a smoke flow on Factory (`create_ajo` + phased deploy)
+  - Writes `../verification_report.json`
+
+- `npm run smoke:deployed`
+  - Runs BTC-mode smoke test against deployed contracts from `../deployment_info.json`
+  - Creates BTC Ajo and executes phased deployment
+  - Uses test member accounts (`TEST_ACCOUNT_i_*` or `SMOKE_MEMBER_i_*`) for:
+    - token approvals (collateral/payments)
+    - `join_ajo(1)`
+    - `start_ajo` + cycle payment round
+  - Verifies cycle advancement and writes `../smoke_test_report.json`
+
+- `npm run declare-deploy`
+  - Legacy single-contract script for `AjoFactory` only
+
+## Required Environment Variables
+
+- `STARKNET_RPC`
+- `STARKNET_ACCOUNT_ADDRESS`
+- `STARKNET_PRIVATE_KEY`
+
+## Optional Environment Variables
+
+- `STARKNET_NETWORK` (default: `sepolia`)
+- `OWNER_ADDRESS` (default: deployer account)
+- `BRIDGE_RELAYER_ADDRESS` (default: owner)
+- `OP_CAT_VERIFIER_ADDRESS` (default: owner)
+- `USDC_TOKEN_ADDRESS` (optional Factory token registry override)
+- `BTC_TOKEN_ADDRESS` (optional Factory token registry override)
+
+Verification script options:
+
+- `VERIFY_PAYMENT_TOKEN` (`USDC` or `BTC`, default: `USDC`)
+- `VERIFY_MONTHLY_CONTRIBUTION` (default: `1000`)
+- `VERIFY_TOTAL_PARTICIPANTS` (default: `3`)
+- `VERIFY_CYCLE_DURATION` (default: `60`)
+
+Deployed smoke-test options:
+
+- `SMOKE_TOTAL_PARTICIPANTS` (default: `3`, must be `>= 3`)
+- `SMOKE_MONTHLY_CONTRIBUTION` (default: `1000`)
+- `SMOKE_CYCLE_DURATION` (default: `86400`)
+- `SMOKE_BTC_TOKEN_ADDRESS` (optional; if set, updates Factory BTC token before smoke run)
+- Member keys: `TEST_ACCOUNT_1_ADDRESS`/`TEST_ACCOUNT_1_PRIVATE_KEY` ...
+  or `SMOKE_MEMBER_1_ADDRESS`/`SMOKE_MEMBER_1_PRIVATE_KEY` ...
+
+## Typical Flow
 
 ```bash
+cd ajo-save-cairo
+scarb build
+cd deploy-scripts
 npm install
+npm run deploy:sepolia
+npm run verify:deployment
+npm run smoke:deployed
 ```
-
-## Usage
-
-### Declare and Deploy AjoFactory
-
-```bash
-npm run declare-deploy
-```
-
-This script will:
-1. Connect to Starknet Sepolia testnet
-2. Check if the AjoFactory class is already declared
-3. Declare it if not already declared
-4. Deploy the AjoFactory contract with the configured constructor arguments
-5. Save deployment information to `../ajo-save-cairo/factory_deployment.json`
-
-## Configuration
-
-Edit `declare_and_deploy_factory.js` to modify:
-- RPC URL
-- Account address and private key
-- Constructor arguments
-- Contract class file path
-
-## Output
-
-On successful deployment, you'll see:
-- Transaction hashes for declaration and deployment
-- Deployed contract address
-- Links to view the contract on Voyager and Starkscan
-- Deployment info saved to JSON file
-
-## Troubleshooting
-
-If the script fails:
-1. Check your internet connection
-2. Verify the RPC endpoint is accessible
-3. Ensure your account has sufficient STRK for gas fees
-4. Try using Voyager UI as an alternative: https://sepolia.voyager.online/
-
-## Alternative: Voyager UI
-
-If the script doesn't work, use the Voyager UI (recommended):
-1. Declare: https://sepolia.voyager.online/declare-contract
-2. Deploy: https://sepolia.voyager.online/deploy-contract
-
-See `../ajo-save-cairo/DECLARE_AND_DEPLOY_GUIDE.md` for detailed instructions.

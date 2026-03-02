@@ -2,8 +2,15 @@ use starknet::ContractAddress;
 
 #[starknet::interface]
 pub trait IAjoPayments<TContractState> {
+    // Core authorization
+    fn set_authorized_core(ref self: TContractState, core: ContractAddress);
+    fn get_authorized_core(self: @TContractState) -> ContractAddress;
+
     // Payment processing
     fn make_payment(ref self: TContractState, cycle: u256, amount: u256);
+    fn make_payment_for(
+        ref self: TContractState, member: ContractAddress, cycle: u256, amount: u256
+    );
     fn distribute_payout(ref self: TContractState, cycle: u256, recipient: ContractAddress);
 
     // Cycle management
@@ -20,6 +27,7 @@ pub trait IAjoPayments<TContractState> {
     ) -> bool;
     fn get_total_paid(self: @TContractState, member: ContractAddress) -> u256;
     fn get_cycle_contributions(self: @TContractState, cycle: u256) -> u256;
+    fn get_payment_token(self: @TContractState) -> ContractAddress;
 
     // Payout tracking
     fn get_payout_recipient(self: @TContractState, cycle: u256) -> ContractAddress;
@@ -29,4 +37,15 @@ pub trait IAjoPayments<TContractState> {
     fn mark_default(ref self: TContractState, member: ContractAddress, cycle: u256);
     fn is_defaulted(self: @TContractState, member: ContractAddress) -> bool;
     fn seize_past_payments(ref self: TContractState, member: ContractAddress) -> u256;
+
+    // Swap routing
+    fn set_swap_router(ref self: TContractState, router: ContractAddress);
+    fn get_swap_router(self: @TContractState) -> ContractAddress;
+    fn enable_swap(ref self: TContractState);
+    fn disable_swap(ref self: TContractState);
+    fn is_swap_enabled(self: @TContractState) -> bool;
+    fn set_token_preference(ref self: TContractState, token: ContractAddress);
+    fn get_token_preference(
+        self: @TContractState, member: ContractAddress
+    ) -> ContractAddress;
 }

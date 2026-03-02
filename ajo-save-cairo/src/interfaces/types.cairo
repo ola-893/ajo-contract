@@ -8,6 +8,14 @@ pub enum PaymentToken {
     BTC,
 }
 
+// Collateral mode types
+#[derive(Drop, Serde, Copy, starknet::Store, PartialEq)]
+pub enum CollateralMode {
+    #[default]
+    L2Escrow,
+    BTCCommitment,
+}
+
 // Member status
 #[derive(Drop, Serde, Copy, starknet::Store, PartialEq)]
 pub enum MemberStatus {
@@ -37,6 +45,7 @@ pub struct AjoConfig {
     pub total_participants: u256,
     pub cycle_duration: u64,
     pub payment_token: PaymentToken,
+    pub collateral_mode: CollateralMode,
     pub creator: ContractAddress,
 }
 

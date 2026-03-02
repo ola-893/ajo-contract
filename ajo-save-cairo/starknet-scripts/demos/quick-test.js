@@ -53,12 +53,17 @@ async function runQuickTest() {
     console.log(colors.dim(`     USDC:    ${contracts.usdc}\n`));
     
     // Display factory stats
-    const factory = new Contract(ABIS.factory, contracts.factory, account);
+    const factory = new Contract(ABIS.FACTORY_ABI, contracts.factory, account);
     await displayFactoryStats(factory);
     
     // Create test Ajo
     const ajoConfig = {
       name: `QuickTest_${Date.now()}`,
+      monthlyContribution: "50000000",
+      totalParticipants: 10,
+      cycleDuration: 2592000,
+      paymentToken: "USDC",
+      usdcTokenAddress: contracts.usdc,
       owner: account.address,
       core_class_hash: contracts.classHashes.core,
       members_class_hash: contracts.classHashes.members,

@@ -3,6 +3,10 @@ use ajo_save::interfaces::types::{Member, MemberStatus};
 
 #[starknet::interface]
 pub trait IAjoMembers<TContractState> {
+    // Core authorization
+    fn set_authorized_core(ref self: TContractState, core: ContractAddress);
+    fn get_authorized_core(self: @TContractState) -> ContractAddress;
+
     // Member management
     fn add_member(ref self: TContractState, member: ContractAddress, position: u256);
     fn remove_member(ref self: TContractState, member: ContractAddress);

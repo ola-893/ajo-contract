@@ -50,6 +50,11 @@ async function main() {
     
     const { ajoId, ajoInfo } = await setupAjo(account, factoryAddress, {
       name: `Full Cycle Demo ${Date.now()}`,
+      monthlyContribution: "50000000",
+      totalParticipants: 10,
+      cycleDuration: 2592000,
+      paymentToken: "USDC",
+      usdcTokenAddress: usdcAddress,
       owner: account.address,
       core_class_hash: CONTRACTS.sepolia.classHashes.core,
       members_class_hash: CONTRACTS.sepolia.classHashes.members,

@@ -9,6 +9,7 @@
 #[starknet::contract]
 pub mod AjoGovernance {
     use starknet::ContractAddress;
+    use starknet::get_caller_address;
     use starknet::storage::{Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess, StoragePointerWriteAccess};
     use ajo_save::interfaces::i_ajo_governance::{
         IAjoGovernance, Proposal, ProposalType, ProposalStatus
@@ -40,6 +41,7 @@ pub mod AjoGovernance {
         
         // Reference to AjoMembers contract for member verification
         members_contract: ContractAddress,
+        authorized_core: ContractAddress,
         
         // Ownable component
         #[substorage(v0)]
@@ -125,6 +127,7 @@ pub mod AjoGovernance {
         // Validate and set members contract
         assert(!members_contract.is_zero(), Errors::ZERO_ADDRESS);
         self.members_contract.write(members_contract);
+        self.authorized_core.write(owner);
         
         // Validate and set voting period
         assert(voting_period > 0, Errors::INVALID_VOTING_PERIOD);
@@ -141,6 +144,12 @@ pub mod AjoGovernance {
     // These functions are used by execute_proposal to verify if a proposal can be executed
     #[generate_trait]
     impl InternalImpl of InternalTrait {
+        fn assert_only_core(self: @ContractState) {
+            let caller = get_caller_address();
+            let authorized = self.authorized_core.read();
+            assert(caller == authorized, 'Only authorized core');
+        }
+
         /// Check if a proposal has reached quorum
         /// 
         /// Quorum is met when total votes >= (total_members × quorum_percentage / 100)
@@ -196,6 +205,16 @@ pub mod AjoGovernance {
 
     #[abi(embed_v0)]
     impl AjoGovernanceImpl of IAjoGovernance<ContractState> {
+        fn set_authorized_core(ref self: ContractState, core: ContractAddress) {
+            self.ownable.assert_only_owner();
+            assert(!core.is_zero(), Errors::ZERO_ADDRESS);
+            self.authorized_core.write(core);
+        }
+
+        fn get_authorized_core(self: @ContractState) -> ContractAddress {
+            self.authorized_core.read()
+        }
+
         fn create_proposal(
             ref self: ContractState,
             proposal_type: ProposalType,
@@ -364,8 +383,18 @@ pub mod AjoGovernance {
         }
 
         fn cancel_proposal(ref self: ContractState, proposal_id: u256) {
-            // TODO: Implement
-            panic!("Not implemented");
+            let caller = starknet::get_caller_address();
+            let mut proposal = self.proposals.read(proposal_id);
+            assert(proposal.id != 0, Errors::PROPOSAL_NOT_FOUND);
+            assert(proposal.status == ProposalStatus::Active, 'Proposal not active');
+
+            let owner = self.ownable.owner();
+            assert(caller == proposal.proposer || caller == owner, 'Not authorized to cancel');
+
+            proposal.status = ProposalStatus::Cancelled;
+            self.proposals.write(proposal_id, proposal);
+
+            self.emit(ProposalCancelled { proposal_id, canceller: caller });
         }
 
         fn get_proposal(self: @ContractState, proposal_id: u256) -> Proposal {

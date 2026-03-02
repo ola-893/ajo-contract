@@ -12,7 +12,15 @@ pub mod AjoCollateral {
     use starknet::storage::{Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess, StoragePointerWriteAccess};
     use starknet::get_caller_address;
     use starknet::get_contract_address;
+    use core::array::ArrayTrait;
+    use core::num::traits::Zero;
+    use ajo_save::interfaces::types::CollateralMode;
     use ajo_save::interfaces::i_ajo_collateral::IAjoCollateral;
+    use ajo_save::interfaces::i_ajo_core::{IAjoCoreDispatcher, IAjoCoreDispatcherTrait};
+    use ajo_save::interfaces::i_ajo_members::{IAjoMembersDispatcher, IAjoMembersDispatcherTrait};
+    use ajo_save::interfaces::i_btc_collateral_adapter::{
+        IBTCCollateralAdapterDispatcher, IBTCCollateralAdapterDispatcherTrait
+    };
     use ajo_save::components::ownable::OwnableComponent;
     use ajo_save::components::reentrancy_guard::ReentrancyGuardComponent;
 
@@ -54,6 +62,9 @@ pub mod AjoCollateral {
         monthly_contribution: u256,
         total_participants: u256,
         payment_token: ContractAddress,
+        payments_contract: ContractAddress,
+        members_contract: ContractAddress,
+        authorized_core: ContractAddress,
         
         // Constants (60% = 600 basis points out of 1000)
         collateral_factor: u256, // 600 basis points
@@ -72,6 +83,7 @@ pub mod AjoCollateral {
         CollateralDeposited: CollateralDeposited,
         CollateralWithdrawn: CollateralWithdrawn,
         CollateralSeized: CollateralSeized,
+        CollateralSlashed: CollateralSlashed,
         #[flat]
         OwnableEvent: OwnableComponent::Event,
         #[flat]
@@ -99,6 +111,14 @@ pub mod AjoCollateral {
         pub amount: u256,
     }
 
+    #[derive(Drop, starknet::Event)]
+    pub struct CollateralSlashed {
+        #[key]
+        pub member: ContractAddress,
+        pub amount: u256,
+        pub destination: ContractAddress,
+    }
+
     #[constructor]
     fn constructor(
         ref self: ContractState,
@@ -106,6 +126,8 @@ pub mod AjoCollateral {
         monthly_contribution: u256,
         total_participants: u256,
         payment_token: ContractAddress,
+        payments_contract: ContractAddress,
+        members_contract: ContractAddress,
     ) {
         // Initialize Ownable component
         self.ownable.initializer(owner);
@@ -114,6 +136,9 @@ pub mod AjoCollateral {
         self.monthly_contribution.write(monthly_contribution);
         self.total_participants.write(total_participants);
         self.payment_token.write(payment_token);
+        self.payments_contract.write(payments_contract);
+        self.members_contract.write(members_contract);
+        self.authorized_core.write(owner);
         
         // Set constants (60% = 600 basis points out of 1000)
         self.collateral_factor.write(600);
@@ -125,6 +150,16 @@ pub mod AjoCollateral {
 
     #[abi(embed_v0)]
     impl AjoCollateralImpl of IAjoCollateral<ContractState> {
+        fn set_authorized_core(ref self: ContractState, core: ContractAddress) {
+            self.ownable.assert_only_owner();
+            assert(!core.is_zero(), 'Core address is zero');
+            self.authorized_core.write(core);
+        }
+
+        fn get_authorized_core(self: @ContractState) -> ContractAddress {
+            self.authorized_core.read()
+        }
+
         /// Calculate debt for a given position
         /// Formula: Debt(n) = Payout - (n × monthlyContribution)
         /// where Payout = monthlyContribution × totalParticipants
@@ -309,6 +344,7 @@ pub mod AjoCollateral {
         /// # Events
         /// Emits `CollateralDeposited` event
         fn deposit_collateral(ref self: ContractState, amount: u256) {
+            self.assert_only_core();
             // Start reentrancy protection
             self.reentrancy_guard.start();
             
@@ -317,6 +353,22 @@ pub mod AjoCollateral {
             
             // Get caller address
             let caller = get_caller_address();
+
+            let btc_adapter = InternalImpl::get_btc_adapter_if_enabled(@self);
+            if !btc_adapter.is_zero() {
+                let adapter = IBTCCollateralAdapterDispatcher { contract_address: btc_adapter };
+                let mut proof = ArrayTrait::new();
+                proof.append(1);
+                adapter.register_commitment(0, caller, amount, 1, proof.span());
+
+                let current_collateral = self.member_collateral.read(caller);
+                self.member_collateral.write(caller, current_collateral + amount);
+                let current_total = self.total_collateral.read();
+                self.total_collateral.write(current_total + amount);
+                self.emit(CollateralDeposited { member: caller, amount });
+                self.reentrancy_guard.end();
+                return ();
+            }
             
             // Get payment token address
             let token_address = self.payment_token.read();
@@ -350,6 +402,47 @@ pub mod AjoCollateral {
             self.reentrancy_guard.end();
         }
 
+        fn deposit_collateral_for(
+            ref self: ContractState, member: ContractAddress, amount: u256
+        ) {
+            self.assert_only_core();
+            self.reentrancy_guard.start();
+
+            assert(!member.is_zero(), 'Member address is zero');
+            assert(amount > 0, 'Amount must be greater than 0');
+
+            let btc_adapter = InternalImpl::get_btc_adapter_if_enabled(@self);
+            if !btc_adapter.is_zero() {
+                let adapter = IBTCCollateralAdapterDispatcher { contract_address: btc_adapter };
+                let mut proof = ArrayTrait::new();
+                proof.append(1);
+                adapter.register_commitment(0, member, amount, 1, proof.span());
+
+                let current_collateral = self.member_collateral.read(member);
+                self.member_collateral.write(member, current_collateral + amount);
+                let current_total = self.total_collateral.read();
+                self.total_collateral.write(current_total + amount);
+                self.emit(CollateralDeposited { member, amount });
+                self.reentrancy_guard.end();
+                return ();
+            }
+
+            let token_address = self.payment_token.read();
+            let token = IERC20Dispatcher { contract_address: token_address };
+
+            let success = token.transfer_from(member, get_contract_address(), amount);
+            assert(success, 'Token transfer failed');
+
+            let current_collateral = self.member_collateral.read(member);
+            self.member_collateral.write(member, current_collateral + amount);
+
+            let current_total = self.total_collateral.read();
+            self.total_collateral.write(current_total + amount);
+
+            self.emit(CollateralDeposited { member, amount });
+            self.reentrancy_guard.end();
+        }
+
         /// Withdraw collateral for the caller
         /// Transfers ERC20 tokens from this contract back to the caller and updates collateral tracking.
         /// Protected against reentrancy attacks.
@@ -371,6 +464,7 @@ pub mod AjoCollateral {
         /// # Events
         /// Emits `CollateralWithdrawn` event
         fn withdraw_collateral(ref self: ContractState, amount: u256) {
+            self.assert_only_core();
             // Start reentrancy protection
             self.reentrancy_guard.start();
             
@@ -386,6 +480,22 @@ pub mod AjoCollateral {
             
             // Check sufficient balance
             assert(current_collateral >= amount, 'Insufficient collateral balance');
+
+            let btc_adapter = InternalImpl::get_btc_adapter_if_enabled(@self);
+            if !btc_adapter.is_zero() {
+                let adapter = IBTCCollateralAdapterDispatcher { contract_address: btc_adapter };
+                let commitment_id = adapter.get_member_commitment(caller);
+                if commitment_id > 0 {
+                    adapter.release_commitment(commitment_id);
+                }
+
+                self.member_collateral.write(caller, current_collateral - amount);
+                let current_total = self.total_collateral.read();
+                self.total_collateral.write(current_total - amount);
+                self.emit(CollateralWithdrawn { member: caller, amount });
+                self.reentrancy_guard.end();
+                return ();
+            }
             
             // Get payment token address
             let token_address = self.payment_token.read();
@@ -413,9 +523,112 @@ pub mod AjoCollateral {
             self.reentrancy_guard.end();
         }
 
-        // TODO: Implement slash_collateral
+        fn withdraw_collateral_for(
+            ref self: ContractState, member: ContractAddress, amount: u256
+        ) {
+            self.assert_only_core();
+            self.reentrancy_guard.start();
+
+            assert(!member.is_zero(), 'Member address is zero');
+            assert(amount > 0, 'Amount must be greater than 0');
+
+            let current_collateral = self.member_collateral.read(member);
+            assert(current_collateral >= amount, 'Insufficient collateral balance');
+
+            let btc_adapter = InternalImpl::get_btc_adapter_if_enabled(@self);
+            if !btc_adapter.is_zero() {
+                let adapter = IBTCCollateralAdapterDispatcher { contract_address: btc_adapter };
+                let commitment_id = adapter.get_member_commitment(member);
+                if commitment_id > 0 {
+                    adapter.release_commitment(commitment_id);
+                }
+
+                self.member_collateral.write(member, current_collateral - amount);
+                let current_total = self.total_collateral.read();
+                self.total_collateral.write(current_total - amount);
+                self.emit(CollateralWithdrawn { member, amount });
+                self.reentrancy_guard.end();
+                return ();
+            }
+
+            let token_address = self.payment_token.read();
+            let token = IERC20Dispatcher { contract_address: token_address };
+            let success = token.transfer(member, amount);
+            assert(success, 'Token transfer failed');
+
+            self.member_collateral.write(member, current_collateral - amount);
+            let current_total = self.total_collateral.read();
+            self.total_collateral.write(current_total - amount);
+
+            self.emit(CollateralWithdrawn { member, amount });
+            self.reentrancy_guard.end();
+        }
+
+        fn set_payments_contract(
+            ref self: ContractState,
+            payments_contract: ContractAddress
+        ) {
+            self.ownable.assert_only_owner();
+            assert(!payments_contract.is_zero(), 'Payments addr cannot be zero');
+            self.payments_contract.write(payments_contract);
+        }
+
+        fn set_members_contract(
+            ref self: ContractState,
+            members_contract: ContractAddress
+        ) {
+            self.ownable.assert_only_owner();
+            assert(!members_contract.is_zero(), 'Members addr cannot be zero');
+            self.members_contract.write(members_contract);
+        }
+
         fn slash_collateral(ref self: ContractState, member: ContractAddress, amount: u256) {
-            // Placeholder
+            self.assert_only_core();
+            self.reentrancy_guard.start();
+
+            assert(amount > 0, 'Amount must be greater than 0');
+
+            let current_collateral = self.member_collateral.read(member);
+            assert(current_collateral >= amount, 'Insufficient collateral balance');
+
+            let btc_adapter = InternalImpl::get_btc_adapter_if_enabled(@self);
+            if !btc_adapter.is_zero() {
+                let adapter = IBTCCollateralAdapterDispatcher { contract_address: btc_adapter };
+                let commitment_id = adapter.get_member_commitment(member);
+                if commitment_id > 0 {
+                    let mut default_proof = ArrayTrait::new();
+                    default_proof.append(1);
+                    adapter.start_enforcement(commitment_id, default_proof.span());
+                }
+
+                self.member_collateral.write(member, current_collateral - amount);
+                let current_total = self.total_collateral.read();
+                self.total_collateral.write(current_total - amount);
+                self.emit(CollateralSlashed {
+                    member,
+                    amount,
+                    destination: btc_adapter,
+                });
+                self.reentrancy_guard.end();
+                return ();
+            }
+
+            let mut destination = self.payments_contract.read();
+            if destination.is_zero() {
+                destination = self.ownable.owner();
+            }
+
+            let token_address = self.payment_token.read();
+            let token = IERC20Dispatcher { contract_address: token_address };
+            let success = token.transfer(destination, amount);
+            assert(success, 'Token transfer failed');
+
+            self.member_collateral.write(member, current_collateral - amount);
+            let current_total = self.total_collateral.read();
+            self.total_collateral.write(current_total - amount);
+
+            self.emit(CollateralSlashed { member, amount, destination });
+            self.reentrancy_guard.end();
         }
 
         /// Seize collateral from a member (used in default handling)
@@ -440,8 +653,7 @@ pub mod AjoCollateral {
         /// callable by the trusted owner (AjoCore), which already has reentrancy
         /// protection on the handle_default function.
         fn seize_collateral(ref self: ContractState, member: ContractAddress) -> u256 {
-            // Only owner (AjoCore) can seize collateral
-            self.ownable.assert_only_owner();
+            self.assert_only_core();
             
             // Get member's collateral balance
             let collateral_amount = self.member_collateral.read(member);
@@ -450,6 +662,23 @@ pub mod AjoCollateral {
             if collateral_amount == 0 {
                 return 0;
             }
+
+            let btc_adapter = InternalImpl::get_btc_adapter_if_enabled(@self);
+            if !btc_adapter.is_zero() {
+                let adapter = IBTCCollateralAdapterDispatcher { contract_address: btc_adapter };
+                let commitment_id = adapter.get_member_commitment(member);
+                if commitment_id > 0 {
+                    let mut default_proof = ArrayTrait::new();
+                    default_proof.append(1);
+                    adapter.start_enforcement(commitment_id, default_proof.span());
+                }
+
+                self.member_collateral.write(member, 0);
+                let current_total = self.total_collateral.read();
+                self.total_collateral.write(current_total - collateral_amount);
+                self.emit(CollateralSeized { member, amount: collateral_amount });
+                return collateral_amount;
+            }
             
             // Get payment token address
             let token_address = self.payment_token.read();
@@ -457,11 +686,12 @@ pub mod AjoCollateral {
             // Create ERC20 dispatcher for token transfers
             let token = IERC20Dispatcher { contract_address: token_address };
             
-            // Get the owner (payments contract address)
-            // Note: In the actual system, the owner should be AjoCore,
-            // and we should transfer to a payments contract address.
-            // For now, we transfer to the owner as specified in requirements.
-            let payments_contract = self.ownable.owner();
+            // Prefer explicit payments contract destination.
+            // Fall back to owner to avoid fund lock in partially initialized states.
+            let mut payments_contract = self.payments_contract.read();
+            if payments_contract.is_zero() {
+                payments_contract = self.ownable.owner();
+            }
             
             // Transfer collateral to payments contract
             let success = token.transfer(payments_contract, collateral_amount);
@@ -492,9 +722,53 @@ pub mod AjoCollateral {
             self.total_collateral.read()
         }
 
-        // TODO: Implement is_collateral_sufficient
         fn is_collateral_sufficient(self: @ContractState, member: ContractAddress) -> bool {
-            false // Placeholder
+            let members_contract = self.members_contract.read();
+            if members_contract.is_zero() {
+                return false;
+            }
+
+            let members_dispatcher = IAjoMembersDispatcher { contract_address: members_contract };
+            if !members_dispatcher.is_member(member) {
+                return false;
+            }
+
+            let member_data = members_dispatcher.get_member(member);
+            let required = self.calculate_required_collateral(
+                member_data.position,
+                self.monthly_contribution.read(),
+                self.total_participants.read()
+            );
+            let actual = self.member_collateral.read(member);
+
+            actual >= required
+        }
+    }
+
+    #[generate_trait]
+    impl InternalImpl of InternalTrait {
+        fn assert_only_core(self: @ContractState) {
+            let caller = get_caller_address();
+            let authorized = self.authorized_core.read();
+            assert(caller == authorized, 'Only authorized core');
+        }
+
+        fn get_btc_adapter_if_enabled(self: @ContractState) -> ContractAddress {
+            let core_address = self.authorized_core.read();
+            if core_address.is_zero() {
+                return Zero::zero();
+            }
+
+            let core = IAjoCoreDispatcher { contract_address: core_address };
+            let mode = core.get_collateral_mode();
+            let enabled = core.is_btc_commitment_enabled();
+            let adapter = core.get_btc_collateral_adapter();
+
+            if mode == CollateralMode::BTCCommitment && enabled && !adapter.is_zero() {
+                adapter
+            } else {
+                Zero::zero()
+            }
         }
     }
 }

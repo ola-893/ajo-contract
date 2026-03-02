@@ -64,6 +64,11 @@ fn test_full_season_completion() {
     
     let factory = deploy_factory();
     start_cheat_caller_address(factory.contract_address, ADMIN());
+
+    // Deploy mock USDC token and configure factory token registry before module deployment.
+    let token_address = deploy_mock_token("USD Coin", "USDC", 6);
+    let token = IMockERC20Dispatcher { contract_address: token_address };
+    factory.set_usdc_token_address(token_address);
     
     // Create Ajo through factory
     let ajo_id = factory.create_ajo(
@@ -75,20 +80,16 @@ fn test_full_season_completion() {
     );
     
     // Complete 5-phase initialization
-    let core_address = factory.deploy_core(ajo_id);
     let members_address = factory.deploy_members(ajo_id);
     let (collateral_address, payments_address) = factory.deploy_collateral_and_payments(ajo_id);
     let (governance_address, schedule_address) = factory.deploy_governance_and_schedule(ajo_id);
+    let core_address = factory.deploy_core(ajo_id);
     
     // Get dispatchers for all contracts
     let core = IAjoCoreDispatcher { contract_address: core_address };
     let members = IAjoMembersDispatcher { contract_address: members_address };
     let collateral = IAjoCollateralDispatcher { contract_address: collateral_address };
     let payments = IAjoPaymentsDispatcher { contract_address: payments_address };
-    
-    // Deploy mock USDC token
-    let token_address = deploy_mock_token("USD Coin", "USDC", 6);
-    let token = IMockERC20Dispatcher { contract_address: token_address };
     
     // ========================================================================
     // PHASE 2: Join 10 members with correct collateral amounts
@@ -283,10 +284,10 @@ fn test_cannot_start_with_insufficient_members() {
         PaymentToken::USDC
     );
     
-    let core_address = factory.deploy_core(ajo_id);
     factory.deploy_members(ajo_id);
     factory.deploy_collateral_and_payments(ajo_id);
     factory.deploy_governance_and_schedule(ajo_id);
+    let core_address = factory.deploy_core(ajo_id);
     
     let core = IAjoCoreDispatcher { contract_address: core_address };
     
@@ -301,6 +302,10 @@ fn test_cannot_start_with_insufficient_members() {
 fn test_cannot_join_when_full() {
     let factory = deploy_factory();
     start_cheat_caller_address(factory.contract_address, ADMIN());
+
+    let token_address = deploy_mock_token("USD Coin", "USDC", 6);
+    let token = IMockERC20Dispatcher { contract_address: token_address };
+    factory.set_usdc_token_address(token_address);
     
     let ajo_id = factory.create_ajo(
         'FullTest',
@@ -310,15 +315,13 @@ fn test_cannot_join_when_full() {
         PaymentToken::USDC
     );
     
-    let core_address = factory.deploy_core(ajo_id);
     let members_address = factory.deploy_members(ajo_id);
     let (collateral_address, _) = factory.deploy_collateral_and_payments(ajo_id);
     factory.deploy_governance_and_schedule(ajo_id);
+    let core_address = factory.deploy_core(ajo_id);
     
     let core = IAjoCoreDispatcher { contract_address: core_address };
     let collateral = IAjoCollateralDispatcher { contract_address: collateral_address };
-    let token_address = deploy_mock_token("USD Coin", "USDC", 6);
-    let token = IMockERC20Dispatcher { contract_address: token_address };
     
     // Join 10 members
     let all_members = get_all_members();
@@ -359,6 +362,10 @@ fn test_cannot_join_when_full() {
 fn test_cannot_pay_twice_same_cycle() {
     let factory = deploy_factory();
     start_cheat_caller_address(factory.contract_address, ADMIN());
+
+    let token_address = deploy_mock_token("USD Coin", "USDC", 6);
+    let token = IMockERC20Dispatcher { contract_address: token_address };
+    factory.set_usdc_token_address(token_address);
     
     let ajo_id = factory.create_ajo(
         'DuplicatePaymentTest',
@@ -368,14 +375,12 @@ fn test_cannot_pay_twice_same_cycle() {
         PaymentToken::USDC
     );
     
-    let core_address = factory.deploy_core(ajo_id);
     factory.deploy_members(ajo_id);
     factory.deploy_collateral_and_payments(ajo_id);
     factory.deploy_governance_and_schedule(ajo_id);
+    let core_address = factory.deploy_core(ajo_id);
     
     let core = IAjoCoreDispatcher { contract_address: core_address };
-    let token_address = deploy_mock_token("USD Coin", "USDC", 6);
-    let token = IMockERC20Dispatcher { contract_address: token_address };
     
     // Join all 10 members first
     let all_members = get_all_members();

@@ -10,3 +10,4 @@ pub mod collateral;
 pub mod payments;
 pub mod governance;
 pub mod schedule;
+pub mod adapters;

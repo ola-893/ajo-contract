@@ -1,5 +1,5 @@
 use starknet::{ContractAddress, ClassHash};
-use ajo_save::interfaces::types::{AjoConfig, AjoInfo, PaymentToken};
+use ajo_save::interfaces::types::{AjoInfo, PaymentToken};
 
 #[starknet::interface]
 pub trait IAjoFactory<TContractState> {
@@ -41,4 +41,10 @@ pub trait IAjoFactory<TContractState> {
     fn set_payments_class_hash(ref self: TContractState, class_hash: ClassHash);
     fn set_governance_class_hash(ref self: TContractState, class_hash: ClassHash);
     fn set_schedule_class_hash(ref self: TContractState, class_hash: ClassHash);
+
+    // Token configuration
+    fn set_usdc_token_address(ref self: TContractState, token_address: ContractAddress);
+    fn set_btc_token_address(ref self: TContractState, token_address: ContractAddress);
+    fn get_usdc_token_address(self: @TContractState) -> ContractAddress;
+    fn get_btc_token_address(self: @TContractState) -> ContractAddress;
 }

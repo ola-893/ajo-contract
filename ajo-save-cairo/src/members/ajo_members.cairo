@@ -4,10 +4,11 @@
 #[starknet::contract]
 pub mod AjoMembers {
     use starknet::ContractAddress;
+    use starknet::get_caller_address;
     use starknet::storage::{Map, Vec, VecTrait, MutableVecTrait, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess};
     use ajo_save::interfaces::types::{Member, MemberStatus};
     use ajo_save::interfaces::i_ajo_members::IAjoMembers;
-    use ajo_save::components::ownable::{OwnableComponent, IOwnable};
+    use ajo_save::components::ownable::OwnableComponent;
     use core::num::traits::Zero;
 
     // Component declarations
@@ -28,6 +29,7 @@ pub mod AjoMembers {
         
         // Configuration
         total_participants: u256,
+        authorized_core: ContractAddress,
         
         // Components
         #[substorage(v0)]
@@ -93,13 +95,32 @@ pub mod AjoMembers {
         assert(total_participants > 0, Errors::INVALID_TOTAL_PARTICIPANTS);
         self.total_participants.write(total_participants);
         self.member_count.write(0);
+        self.authorized_core.write(owner);
+    }
+
+    #[generate_trait]
+    impl InternalImpl of InternalTrait {
+        fn assert_only_core(self: @ContractState) {
+            let caller = get_caller_address();
+            let authorized = self.authorized_core.read();
+            assert(caller == authorized, 'Only authorized core');
+        }
     }
 
     #[abi(embed_v0)]
     impl AjoMembersImpl of IAjoMembers<ContractState> {
-        fn add_member(ref self: ContractState, member: ContractAddress, position: u256) {
-            // Only owner (AjoCore) can add members
+        fn set_authorized_core(ref self: ContractState, core: ContractAddress) {
             self.ownable.assert_only_owner();
+            assert(!core.is_zero(), Errors::ZERO_ADDRESS);
+            self.authorized_core.write(core);
+        }
+
+        fn get_authorized_core(self: @ContractState) -> ContractAddress {
+            self.authorized_core.read()
+        }
+
+        fn add_member(ref self: ContractState, member: ContractAddress, position: u256) {
+            InternalImpl::assert_only_core(@self);
             
             // Validate member address is not zero
             assert(!member.is_zero(), Errors::ZERO_ADDRESS);
@@ -154,15 +175,51 @@ pub mod AjoMembers {
         }
 
         fn remove_member(ref self: ContractState, member: ContractAddress) {
-            // TODO: Implement in future task
-            panic!("Not implemented");
+            InternalImpl::assert_only_core(@self);
+            assert(!member.is_zero(), Errors::ZERO_ADDRESS);
+
+            let member_data = self.members.entry(member).read();
+            assert(!member_data.address.is_zero(), Errors::MEMBER_NOT_FOUND);
+
+            self.position_to_member.entry(member_data.position).write(Zero::zero());
+
+            self.members.entry(member).write(Member {
+                address: Zero::zero(),
+                position: 0,
+                collateral_deposited: 0,
+                has_received_payout: false,
+                status: MemberStatus::Removed,
+                join_timestamp: 0,
+            });
+
+            let len = self.member_list.len();
+            let mut i: u64 = 0;
+            loop {
+                if i >= len {
+                    break;
+                }
+
+                let listed = self.member_list.at(i).read();
+                if listed == member {
+                    self.member_list.at(i).write(Zero::zero());
+                    break;
+                }
+
+                i += 1;
+            };
+
+            let count = self.member_count.read();
+            if count > 0 {
+                self.member_count.write(count - 1);
+            }
+
+            self.emit(MemberRemoved { member });
         }
 
         fn update_member_status(
             ref self: ContractState, member: ContractAddress, status: MemberStatus
         ) {
-            // Only owner (AjoCore) can update member status
-            self.ownable.assert_only_owner();
+            InternalImpl::assert_only_core(@self);
             
             // Verify member exists
             assert(!member.is_zero(), Errors::ZERO_ADDRESS);
@@ -252,19 +309,23 @@ pub mod AjoMembers {
         }
 
         fn get_all_members(self: @ContractState) -> Span<Member> {
-            let member_count = self.member_count.read();
             let mut members_array: Array<Member> = ArrayTrait::new();
+            let len = self.member_list.len();
             
-            // Iterate through member list and collect all members
-            let mut i: u32 = 0;
+            // Iterate through full list and skip removed/empty entries.
+            let mut i: u64 = 0;
             loop {
-                if i >= member_count.try_into().unwrap() {
+                if i >= len {
                     break;
                 }
                 
-                let member_address = self.member_list.at(i.into()).read();
-                let member_data = self.members.entry(member_address).read();
-                members_array.append(member_data);
+                let member_address = self.member_list.at(i).read();
+                if !member_address.is_zero() {
+                    let member_data = self.members.entry(member_address).read();
+                    if !member_data.address.is_zero() {
+                        members_array.append(member_data);
+                    }
+                }
                 
                 i += 1;
             };
@@ -273,8 +334,7 @@ pub mod AjoMembers {
         }
 
         fn mark_payout_received(ref self: ContractState, member: ContractAddress) {
-            // Only owner (AjoCore) can mark payout received
-            self.ownable.assert_only_owner();
+            InternalImpl::assert_only_core(@self);
             
             // Verify member exists
             assert(!member.is_zero(), Errors::ZERO_ADDRESS);

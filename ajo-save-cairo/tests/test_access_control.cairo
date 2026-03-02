@@ -471,6 +471,8 @@ fn test_collateral_non_core_cannot_seize_collateral() {
     50_000000_u256.serialize(ref calldata); // monthly_contribution
     10_u256.serialize(ref calldata); // total_participants
     contract_address_const::<'token'>().serialize(ref calldata); // payment_token
+    contract_address_const::<'payments'>().serialize(ref calldata); // payments_contract
+    contract_address_const::<'members'>().serialize(ref calldata); // members_contract
     
     let (collateral_address, _) = collateral_class.deploy(@calldata).unwrap();
     let collateral = IAjoCollateralDispatcher { contract_address: collateral_address };

@@ -23,6 +23,10 @@ pub struct ScheduledTask {
 
 #[starknet::interface]
 pub trait IAjoSchedule<TContractState> {
+    // Core authorization
+    fn set_authorized_core(ref self: TContractState, core: ContractAddress);
+    fn get_authorized_core(self: @TContractState) -> ContractAddress;
+
     // Schedule management
     fn schedule_task(
         ref self: TContractState,

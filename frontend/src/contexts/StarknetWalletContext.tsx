@@ -14,7 +14,9 @@ interface StarknetWalletContextType {
   chainId: string | null;
 }
 
-const RPC_URL = "https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_7/W7Jx4ZJo0o9FaoLXaNRG4";
+const RPC_URL =
+  import.meta.env.VITE_STARKNET_RPC_URL ||
+  "https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_7/W7Jx4ZJo0o9FaoLXaNRG4";
 
 const StarknetWalletContext = createContext<
   StarknetWalletContextType | undefined

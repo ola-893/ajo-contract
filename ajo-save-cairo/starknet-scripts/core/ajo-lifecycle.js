@@ -24,7 +24,7 @@ export async function setupAjo(account, factoryAddress, config) {
   
   // Step 2: Verify deployment
   console.log(colors.cyan("  📋 Step 2: Verifying deployment..."));
-  const factory = new Contract(ABIS.factory, factoryAddress, account);
+  const factory = new Contract(ABIS.FACTORY_ABI, factoryAddress, account);
   const ajoInfo = await verifyAjoDeployment(factory, ajoId);
   console.log(colors.green(`  ✅ Ajo contracts deployed\n`));
   
@@ -96,7 +96,7 @@ export async function displayAjoInfo(ajoInfo) {
  * @returns {Contract} Core contract instance
  */
 export function getAjoCoreContract(account, ajoInfo) {
-  return new Contract(ABIS.core, ajoInfo.ajo_core, account);
+  return new Contract(ABIS.CORE_ABI, ajoInfo.ajo_core, account);
 }
 
 /**
@@ -106,7 +106,7 @@ export function getAjoCoreContract(account, ajoInfo) {
  * @returns {Contract} Members contract instance
  */
 export function getAjoMembersContract(account, ajoInfo) {
-  return new Contract(ABIS.members, ajoInfo.ajo_members, account);
+  return new Contract(ABIS.MEMBERS_ABI, ajoInfo.ajo_members, account);
 }
 
 /**
@@ -116,7 +116,7 @@ export function getAjoMembersContract(account, ajoInfo) {
  * @returns {Contract} Payments contract instance
  */
 export function getAjoPaymentsContract(account, ajoInfo) {
-  return new Contract(ABIS.payments, ajoInfo.ajo_payments, account);
+  return new Contract(ABIS.PAYMENTS_ABI, ajoInfo.ajo_payments, account);
 }
 
 /**
@@ -126,7 +126,7 @@ export function getAjoPaymentsContract(account, ajoInfo) {
  * @returns {Contract} Collateral contract instance
  */
 export function getAjoCollateralContract(account, ajoInfo) {
-  return new Contract(ABIS.collateral, ajoInfo.ajo_collateral, account);
+  return new Contract(ABIS.COLLATERAL_ABI, ajoInfo.ajo_collateral, account);
 }
 
 /**
@@ -136,5 +136,5 @@ export function getAjoCollateralContract(account, ajoInfo) {
  * @returns {Contract} Governance contract instance
  */
 export function getAjoGovernanceContract(account, ajoInfo) {
-  return new Contract(ABIS.governance, ajoInfo.ajo_governance, account);
+  return new Contract(ABIS.GOVERNANCE_ABI, ajoInfo.ajo_governance, account);
 }

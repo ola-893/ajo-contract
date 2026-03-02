@@ -6,6 +6,9 @@
   "type": "module",
   "scripts": {
     "declare-deploy": "node declare_and_deploy_factory.js",
+    "deploy:sepolia": "node deploy_testnet_full.js",
+    "verify:deployment": "node verify_deployment.js",
+    "smoke:deployed": "node smoke_test_deployed.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

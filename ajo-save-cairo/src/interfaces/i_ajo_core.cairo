@@ -1,5 +1,5 @@
 use starknet::ContractAddress;
-use ajo_save::interfaces::types::{AjoConfig, Member, AjoStatus, MemberInfo, CycleInfo};
+use ajo_save::interfaces::types::{AjoConfig, AjoStatus, MemberInfo, CycleInfo, CollateralMode};
 
 #[starknet::interface]
 pub trait IAjoCore<TContractState> {
@@ -32,6 +32,15 @@ pub trait IAjoCore<TContractState> {
     fn get_payments_address(self: @TContractState) -> ContractAddress;
     fn get_governance_address(self: @TContractState) -> ContractAddress;
     fn get_schedule_address(self: @TContractState) -> ContractAddress;
+    fn get_payment_token_address(self: @TContractState) -> ContractAddress;
+    fn get_payment_token_decimals(self: @TContractState) -> u8;
+    fn get_bridge_adapter(self: @TContractState) -> ContractAddress;
+    fn is_bridge_enabled(self: @TContractState) -> bool;
+    fn get_swap_router(self: @TContractState) -> ContractAddress;
+    fn is_swap_enabled(self: @TContractState) -> bool;
+    fn get_btc_collateral_adapter(self: @TContractState) -> ContractAddress;
+    fn is_btc_commitment_enabled(self: @TContractState) -> bool;
+    fn get_collateral_mode(self: @TContractState) -> CollateralMode;
 
     // Query functions (aggregate data from all modules)
     fn get_ajo_status(self: @TContractState) -> AjoStatus;
@@ -41,4 +50,24 @@ pub trait IAjoCore<TContractState> {
     // Emergency functions
     fn pause(ref self: TContractState);
     fn unpause(ref self: TContractState);
+
+    // Admin token config
+    fn set_payment_token_address(
+        ref self: TContractState, token_address: ContractAddress, decimals: u8
+    );
+    fn set_bridge_adapter(ref self: TContractState, bridge_adapter: ContractAddress);
+    fn enable_bridge(ref self: TContractState);
+    fn disable_bridge(ref self: TContractState);
+    fn set_swap_router(ref self: TContractState, swap_router: ContractAddress);
+    fn enable_swap(ref self: TContractState);
+    fn disable_swap(ref self: TContractState);
+    fn set_btc_collateral_adapter(
+        ref self: TContractState, btc_collateral_adapter: ContractAddress
+    );
+    fn enable_btc_commitment(ref self: TContractState);
+    fn disable_btc_commitment(ref self: TContractState);
+    fn set_collateral_mode(ref self: TContractState, mode: CollateralMode);
+    fn emergency_disable_bridge(ref self: TContractState);
+    fn emergency_disable_swap(ref self: TContractState);
+    fn emergency_disable_btc_collateral(ref self: TContractState);
 }

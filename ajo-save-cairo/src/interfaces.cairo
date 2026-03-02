@@ -8,3 +8,6 @@ pub mod i_ajo_collateral;
 pub mod i_ajo_payments;
 pub mod i_ajo_governance;
 pub mod i_ajo_schedule;
+pub mod i_bridge_adapter;
+pub mod i_swap_router;
+pub mod i_btc_collateral_adapter;

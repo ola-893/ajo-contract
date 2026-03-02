@@ -3,10 +3,14 @@
 
 #[starknet::contract]
 pub mod AjoPayments {
-    use starknet::{ContractAddress, get_caller_address, get_contract_address};
+    use starknet::{ContractAddress, get_block_timestamp, get_caller_address, get_contract_address};
     use starknet::storage::{Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess, StoragePointerWriteAccess};
+    use core::num::traits::Zero;
     use ajo_save::interfaces::i_ajo_payments::IAjoPayments;
     use ajo_save::interfaces::i_ajo_members::{IAjoMembersDispatcher, IAjoMembersDispatcherTrait};
+    use ajo_save::interfaces::i_swap_router::{
+        ISwapRouterDispatcher, ISwapRouterDispatcherTrait, SwapStatus
+    };
     use ajo_save::components::ownable::OwnableComponent;
     use ajo_save::components::reentrancy_guard::ReentrancyGuardComponent;
 
@@ -22,6 +26,11 @@ pub mod AjoPayments {
             ref self: TContractState,
             sender: ContractAddress,
             recipient: ContractAddress,
+            amount: u256
+        ) -> bool;
+        fn approve(
+            ref self: TContractState,
+            spender: ContractAddress,
             amount: u256
         ) -> bool;
     }
@@ -52,6 +61,10 @@ pub mod AjoPayments {
         total_participants: u256,
         payment_token: ContractAddress,
         members_contract: ContractAddress,
+        swap_router: ContractAddress,
+        recipient_token_preferences: Map<ContractAddress, ContractAddress>,
+        swap_enabled: bool,
+        authorized_core: ContractAddress,
         
         // Components
         #[substorage(v0)]
@@ -105,8 +118,39 @@ pub mod AjoPayments {
         pub amount: u256,
     }
 
+    #[constructor]
+    fn constructor(
+        ref self: ContractState,
+        owner: ContractAddress,
+        monthly_contribution: u256,
+        total_participants: u256,
+        cycle_duration: u64,
+        payment_token: ContractAddress,
+        members_contract: ContractAddress,
+    ) {
+        self.ownable.initializer(owner);
+        self.monthly_contribution.write(monthly_contribution);
+        self.total_participants.write(total_participants);
+        self.cycle_duration.write(cycle_duration);
+        self.payment_token.write(payment_token);
+        self.members_contract.write(members_contract);
+        self.swap_router.write(Zero::zero());
+        self.swap_enabled.write(false);
+        self.authorized_core.write(owner);
+
+        self.current_cycle.write(0);
+        self.cycle_start_time.write(0);
+        self.next_payout_position.write(1);
+    }
+
     #[generate_trait]
     impl InternalImpl of InternalTrait {
+        fn assert_only_core(self: @ContractState) {
+            let caller = get_caller_address();
+            let authorized = self.authorized_core.read();
+            assert(caller == authorized, 'Only authorized core');
+        }
+
         /// Record a payment from a member for a specific cycle
         /// 
         /// # Arguments
@@ -357,32 +401,91 @@ pub mod AjoPayments {
 
     #[abi(embed_v0)]
     impl AjoPaymentsImpl of IAjoPayments<ContractState> {
+        fn set_authorized_core(ref self: ContractState, core: ContractAddress) {
+            self.ownable.assert_only_owner();
+            assert(!core.is_zero(), 'Core address is zero');
+            self.authorized_core.write(core);
+        }
+
+        fn get_authorized_core(self: @ContractState) -> ContractAddress {
+            self.authorized_core.read()
+        }
+
         fn make_payment(ref self: ContractState, cycle: u256, amount: u256) {
             let caller = get_caller_address();
+            InternalImpl::assert_only_core(@self);
             InternalImpl::record_payment(ref self, caller, cycle, amount);
         }
 
+        fn make_payment_for(
+            ref self: ContractState, member: ContractAddress, cycle: u256, amount: u256
+        ) {
+            InternalImpl::assert_only_core(@self);
+            InternalImpl::record_payment(ref self, member, cycle, amount);
+        }
+
         fn distribute_payout(ref self: ContractState, cycle: u256, recipient: ContractAddress) {
+            InternalImpl::assert_only_core(@self);
+
             let monthly = self.monthly_contribution.read();
             let total = self.total_participants.read();
             let payout_amount = monthly * total;
-            InternalImpl::distribute_payout(ref self, recipient, payout_amount);
+            let current_cycle = self.current_cycle.read();
+            assert(cycle == current_cycle, 'Invalid cycle number');
+            assert(InternalImpl::all_members_paid(@self, cycle), 'Not all members paid');
+
+            let pool_token = self.payment_token.read();
+            let preferred_token = self.recipient_token_preferences.read(recipient);
+            let swap_router = self.swap_router.read();
+            let use_swap = self.swap_enabled.read() && !swap_router.is_zero()
+                && !preferred_token.is_zero() && preferred_token != pool_token;
+
+            if use_swap {
+                self.reentrancy_guard.start();
+
+                let token = IERC20Dispatcher { contract_address: pool_token };
+                let approved = token.approve(swap_router, payout_amount);
+                assert(approved, 'Swap approval failed');
+
+                let router = ISwapRouterDispatcher { contract_address: swap_router };
+                let quoted = router.get_quote(pool_token, preferred_token, payout_amount);
+                assert(quoted > 0, 'Invalid swap quote');
+                let deadline = get_block_timestamp() + 300;
+                let request_id = router.execute_swap(
+                    cycle,
+                    recipient,
+                    pool_token,
+                    preferred_token,
+                    payout_amount,
+                    quoted,
+                    deadline
+                );
+
+                let status = router.get_swap_status(request_id);
+                assert(status == SwapStatus::Executed, 'Swap execution failed');
+
+                self.emit(PayoutDistributed { cycle, recipient, amount: payout_amount });
+                self.reentrancy_guard.end();
+            } else {
+                InternalImpl::distribute_payout(ref self, recipient, payout_amount);
+            }
         }
 
         fn start_cycle(ref self: ContractState, cycle_number: u256) {
-            self.ownable.assert_only_owner();
+            InternalImpl::assert_only_core(@self);
             self.current_cycle.write(cycle_number);
             self.cycle_start_time.write(starknet::get_block_timestamp());
             self.next_payout_position.write(1);
         }
 
         fn end_cycle(ref self: ContractState, cycle_number: u256) {
-            self.ownable.assert_only_owner();
+            InternalImpl::assert_only_core(@self);
             // Verify this is the current cycle
             assert(self.current_cycle.read() == cycle_number, 'Invalid cycle number');
         }
 
         fn advance_cycle(ref self: ContractState) {
+            InternalImpl::assert_only_core(@self);
             InternalImpl::advance_cycle(ref self);
         }
 
@@ -412,6 +515,10 @@ pub mod AjoPayments {
             payments_count * monthly
         }
 
+        fn get_payment_token(self: @ContractState) -> ContractAddress {
+            self.payment_token.read()
+        }
+
         fn get_payout_recipient(self: @ContractState, cycle: u256) -> ContractAddress {
             InternalImpl::get_next_recipient(self)
         }
@@ -423,7 +530,7 @@ pub mod AjoPayments {
         }
 
         fn mark_default(ref self: ContractState, member: ContractAddress, cycle: u256) {
-            self.ownable.assert_only_owner();
+            InternalImpl::assert_only_core(@self);
             // Mark member as defaulted - implementation depends on requirements
             // For now, we just verify the member exists
         }
@@ -434,7 +541,44 @@ pub mod AjoPayments {
         }
 
         fn seize_past_payments(ref self: ContractState, member: ContractAddress) -> u256 {
+            InternalImpl::assert_only_core(@self);
             InternalImpl::seize_past_payments(ref self, member)
+        }
+
+        fn set_swap_router(ref self: ContractState, router: ContractAddress) {
+            InternalImpl::assert_only_core(@self);
+            assert(!router.is_zero(), 'Swap router cannot be zero');
+            self.swap_router.write(router);
+        }
+
+        fn get_swap_router(self: @ContractState) -> ContractAddress {
+            self.swap_router.read()
+        }
+
+        fn enable_swap(ref self: ContractState) {
+            InternalImpl::assert_only_core(@self);
+            assert(!self.swap_router.read().is_zero(), 'Swap router not configured');
+            self.swap_enabled.write(true);
+        }
+
+        fn disable_swap(ref self: ContractState) {
+            InternalImpl::assert_only_core(@self);
+            self.swap_enabled.write(false);
+        }
+
+        fn is_swap_enabled(self: @ContractState) -> bool {
+            self.swap_enabled.read()
+        }
+
+        fn set_token_preference(ref self: ContractState, token: ContractAddress) {
+            let caller = get_caller_address();
+            self.recipient_token_preferences.write(caller, token);
+        }
+
+        fn get_token_preference(
+            self: @ContractState, member: ContractAddress
+        ) -> ContractAddress {
+            self.recipient_token_preferences.read(member)
         }
     }
 }

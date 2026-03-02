@@ -1,5 +1,4 @@
 use starknet::ContractAddress;
-use starknet::get_caller_address;
 
 #[starknet::interface]
 pub trait IOwnable<TContractState> {

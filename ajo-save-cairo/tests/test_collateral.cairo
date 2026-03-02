@@ -324,6 +324,8 @@ fn deploy_collateral_contract() -> IAjoCollateralDispatcher {
     monthly_contribution.serialize(ref calldata);
     total_participants.serialize(ref calldata);
     token_address.serialize(ref calldata);
+    contract_address_const::<'PAYMENTS'>().serialize(ref calldata);
+    contract_address_const::<'MEMBERS'>().serialize(ref calldata);
     
     let (contract_address, _) = contract.deploy(@calldata).unwrap();
     

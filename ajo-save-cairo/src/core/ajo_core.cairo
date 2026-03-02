@@ -6,11 +6,14 @@ pub mod AjoCore {
     use starknet::ContractAddress;
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
     use core::num::traits::Zero;
-    use ajo_save::interfaces::types::{AjoConfig, PaymentToken, MemberStatus, AjoStatus, MemberInfo, CycleInfo};
+    use ajo_save::interfaces::types::{AjoConfig, PaymentToken, MemberStatus, AjoStatus, MemberInfo, CycleInfo, CollateralMode};
     use ajo_save::interfaces::i_ajo_core::IAjoCore;
     use ajo_save::interfaces::i_ajo_members::{IAjoMembersDispatcher, IAjoMembersDispatcherTrait};
     use ajo_save::interfaces::i_ajo_collateral::{IAjoCollateralDispatcher, IAjoCollateralDispatcherTrait};
     use ajo_save::interfaces::i_ajo_payments::{IAjoPaymentsDispatcher, IAjoPaymentsDispatcherTrait};
+    use ajo_save::interfaces::i_ajo_governance::{
+        IAjoGovernanceDispatcher, IAjoGovernanceDispatcherTrait, ProposalStatus
+    };
     use ajo_save::components::ownable::{OwnableComponent, IOwnable};
     use ajo_save::components::pausable::{PausableComponent, IPausable};
     use ajo_save::components::reentrancy_guard::ReentrancyGuardComponent;
@@ -39,6 +42,8 @@ pub mod AjoCore {
         total_participants: u256,
         cycle_duration: u64,
         payment_token: PaymentToken,
+        payment_token_address: ContractAddress,
+        payment_token_decimals: u8,
         
         // Module addresses
         members_contract: ContractAddress,
@@ -46,10 +51,19 @@ pub mod AjoCore {
         payments_contract: ContractAddress,
         governance_contract: ContractAddress,
         schedule_contract: ContractAddress,
+        bridge_adapter: ContractAddress,
+        bridge_enabled: bool,
+        swap_router: ContractAddress,
+        swap_enabled: bool,
+        btc_collateral_adapter: ContractAddress,
+        btc_commitment_enabled: bool,
+        collateral_mode: CollateralMode,
         
         // State variables
         is_active: bool,
         current_cycle: u256,
+        initialized: bool,
+        authorized_initializer: ContractAddress,
         
         // Components
         #[substorage(v0)]
@@ -76,6 +90,10 @@ pub mod AjoCore {
         PayoutDistributed: PayoutDistributed,
         DefaultHandled: DefaultHandled,
         MemberExited: MemberExited,
+        AjoFinalized: AjoFinalized,
+        CollateralModeChanged: CollateralModeChanged,
+        AdapterAddressUpdated: AdapterAddressUpdated,
+        FeatureFlagToggled: FeatureFlagToggled,
     }
 
     #[derive(Drop, starknet::Event)]
@@ -158,6 +176,41 @@ pub mod AjoCore {
         pub refund_amount: u256,
     }
 
+    #[derive(Drop, starknet::Event)]
+    pub struct AjoFinalized {
+        #[key]
+        pub ajo_id: u256,
+        pub final_cycle: u256,
+        pub total_members: u256,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    pub struct CollateralModeChanged {
+        pub old_mode: CollateralMode,
+        pub new_mode: CollateralMode,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    pub struct AdapterAddressUpdated {
+        pub adapter_type: felt252,
+        pub adapter_address: ContractAddress,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    pub struct FeatureFlagToggled {
+        pub feature: felt252,
+        pub enabled: bool,
+    }
+
+    #[constructor]
+    fn constructor(ref self: ContractState, factory_address: ContractAddress) {
+        assert(!factory_address.is_zero(), 'Factory address cannot be zero');
+        self.initialized.write(false);
+        self.authorized_initializer.write(factory_address);
+        self.is_active.write(false);
+        self.current_cycle.write(0);
+    }
+
     #[abi(embed_v0)]
     impl AjoCoreImpl of IAjoCore<ContractState> {
         fn initialize(
@@ -169,6 +222,10 @@ pub mod AjoCore {
             governance_address: ContractAddress,
             schedule_address: ContractAddress,
         ) {
+            assert(!self.initialized.read(), 'Already initialized');
+            let caller = starknet::get_caller_address();
+            assert(caller == self.authorized_initializer.read(), 'Unauthorized initializer');
+
             // Validate all module addresses are non-zero
             assert(!members_address.is_zero(), 'Members addr cannot be zero');
             assert(!collateral_address.is_zero(), 'Collateral addr cannot be 0');
@@ -182,6 +239,16 @@ pub mod AjoCore {
             self.total_participants.write(config.total_participants);
             self.cycle_duration.write(config.cycle_duration);
             self.payment_token.write(config.payment_token);
+            match config.payment_token {
+                PaymentToken::USDC => {
+                    self.payment_token_decimals.write(6);
+                },
+                PaymentToken::BTC => {
+                    self.payment_token_decimals.write(8);
+                },
+            };
+            // Token address is configured explicitly by owner post-deploy.
+            self.payment_token_address.write(Zero::zero());
             
             // Store module addresses
             self.members_contract.write(members_address);
@@ -189,10 +256,18 @@ pub mod AjoCore {
             self.payments_contract.write(payments_address);
             self.governance_contract.write(governance_address);
             self.schedule_contract.write(schedule_address);
+            self.bridge_adapter.write(Zero::zero());
+            self.bridge_enabled.write(false);
+            self.swap_router.write(Zero::zero());
+            self.swap_enabled.write(false);
+            self.btc_collateral_adapter.write(Zero::zero());
+            self.btc_commitment_enabled.write(false);
+            self.collateral_mode.write(config.collateral_mode);
 
             // Initialize state variables
             self.is_active.write(false);
             self.current_cycle.write(0);
+            self.initialized.write(true);
 
             // Set owner
             self.ownable.initializer(config.creator);
@@ -215,6 +290,16 @@ pub mod AjoCore {
         fn join_ajo(ref self: ContractState, token_index: u256) {
             // Apply reentrancy protection
             self.reentrancy_guard.start();
+
+            // Validate token selection against configured payment token.
+            match self.payment_token.read() {
+                PaymentToken::USDC => {
+                    assert(token_index == 0, 'Token mismatch: expected USDC');
+                },
+                PaymentToken::BTC => {
+                    assert(token_index == 1, 'Token mismatch: expected BTC');
+                },
+            };
             
             // Verify Ajo is not full
             let members_dispatcher = IAjoMembersDispatcher {
@@ -246,7 +331,7 @@ pub mod AjoCore {
             );
             
             // Deposit collateral (this will transfer tokens from caller)
-            collateral_dispatcher.deposit_collateral(required_collateral);
+            collateral_dispatcher.deposit_collateral_for(caller, required_collateral);
             
             // Get guarantor for event emission
             let guarantor = members_dispatcher.get_guarantor(caller);
@@ -324,7 +409,7 @@ pub mod AjoCore {
             let amount = self.monthly_contribution.read();
             
             // Call AjoPayments.make_payment() to record the payment
-            payments_dispatcher.make_payment(current_cycle, amount);
+            payments_dispatcher.make_payment_for(caller, current_cycle, amount);
             
             // Check if all members have paid for this cycle
             let all_paid = payments_dispatcher.get_cycle_contributions(current_cycle) 
@@ -349,8 +434,25 @@ pub mod AjoCore {
         }
 
         fn process_cycle(ref self: ContractState, cycle_number: u256) {
-            // TODO: Implement
-            panic!("Not implemented");
+            // Only owner (operator) or schedule module can process cycles.
+            let caller = starknet::get_caller_address();
+            let owner = self.ownable.owner();
+            let schedule = self.schedule_contract.read();
+            assert(caller == owner || caller == schedule, 'Unauthorized cycle processor');
+
+            assert(self.is_active.read(), 'Ajo is not active');
+
+            let payments_dispatcher = IAjoPaymentsDispatcher {
+                contract_address: self.payments_contract.read()
+            };
+            let current_cycle = payments_dispatcher.get_current_cycle();
+            assert(cycle_number == current_cycle, 'Cycle mismatch');
+
+            let expected_total = self.monthly_contribution.read() * self.total_participants.read();
+            let total_paid = payments_dispatcher.get_cycle_contributions(cycle_number);
+            assert(total_paid == expected_total, 'Cycle not fully funded');
+
+            self._distribute_payout();
         }
 
         fn handle_default(ref self: ContractState, defaulter: ContractAddress) {
@@ -440,9 +542,6 @@ pub mod AjoCore {
             // Verify member hasn't received payout
             assert(!members_dispatcher.has_received_payout(caller), 'Already received payout');
             
-            // Get member details to determine position
-            let member = members_dispatcher.get_member(caller);
-            
             // Get collateral dispatcher
             let collateral_dispatcher = IAjoCollateralDispatcher {
                 contract_address: self.collateral_contract.read()
@@ -462,7 +561,7 @@ pub mod AjoCore {
             
             // Refund remaining collateral to member
             if refund_amount > 0 {
-                collateral_dispatcher.withdraw_collateral(refund_amount);
+                collateral_dispatcher.withdraw_collateral_for(caller, refund_amount);
             }
             
             // Update member status to Removed
@@ -481,8 +580,26 @@ pub mod AjoCore {
         }
 
         fn finalize_ajo(ref self: ContractState) {
-            // TODO: Implement
-            panic!("Not implemented");
+            self.ownable.assert_only_owner();
+
+            // Finalization is allowed after all payout cycles have completed.
+            // current_cycle starts at 1 when active and increments after payout,
+            // so completion means current_cycle > total_participants.
+            let current_cycle = self.current_cycle.read();
+            let total_participants = self.total_participants.read();
+            assert(current_cycle > total_participants, 'Ajo not completed');
+
+            self.is_active.write(false);
+
+            let members_dispatcher = IAjoMembersDispatcher {
+                contract_address: self.members_contract.read()
+            };
+
+            self.emit(AjoFinalized {
+                ajo_id: self.ajo_id.read(),
+                final_cycle: current_cycle,
+                total_members: members_dispatcher.get_total_members(),
+            });
         }
 
         fn get_config(self: @ContractState) -> AjoConfig {
@@ -492,6 +609,7 @@ pub mod AjoCore {
                 total_participants: self.total_participants.read(),
                 cycle_duration: self.cycle_duration.read(),
                 payment_token: self.payment_token.read(),
+                collateral_mode: self.collateral_mode.read(),
                 creator: self.ownable.owner(),
             }
         }
@@ -522,6 +640,42 @@ pub mod AjoCore {
 
         fn get_schedule_address(self: @ContractState) -> ContractAddress {
             self.schedule_contract.read()
+        }
+
+        fn get_payment_token_address(self: @ContractState) -> ContractAddress {
+            self.payment_token_address.read()
+        }
+
+        fn get_payment_token_decimals(self: @ContractState) -> u8 {
+            self.payment_token_decimals.read()
+        }
+
+        fn get_bridge_adapter(self: @ContractState) -> ContractAddress {
+            self.bridge_adapter.read()
+        }
+
+        fn is_bridge_enabled(self: @ContractState) -> bool {
+            self.bridge_enabled.read()
+        }
+
+        fn get_swap_router(self: @ContractState) -> ContractAddress {
+            self.swap_router.read()
+        }
+
+        fn is_swap_enabled(self: @ContractState) -> bool {
+            self.swap_enabled.read()
+        }
+
+        fn get_btc_collateral_adapter(self: @ContractState) -> ContractAddress {
+            self.btc_collateral_adapter.read()
+        }
+
+        fn is_btc_commitment_enabled(self: @ContractState) -> bool {
+            self.btc_commitment_enabled.read()
+        }
+
+        fn get_collateral_mode(self: @ContractState) -> CollateralMode {
+            self.collateral_mode.read()
         }
 
         fn get_ajo_status(self: @ContractState) -> AjoStatus {
@@ -644,11 +798,181 @@ pub mod AjoCore {
             self.ownable.assert_only_owner();
             self.pausable.unpause();
         }
+
+        fn set_payment_token_address(
+            ref self: ContractState, token_address: ContractAddress, decimals: u8
+        ) {
+            let caller = starknet::get_caller_address();
+            let owner = self.ownable.owner();
+            let initializer = self.authorized_initializer.read();
+            assert(caller == owner || caller == initializer, 'Not authorized');
+            assert(!token_address.is_zero(), 'Token address cannot be zero');
+            assert(decimals > 0, 'Token decimals must be > 0');
+
+            self.payment_token_address.write(token_address);
+            self.payment_token_decimals.write(decimals);
+        }
+
+        fn set_bridge_adapter(ref self: ContractState, bridge_adapter: ContractAddress) {
+            self.ownable.assert_only_owner();
+            assert(!bridge_adapter.is_zero(), 'Bridge adapter cannot be zero');
+            self.bridge_adapter.write(bridge_adapter);
+            self.emit(AdapterAddressUpdated {
+                adapter_type: 'bridge',
+                adapter_address: bridge_adapter,
+            });
+        }
+
+        fn enable_bridge(ref self: ContractState) {
+            self.ownable.assert_only_owner();
+            assert(!self.bridge_adapter.read().is_zero(), 'Bridge adapter not configured');
+            self.bridge_enabled.write(true);
+            self.emit(FeatureFlagToggled { feature: 'bridge', enabled: true });
+        }
+
+        fn disable_bridge(ref self: ContractState) {
+            self.ownable.assert_only_owner();
+            self.bridge_enabled.write(false);
+            self.emit(FeatureFlagToggled { feature: 'bridge', enabled: false });
+        }
+
+        fn set_swap_router(ref self: ContractState, swap_router: ContractAddress) {
+            self.ownable.assert_only_owner();
+            assert(!swap_router.is_zero(), 'Swap router cannot be zero');
+            self.swap_router.write(swap_router);
+            self.emit(AdapterAddressUpdated {
+                adapter_type: 'swap',
+                adapter_address: swap_router,
+            });
+
+            let payments = IAjoPaymentsDispatcher {
+                contract_address: self.payments_contract.read()
+            };
+            payments.set_swap_router(swap_router);
+        }
+
+        fn enable_swap(ref self: ContractState) {
+            self.ownable.assert_only_owner();
+            assert(!self.swap_router.read().is_zero(), 'Swap router not configured');
+            self.swap_enabled.write(true);
+            self.emit(FeatureFlagToggled { feature: 'swap', enabled: true });
+
+            let payments = IAjoPaymentsDispatcher {
+                contract_address: self.payments_contract.read()
+            };
+            payments.enable_swap();
+        }
+
+        fn disable_swap(ref self: ContractState) {
+            self.ownable.assert_only_owner();
+            self.swap_enabled.write(false);
+            self.emit(FeatureFlagToggled { feature: 'swap', enabled: false });
+
+            let payments = IAjoPaymentsDispatcher {
+                contract_address: self.payments_contract.read()
+            };
+            payments.disable_swap();
+        }
+
+        fn set_btc_collateral_adapter(
+            ref self: ContractState, btc_collateral_adapter: ContractAddress
+        ) {
+            self.ownable.assert_only_owner();
+            assert(!btc_collateral_adapter.is_zero(), 'BTC collat adapter zero');
+            self.btc_collateral_adapter.write(btc_collateral_adapter);
+            self.emit(AdapterAddressUpdated {
+                adapter_type: 'btc_collateral',
+                adapter_address: btc_collateral_adapter,
+            });
+        }
+
+        fn enable_btc_commitment(ref self: ContractState) {
+            InternalImpl::assert_governance_approved(@self);
+            assert(
+                !self.btc_collateral_adapter.read().is_zero(),
+                'BTC collat adapter missing'
+            );
+            self.btc_commitment_enabled.write(true);
+            self.emit(FeatureFlagToggled { feature: 'btc_commitment', enabled: true });
+        }
+
+        fn disable_btc_commitment(ref self: ContractState) {
+            InternalImpl::assert_governance_approved(@self);
+            self.btc_commitment_enabled.write(false);
+            self.emit(FeatureFlagToggled { feature: 'btc_commitment', enabled: false });
+        }
+
+        fn set_collateral_mode(ref self: ContractState, mode: CollateralMode) {
+            InternalImpl::assert_governance_approved(@self);
+            let old_mode = self.collateral_mode.read();
+            self.collateral_mode.write(mode);
+            self.emit(CollateralModeChanged { old_mode, new_mode: mode });
+        }
+
+        fn emergency_disable_bridge(ref self: ContractState) {
+            self.ownable.assert_only_owner();
+            self.bridge_enabled.write(false);
+            self.bridge_adapter.write(Zero::zero());
+            self.emit(FeatureFlagToggled { feature: 'bridge', enabled: false });
+            self.emit(AdapterAddressUpdated {
+                adapter_type: 'bridge',
+                adapter_address: Zero::zero(),
+            });
+        }
+
+        fn emergency_disable_swap(ref self: ContractState) {
+            self.ownable.assert_only_owner();
+            self.swap_enabled.write(false);
+            self.swap_router.write(Zero::zero());
+            self.emit(FeatureFlagToggled { feature: 'swap', enabled: false });
+            self.emit(AdapterAddressUpdated {
+                adapter_type: 'swap',
+                adapter_address: Zero::zero(),
+            });
+        }
+
+        fn emergency_disable_btc_collateral(ref self: ContractState) {
+            self.ownable.assert_only_owner();
+            self.btc_commitment_enabled.write(false);
+            self.btc_collateral_adapter.write(Zero::zero());
+            let old_mode = self.collateral_mode.read();
+            self.collateral_mode.write(CollateralMode::L2Escrow);
+
+            self.emit(FeatureFlagToggled { feature: 'btc_commitment', enabled: false });
+            self.emit(AdapterAddressUpdated {
+                adapter_type: 'btc_collateral',
+                adapter_address: Zero::zero(),
+            });
+            self.emit(CollateralModeChanged {
+                old_mode,
+                new_mode: CollateralMode::L2Escrow,
+            });
+        }
     }
 
     // Internal helper functions
     #[generate_trait]
     impl InternalImpl of InternalTrait {
+        fn assert_governance_approved(self: @ContractState) {
+            let governance_address = self.governance_contract.read();
+            assert(!governance_address.is_zero(), 'Governance not configured');
+
+            let caller = starknet::get_caller_address();
+            if caller == governance_address {
+                return ();
+            }
+
+            let owner = self.ownable.owner();
+            assert(caller == owner, 'Only owner or governance');
+
+            let governance = IAjoGovernanceDispatcher { contract_address: governance_address };
+            let total_proposals = governance.get_total_proposals();
+            assert(total_proposals > 0, 'No governance proposal');
+
+            let proposal = governance.get_proposal(total_proposals);
+            assert(proposal.status == ProposalStatus::Executed, 'Governance approval required');
+        }
+
         /// Internal function to distribute payout to the next recipient
         /// Called automatically when all members have paid for the current cycle
         /// 

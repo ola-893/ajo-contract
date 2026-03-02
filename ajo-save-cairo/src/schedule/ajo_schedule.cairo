@@ -9,12 +9,13 @@
 #[starknet::contract]
 pub mod AjoSchedule {
     use starknet::ContractAddress;
+    use starknet::get_caller_address;
     use starknet::storage::Map;
     use core::array::ArrayTrait;
     use core::num::traits::Zero;
     use ajo_save::interfaces::i_ajo_schedule::{IAjoSchedule, ScheduledTask, ScheduleType};
     use ajo_save::interfaces::i_ajo_core::{IAjoCoreDispatcher, IAjoCoreDispatcherTrait};
-    use ajo_save::interfaces::i_ajo_payments::{IAjoPaymentsDispatcher, IAjoPaymentsDispatcherTrait};
+    use ajo_save::interfaces::i_ajo_payments::IAjoPaymentsDispatcherTrait;
     use ajo_save::components::ownable::OwnableComponent;
 
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
@@ -28,6 +29,9 @@ pub mod AjoSchedule {
         // Schedule tracking
         schedule_count: u256,
         schedules: Map<u256, ScheduledTask>,
+        cycle_payment_tasks: Map<u256, u256>,
+        cycle_payout_tasks: Map<u256, u256>,
+        authorized_core: ContractAddress,
         // Components
         #[substorage(v0)]
         ownable: OwnableComponent::Storage,
@@ -69,10 +73,30 @@ pub mod AjoSchedule {
     fn constructor(ref self: ContractState, owner: ContractAddress) {
         self.ownable.initializer(owner);
         self.schedule_count.write(0);
+        self.authorized_core.write(owner);
+    }
+
+    #[generate_trait]
+    impl InternalImpl of InternalTrait {
+        fn assert_only_core(self: @ContractState) {
+            let caller = get_caller_address();
+            let authorized = self.authorized_core.read();
+            assert(caller == authorized, 'Only authorized core');
+        }
     }
 
     #[abi(embed_v0)]
     impl AjoScheduleImpl of IAjoSchedule<ContractState> {
+        fn set_authorized_core(ref self: ContractState, core: ContractAddress) {
+            self.ownable.assert_only_owner();
+            assert(!core.is_zero(), 'Core address is zero');
+            self.authorized_core.write(core);
+        }
+
+        fn get_authorized_core(self: @ContractState) -> ContractAddress {
+            self.authorized_core.read()
+        }
+
         fn schedule_task(
             ref self: ContractState,
             schedule_type: ScheduleType,
@@ -175,8 +199,7 @@ pub mod AjoSchedule {
         }
 
         fn cancel_task(ref self: ContractState, task_id: u256) {
-            // Owner-only access control
-            self.ownable.assert_only_owner();
+            InternalImpl::assert_only_core(@self);
 
             // Get the scheduled task
             let mut task = self.schedules.read(task_id);
@@ -199,15 +222,76 @@ pub mod AjoSchedule {
         }
 
         fn schedule_cycle_payments(ref self: ContractState, cycle: u256, start_time: u64) {
-            // TODO: Implement schedule_cycle_payments
-            panic!("Not implemented");
+            InternalImpl::assert_only_core(@self);
+
+            let current_time = starknet::get_block_timestamp();
+            assert(start_time >= current_time, 'Start time must be future');
+
+            let core_address = self.authorized_core.read();
+            assert(!core_address.is_zero(), 'Core not configured');
+
+            let core = IAjoCoreDispatcher { contract_address: core_address };
+            let config = core.get_config();
+            let execution_time = start_time + config.cycle_duration;
+
+            let task_id = self.schedule_count.read() + 1;
+            self.schedule_count.write(task_id);
+
+            let cycle_as_felt: felt252 = cycle.try_into().unwrap();
+            let task = ScheduledTask {
+                id: task_id,
+                schedule_type: ScheduleType::Payout,
+                execution_time,
+                target: core_address,
+                calldata: cycle_as_felt,
+                is_executed: false,
+                is_cancelled: false,
+            };
+
+            self.schedules.write(task_id, task);
+            self.cycle_payment_tasks.write(cycle, task_id);
+            self.emit(TaskScheduled {
+                task_id,
+                schedule_type: ScheduleType::Payout,
+                execution_time,
+                target: core_address,
+            });
         }
 
         fn schedule_payout(
             ref self: ContractState, cycle: u256, recipient: ContractAddress, payout_time: u64
         ) {
-            // TODO: Implement schedule_payout
-            panic!("Not implemented");
+            InternalImpl::assert_only_core(@self);
+
+            let current_time = starknet::get_block_timestamp();
+            assert(payout_time > current_time, 'Payout time must be future');
+            assert(!recipient.is_zero(), 'Recipient cannot be zero');
+
+            let core_address = self.authorized_core.read();
+            assert(!core_address.is_zero(), 'Core not configured');
+
+            let task_id = self.schedule_count.read() + 1;
+            self.schedule_count.write(task_id);
+
+            let cycle_as_felt: felt252 = cycle.try_into().unwrap();
+            let task = ScheduledTask {
+                id: task_id,
+                schedule_type: ScheduleType::Payout,
+                execution_time: payout_time,
+                target: core_address,
+                calldata: cycle_as_felt,
+                is_executed: false,
+                is_cancelled: false,
+            };
+
+            self.schedules.write(task_id, task);
+            self.cycle_payout_tasks.write(cycle, task_id);
+            self.emit(TaskScheduled {
+                task_id,
+                schedule_type: ScheduleType::Payout,
+                execution_time: payout_time,
+                target: core_address,
+            });
         }
 
         fn get_task(self: @ContractState, task_id: u256) -> ScheduledTask {
@@ -265,9 +349,30 @@ pub mod AjoSchedule {
         }
 
         fn get_next_execution_time(self: @ContractState) -> u64 {
-            // TODO: Implement get_next_execution_time
-            panic!("Not implemented");
-            0_u64
+            let total_tasks = self.schedule_count.read();
+            if total_tasks == 0 {
+                return 0;
+            }
+
+            let mut task_id: u256 = 1;
+            let mut next_time: u64 = 0;
+
+            loop {
+                if task_id > total_tasks {
+                    break;
+                }
+
+                let task = self.schedules.read(task_id);
+                if task.id != 0 && !task.is_executed && !task.is_cancelled {
+                    if next_time == 0 || task.execution_time < next_time {
+                        next_time = task.execution_time;
+                    }
+                }
+
+                task_id += 1;
+            };
+
+            next_time
         }
     }
 }

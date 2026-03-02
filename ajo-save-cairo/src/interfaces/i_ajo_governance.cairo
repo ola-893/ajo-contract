@@ -36,6 +36,10 @@ pub struct Proposal {
 
 #[starknet::interface]
 pub trait IAjoGovernance<TContractState> {
+    // Core authorization
+    fn set_authorized_core(ref self: TContractState, core: ContractAddress);
+    fn get_authorized_core(self: @TContractState) -> ContractAddress;
+
     // Proposal creation
     fn create_proposal(
         ref self: TContractState,

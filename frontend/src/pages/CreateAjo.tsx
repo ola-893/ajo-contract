@@ -23,7 +23,7 @@ const CreateAjo = () => {
   const navigate = useNavigate();
   const [isVisible, setIsVisible] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const { createAjo, deployAjoContracts, loading } = useStarknetAjoFactory();
+  const { createAjo, loading } = useStarknetAjoFactory();
   const { address, isConnected } = useStarknetWallet();
 
   // Form state - Updated for Starknet
@@ -129,7 +129,7 @@ const CreateAjo = () => {
       console.log("✅ Ajo created successfully!", result);
       
       toast.success(
-        `🎉 Ajo created successfully! Transaction: ${result.transactionHash.slice(0, 10)}...`
+        `🎉 Ajo #${result.ajoId} created successfully! Tx: ${result.transactionHash.slice(0, 10)}...`
       );
 
       setShowSuccess(true);
@@ -141,7 +141,7 @@ const CreateAjo = () => {
           name: "",
           cycleDuration: "30",
           monthlyContribution: "",
-          totalParticipants: "10",
+          totalParticipants: "3",
           paymentToken: "USDC",
         });
         navigate("/dashboard");

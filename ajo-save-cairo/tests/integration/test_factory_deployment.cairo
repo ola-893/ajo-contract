@@ -121,40 +121,43 @@ fn test_complete_5_phase_initialization() {
     let zero_address: ContractAddress = starknet::contract_address_const::<0>();
     assert(ajo_info_phase1.core_address == zero_address, 'Core should be zero');
     
-    // Phase 2: Deploy core orchestration contract
-    let core_address = factory.deploy_core(ajo_id);
-    assert(core_address.is_non_zero(), 'Core not deployed');
-    
-    // Verify Phase 2 completed correctly
-    let ajo_info_phase2 = factory.get_ajo_info(ajo_id);
-    assert(ajo_info_phase2.core_address == core_address, 'Core address not updated');
-    assert(ajo_info_phase2.members_address == zero_address, 'Members should still be zero');
-    
-    // Phase 3: Deploy members management contract
+    // Phase 2: Deploy members management contract
     let members_address = factory.deploy_members(ajo_id);
     assert(members_address.is_non_zero(), 'Members not deployed');
     
-    // Verify Phase 3 completed correctly
-    let ajo_info_phase3 = factory.get_ajo_info(ajo_id);
-    assert(ajo_info_phase3.members_address == members_address, 'Members address not updated');
-    assert(ajo_info_phase3.collateral_address == zero_address, 'Collateral should still be zero');
+    // Verify Phase 2 completed correctly
+    let ajo_info_phase2 = factory.get_ajo_info(ajo_id);
+    assert(ajo_info_phase2.members_address == members_address, 'Members address not updated');
+    assert(ajo_info_phase2.collateral_address == zero_address, 'Collateral should still be zero');
+    assert(ajo_info_phase2.core_address == zero_address, 'Core should still be zero');
     
-    // Phase 4: Deploy collateral and payments contracts
+    // Phase 3: Deploy collateral and payments contracts
     let (collateral_address, payments_address) = factory.deploy_collateral_and_payments(ajo_id);
     assert(collateral_address.is_non_zero(), 'Collateral not deployed');
     assert(payments_address.is_non_zero(), 'Payments not deployed');
     
-    // Verify Phase 4 completed correctly
-    let ajo_info_phase4 = factory.get_ajo_info(ajo_id);
-    assert(ajo_info_phase4.collateral_address == collateral_address, 'Collateral address not updated');
-    assert(ajo_info_phase4.payments_address == payments_address, 'Payments address not updated');
-    assert(ajo_info_phase4.governance_address == zero_address, 'Governance should still be zero');
-    assert(!ajo_info_phase4.is_initialized, 'Should not be initialized yet');
+    // Verify Phase 3 completed correctly
+    let ajo_info_phase3 = factory.get_ajo_info(ajo_id);
+    assert(ajo_info_phase3.collateral_address == collateral_address, 'Collateral address not updated');
+    assert(ajo_info_phase3.payments_address == payments_address, 'Payments address not updated');
+    assert(ajo_info_phase3.governance_address == zero_address, 'Governance should still be zero');
+    assert(!ajo_info_phase3.is_initialized, 'Should not be initialized yet');
     
-    // Phase 5: Deploy governance and schedule contracts
+    // Phase 4: Deploy governance and schedule contracts
     let (governance_address, schedule_address) = factory.deploy_governance_and_schedule(ajo_id);
     assert(governance_address.is_non_zero(), 'Governance not deployed');
     assert(schedule_address.is_non_zero(), 'Schedule not deployed');
+
+    // Verify Phase 4 completed correctly (core still pending)
+    let ajo_info_phase4 = factory.get_ajo_info(ajo_id);
+    assert(ajo_info_phase4.governance_address == governance_address, 'Governance address not updated');
+    assert(ajo_info_phase4.schedule_address == schedule_address, 'Schedule address not updated');
+    assert(ajo_info_phase4.core_address == zero_address, 'Core should still be zero');
+    assert(!ajo_info_phase4.is_initialized, 'Should not be initialized yet');
+
+    // Phase 5: Deploy core orchestration contract (triggers final init + ownership handover)
+    let core_address = factory.deploy_core(ajo_id);
+    assert(core_address.is_non_zero(), 'Core not deployed');
     
     // Verify all module contracts deployed with correct addresses
     let ajo_info = factory.get_ajo_info(ajo_id);
@@ -217,10 +220,10 @@ fn test_ajo_core_can_call_child_contracts() {
         PaymentToken::USDC
     );
     
-    let core_address = factory.deploy_core(ajo_id);
     let members_address = factory.deploy_members(ajo_id);
     let (collateral_address, payments_address) = factory.deploy_collateral_and_payments(ajo_id);
     let (governance_address, schedule_address) = factory.deploy_governance_and_schedule(ajo_id);
+    let core_address = factory.deploy_core(ajo_id);
     
     // Get AjoCore dispatcher
     let core = IAjoCoreDispatcher { contract_address: core_address };
@@ -280,10 +283,10 @@ fn test_multiple_ajo_deployments() {
         CYCLE_DURATION,
         PaymentToken::USDC
     );
-    factory.deploy_core(ajo_id_1);
     factory.deploy_members(ajo_id_1);
     factory.deploy_collateral_and_payments(ajo_id_1);
     factory.deploy_governance_and_schedule(ajo_id_1);
+    factory.deploy_core(ajo_id_1);
     
     // Create second Ajo
     let ajo_id_2 = factory.create_ajo(
@@ -293,10 +296,10 @@ fn test_multiple_ajo_deployments() {
         CYCLE_DURATION,
         PaymentToken::USDC
     );
-    factory.deploy_core(ajo_id_2);
     factory.deploy_members(ajo_id_2);
     factory.deploy_collateral_and_payments(ajo_id_2);
     factory.deploy_governance_and_schedule(ajo_id_2);
+    factory.deploy_core(ajo_id_2);
     
     // Verify both Ajos are tracked
     assert(factory.get_total_ajos() == 2, 'Total ajos should be 2');
@@ -402,4 +405,3 @@ fn test_zero_contribution() {
         PaymentToken::USDC
     );
 }
-
