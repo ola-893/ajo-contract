@@ -11,10 +11,14 @@ const useStarknetAjoMembers = (ajoMembersAddress: string) => {
   const { account, isConnected } = useStarknetWallet();
   const [loading, setLoading] = useState(false);
 
+  const RPC_URL =
+    import.meta.env.VITE_STARKNET_RPC_URL ||
+    "https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_7/W7Jx4ZJo0o9FaoLXaNRG4";
+
   // Create provider instance
   const getProvider = () => {
     return new RpcProvider({
-      nodeUrl: "https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_7/W7Jx4ZJo0o9FaoLXaNRG4"
+      nodeUrl: RPC_URL
     });
   };
 
@@ -165,12 +169,41 @@ const useStarknetAjoMembers = (ajoMembersAddress: string) => {
     }
   }, [ajoMembersAddress]);
 
+  /**
+   * Check if address is a member
+   */
+  const isMember = useCallback(
+    async (memberAddress: string) => {
+      if (!ajoMembersAddress) {
+        throw new Error("Contract address not available");
+      }
+
+      try {
+        const provider = getProvider();
+        const membersContract = new Contract(
+          ajoMembersAbi as any,
+          ajoMembersAddress,
+          provider
+        );
+
+        const result = await membersContract.is_member(memberAddress);
+        console.log("Is member:", result);
+        return result;
+      } catch (error) {
+        console.error("Error checking member status:", error);
+        throw error;
+      }
+    },
+    [ajoMembersAddress]
+  );
+
   return {
     // View functions
     getAllMembers,
     getMember,
     getTotalMembers,
     getMemberCount,
+    isMember,
     
     // Write functions
     addMember,

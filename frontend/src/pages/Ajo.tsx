@@ -140,14 +140,20 @@ const Ajo = () => {
             ) : (
               userAjos.map((ajo, index) => (
                 <div
-                  key={index}
+                  key={typeof ajo === "object" ? ajo?.id ?? index : ajo}
                   className={`bg-card/60 rounded-xl shadow-sm border border-border/30 p-6 transition-all duration-700 cursor-pointer hover:shadow-md hover:border-primary/30 ${
                     isVisible
                       ? "opacity-100 translate-y-0"
                       : "opacity-0 translate-y-10"
                   }`}
                   style={{ transitionDelay: `${400 + index * 150}ms` }}
-                  onClick={() => navigate(`/ajo/${index}`)}
+                  onClick={() =>
+                    navigate(
+                      `/ajo/${
+                        typeof ajo === "object" ? (ajo?.id ?? index + 1) : ajo
+                      }`,
+                    )
+                  }
                 >
                   <div className="flex items-start justify-between mb-4">
                     <div>

@@ -7,10 +7,26 @@ import {
 
 interface AjoDetailsStatsGridProps {
   isVisible: boolean;
+  monthlyPayment?: number | null;
+  memberCount?: number;
+  totalParticipants?: number;
 }
 
-const AjoDetailsStatsGrid = ({ isVisible }: AjoDetailsStatsGridProps) => {
-  // TODO: Integrate real data from Starknet contracts
+const AjoDetailsStatsGrid = ({
+  isVisible,
+  monthlyPayment = null,
+  memberCount = 0,
+  totalParticipants = 10,
+}: AjoDetailsStatsGridProps) => {
+  const paymentAmount =
+    monthlyPayment !== null && monthlyPayment !== undefined
+      ? `$${monthlyPayment.toFixed(2)}`
+      : "$1.00";
+
+  const poolValue =
+    monthlyPayment !== null && monthlyPayment !== undefined
+      ? `$${(monthlyPayment * totalParticipants).toFixed(2)}`
+      : "$0.00";
 
   return (
     <div
@@ -26,7 +42,7 @@ const AjoDetailsStatsGrid = ({ isVisible }: AjoDetailsStatsGridProps) => {
           <span className="text-xs text-muted-foreground">Monthly</span>
         </div>
         <div className="text-lg md:text-2xl font-bold text-card-foreground">
-          --
+          {paymentAmount}
         </div>
         <div className="text-sm text-muted-foreground">Payment Amount</div>
       </div>
@@ -39,7 +55,7 @@ const AjoDetailsStatsGrid = ({ isVisible }: AjoDetailsStatsGridProps) => {
           <span className="text-xs text-muted-foreground">Progress</span>
         </div>
         <div className="text-lg md:text-2xl font-bold text-card-foreground">
-          --/--
+          {memberCount}/{totalParticipants}
         </div>
         <div className="text-sm text-muted-foreground">Members</div>
       </div>
@@ -52,7 +68,7 @@ const AjoDetailsStatsGrid = ({ isVisible }: AjoDetailsStatsGridProps) => {
           <span className="text-xs text-muted-foreground">Total</span>
         </div>
         <div className="text-lg md:text-2xl font-bold text-card-foreground">
-          --
+          {poolValue}
         </div>
         <div className="text-sm text-muted-foreground">Pool Value</div>
       </div>
@@ -64,9 +80,9 @@ const AjoDetailsStatsGrid = ({ isVisible }: AjoDetailsStatsGridProps) => {
           </div>
         </div>
         <div className="text-lg md:text-2xl font-bold text-card-foreground">
-          --
+          0x0000...0000
         </div>
-        <div className="text-sm text-muted-foreground">Current Cycle</div>
+        <div className="text-sm text-muted-foreground">Guarantor address</div>
       </div>
     </div>
   );

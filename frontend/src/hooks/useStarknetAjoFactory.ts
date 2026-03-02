@@ -1,6 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useCallback, useState } from "react";
-import { Contract, cairo, RpcProvider, CairoCustomEnum } from "starknet";
+import {
+  Contract,
+  cairo,
+  RpcProvider,
+  CairoCustomEnum,
+  shortString,
+} from "starknet";
 import { useStarknetWallet } from "@/contexts/StarknetWalletContext";
 import { ajoFactoryAbi } from "@/abi/placeholders";
 import { CONTRACT_ADDRESSES } from "@/config/constants";
@@ -15,6 +21,30 @@ const PHASE_METHODS = [
   "deploy_governance_and_schedule",
   "deploy_core",
 ] as const;
+
+export type AjoPaymentToken = "USDC" | "BTC";
+
+export interface StarknetAjoConfig {
+  name: string;
+  monthlyContribution: bigint;
+  totalParticipants: number;
+  cycleDuration: number;
+  paymentToken: AjoPaymentToken;
+  creator: string;
+}
+
+export interface StarknetAjoInfo {
+  id: number;
+  config: StarknetAjoConfig;
+  coreAddress: string;
+  membersAddress: string;
+  collateralAddress: string;
+  paymentsAddress: string;
+  governanceAddress: string;
+  scheduleAddress: string;
+  isInitialized: boolean;
+  createdAt: number;
+}
 
 const parseTokenAmountToUnits = (amount: string, decimals: number): bigint => {
   const normalized = amount.trim();
@@ -33,6 +63,152 @@ const buildPaymentTokenEnum = (token: "USDC" | "BTC") =>
   token === "BTC"
     ? new CairoCustomEnum({ BTC: {} })
     : new CairoCustomEnum({ USDC: {} });
+
+const toBigIntValue = (value: any): bigint => {
+  if (value === undefined || value === null) return 0n;
+  if (typeof value === "bigint") return value;
+  if (typeof value === "number") return BigInt(Math.trunc(value));
+  if (typeof value === "string") {
+    if (!value.trim()) return 0n;
+    return BigInt(value);
+  }
+
+  if (typeof value === "object" && "low" in value) {
+    const low = BigInt((value as any).low ?? 0);
+    const high = BigInt((value as any).high ?? 0);
+    return low + (high << 128n);
+  }
+
+  if (typeof value?.toString === "function") {
+    const text = value.toString();
+    if (!text || text === "[object Object]") return 0n;
+    return BigInt(text);
+  }
+
+  return 0n;
+};
+
+const toNumberValue = (value: any): number => Number(toBigIntValue(value));
+
+const toHexAddress = (value: any): string => {
+  if (typeof value === "string") {
+    if (value.startsWith("0x")) return value.toLowerCase();
+    try {
+      return `0x${BigInt(value).toString(16)}`;
+    } catch {
+      return value;
+    }
+  }
+
+  return `0x${toBigIntValue(value).toString(16)}`;
+};
+
+const decodeFeltToString = (value: any): string => {
+  if (typeof value === "string" && !value.startsWith("0x")) return value;
+
+  const hex =
+    typeof value === "string" && value.startsWith("0x")
+      ? value
+      : `0x${toBigIntValue(value).toString(16)}`;
+
+  try {
+    return shortString.decodeShortString(hex);
+  } catch {
+    return hex;
+  }
+};
+
+const parsePaymentToken = (value: any): AjoPaymentToken => {
+  if (typeof value === "string") {
+    return value.toUpperCase() === "BTC" ? "BTC" : "USDC";
+  }
+  if (typeof value === "number") {
+    return value === 1 ? "BTC" : "USDC";
+  }
+  if (typeof value === "object" && value !== null) {
+    if ("BTC" in value) return "BTC";
+    if ("USDC" in value) return "USDC";
+    const keys = Object.keys(value);
+    if (keys.includes("BTC")) return "BTC";
+    if (keys.includes("USDC")) return "USDC";
+  }
+  return "USDC";
+};
+
+const parseBool = (value: any): boolean => {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1;
+  if (typeof value === "string") return value === "1" || value === "true";
+  if (typeof value === "object" && value !== null) {
+    if ("True" in value || "true" in value) return true;
+    if ("False" in value || "false" in value) return false;
+  }
+  return toBigIntValue(value) === 1n;
+};
+
+const extractSpanValues = (value: any): any[] => {
+  if (Array.isArray(value)) return value;
+  if (Array.isArray(value?.snapshot)) return value.snapshot;
+  if (Array.isArray(value?.[0])) return value[0];
+  return [];
+};
+
+const normalizeAjoInfo = (raw: any, fallbackId = 0): StarknetAjoInfo => {
+  const configRaw = raw?.config ?? {};
+
+  const idRaw = raw?.id ?? fallbackId;
+  const coreRaw = raw?.core_address ?? raw?.coreAddress ?? raw?.ajo_core ?? 0;
+  const membersRaw =
+    raw?.members_address ?? raw?.membersAddress ?? raw?.ajo_members ?? 0;
+  const collateralRaw =
+    raw?.collateral_address ??
+    raw?.collateralAddress ??
+    raw?.ajo_collateral ??
+    0;
+  const paymentsRaw =
+    raw?.payments_address ?? raw?.paymentsAddress ?? raw?.ajo_payments ?? 0;
+  const governanceRaw =
+    raw?.governance_address ??
+    raw?.governanceAddress ??
+    raw?.ajo_governance ??
+    0;
+  const scheduleRaw =
+    raw?.schedule_address ?? raw?.scheduleAddress ?? raw?.ajo_schedule ?? 0;
+  const initializedRaw =
+    raw?.is_initialized ?? raw?.isInitialized ?? raw?.is_active ?? false;
+  const createdAtRaw = raw?.created_at ?? raw?.createdAt ?? 0;
+
+  const nameRaw = configRaw?.name ?? raw?.name ?? "";
+  const monthlyRaw =
+    configRaw?.monthly_contribution ?? configRaw?.monthlyContribution ?? raw?.monthly_contribution ?? 0;
+  const participantsRaw =
+    configRaw?.total_participants ?? configRaw?.totalParticipants ?? raw?.total_participants ?? 0;
+  const cycleRaw =
+    configRaw?.cycle_duration ?? configRaw?.cycleDuration ?? raw?.cycle_duration ?? 0;
+  const tokenRaw =
+    configRaw?.payment_token ?? configRaw?.paymentToken ?? raw?.payment_token ?? {};
+  const creatorRaw = configRaw?.creator ?? raw?.owner ?? raw?.creator ?? 0;
+
+  return {
+    id: toNumberValue(idRaw),
+    config: {
+      name: decodeFeltToString(nameRaw),
+      monthlyContribution: toBigIntValue(monthlyRaw),
+      totalParticipants: toNumberValue(participantsRaw),
+      cycleDuration: toNumberValue(cycleRaw),
+      paymentToken: parsePaymentToken(tokenRaw),
+      creator: toHexAddress(creatorRaw),
+    },
+    coreAddress: toHexAddress(coreRaw),
+    membersAddress: toHexAddress(membersRaw),
+    collateralAddress: toHexAddress(collateralRaw),
+    paymentsAddress: toHexAddress(paymentsRaw),
+    governanceAddress: toHexAddress(governanceRaw),
+    scheduleAddress: toHexAddress(scheduleRaw),
+    isInitialized: parseBool(initializedRaw),
+    createdAt: toNumberValue(createdAtRaw),
+  };
+};
 
 const useStarknetAjoFactory = () => {
   const { account, isConnected, address } = useStarknetWallet();
@@ -106,7 +282,7 @@ const useStarknetAjoFactory = () => {
         const totalParticipants = cairo.uint256(params.totalParticipants);
         const paymentToken = buildPaymentTokenEnum(params.paymentToken);
 
-        const totalBefore = Number(await factoryContract.get_total_ajos());
+        const totalBefore = toNumberValue(await factoryContract.get_total_ajos());
 
         const tx = await factoryContract.create_ajo(
           shortName,
@@ -118,7 +294,7 @@ const useStarknetAjoFactory = () => {
 
         await provider.waitForTransaction(tx.transaction_hash);
 
-        const totalAfter = Number(await factoryContract.get_total_ajos());
+        const totalAfter = toNumberValue(await factoryContract.get_total_ajos());
         const ajoId = totalAfter > totalBefore ? totalAfter : totalBefore + 1;
         const ajoIdU256 = cairo.uint256(ajoId);
 
@@ -157,7 +333,8 @@ const useStarknetAjoFactory = () => {
       );
 
       const ajoIdU256 = cairo.uint256(ajoId);
-      return await factoryContract.get_ajo_info(ajoIdU256);
+      const response = await factoryContract.get_ajo_info(ajoIdU256);
+      return normalizeAjoInfo(response, Number(ajoId));
     } catch (error) {
       console.error("Error fetching Ajo info:", error);
       throw error;
@@ -176,7 +353,12 @@ const useStarknetAjoFactory = () => {
         provider,
       );
 
-      return await factoryContract.get_user_ajos(userAddress);
+      const response = await factoryContract.get_user_ajos(userAddress);
+      const ids = extractSpanValues(response)
+        .map((item) => toNumberValue(item))
+        .filter((id) => Number.isFinite(id) && id > 0);
+
+      return [...new Set(ids)];
     } catch (error) {
       console.error("Error fetching user Ajos:", error);
       throw error;

@@ -42,7 +42,10 @@ export const StarknetWalletProvider: React.FC<{ children: ReactNode }> = ({
 
         if (wallet && connectorData && connectorData.account) {
           const provider = new RpcProvider({ nodeUrl: RPC_URL });
-          const walletAccount = new WalletAccount(provider, wallet as StarknetWindowObject);
+          const walletAccount = await WalletAccount.connectSilent(
+            provider,
+            wallet as StarknetWindowObject,
+          );
           setAccount(walletAccount);
           setAddress(connectorData.account);
           setIsConnected(true);
@@ -80,7 +83,10 @@ export const StarknetWalletProvider: React.FC<{ children: ReactNode }> = ({
       }
 
       const provider = new RpcProvider({ nodeUrl: RPC_URL });
-      const walletAccount = new WalletAccount(provider, wallet as StarknetWindowObject);
+      const walletAccount = await WalletAccount.connect(
+        provider,
+        wallet as StarknetWindowObject,
+      );
       setAccount(walletAccount);
       setAddress(connectorData.account);
       setIsConnected(true);

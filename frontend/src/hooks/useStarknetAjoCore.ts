@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useCallback, useState } from 'react';
-import { Contract, RpcProvider } from 'starknet';
-import { useStarknetWallet } from '@/contexts/StarknetWalletContext';
-import { ajoCoreAbi } from '@/abi/placeholders';
+import { useCallback, useState } from "react";
+import { Contract, RpcProvider, cairo } from "starknet";
+import { useStarknetWallet } from "@/contexts/StarknetWalletContext";
+import { ajoCoreAbi } from "@/abi/placeholders";
 
 /**
  * Hook for interacting with a specific Ajo Core Cairo contract
@@ -12,10 +12,14 @@ const useStarknetAjoCore = (ajoCoreAddress: string) => {
   const { account, isConnected } = useStarknetWallet();
   const [loading, setLoading] = useState(false);
 
+  const RPC_URL =
+    import.meta.env.VITE_STARKNET_RPC_URL ||
+    "https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_7/W7Jx4ZJo0o9FaoLXaNRG4";
+
   // Create provider instance
   const getProvider = () => {
     return new RpcProvider({
-      nodeUrl: "https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_7/W7Jx4ZJo0o9FaoLXaNRG4"
+      nodeUrl: RPC_URL
     });
   };
 
@@ -24,7 +28,7 @@ const useStarknetAjoCore = (ajoCoreAddress: string) => {
    */
   const getConfig = useCallback(async () => {
     if (!ajoCoreAddress) {
-      throw new Error('Contract address not available');
+      throw new Error("Contract address not available");
     }
 
     try {
@@ -36,11 +40,11 @@ const useStarknetAjoCore = (ajoCoreAddress: string) => {
       );
 
       const config = await ajoCoreContract.get_config();
-      
-      console.log('Ajo config:', config);
+
+      console.log("Ajo config:", config);
       return config;
     } catch (error) {
-      console.error('Error fetching Ajo config:', error);
+      console.error("Error fetching Ajo config:", error);
       throw error;
     }
   }, [ajoCoreAddress]);
@@ -50,7 +54,7 @@ const useStarknetAjoCore = (ajoCoreAddress: string) => {
    */
   const getCurrentCycle = useCallback(async () => {
     if (!ajoCoreAddress) {
-      throw new Error('Contract address not available');
+      throw new Error("Contract address not available");
     }
 
     try {
@@ -62,11 +66,11 @@ const useStarknetAjoCore = (ajoCoreAddress: string) => {
       );
 
       const cycle = await ajoCoreContract.get_current_cycle();
-      
-      console.log('Current cycle:', cycle);
+
+      console.log("Current cycle:", cycle);
       return cycle;
     } catch (error) {
-      console.error('Error fetching current cycle:', error);
+      console.error("Error fetching current cycle:", error);
       throw error;
     }
   }, [ajoCoreAddress]);
@@ -76,7 +80,7 @@ const useStarknetAjoCore = (ajoCoreAddress: string) => {
    */
   const getAjoStatus = useCallback(async () => {
     if (!ajoCoreAddress) {
-      throw new Error('Contract address not available');
+      throw new Error("Contract address not available");
     }
 
     try {
@@ -88,21 +92,49 @@ const useStarknetAjoCore = (ajoCoreAddress: string) => {
       );
 
       const status = await ajoCoreContract.get_ajo_status();
-      
-      console.log('Ajo status:', status);
+
+      console.log("Ajo status:", status);
       return status;
     } catch (error) {
-      console.error('Error fetching Ajo status:', error);
+      console.error("Error fetching Ajo status:", error);
       throw error;
     }
   }, [ajoCoreAddress]);
+
+  /**
+   * Get member info from core contract
+   */
+  const getMemberInfo = useCallback(
+    async (memberAddress: string) => {
+      if (!ajoCoreAddress) {
+        throw new Error("Contract address not available");
+      }
+
+      try {
+        const provider = getProvider();
+        const ajoCoreContract = new Contract(
+          ajoCoreAbi as any,
+          ajoCoreAddress,
+          provider,
+        );
+
+        const memberInfo = await ajoCoreContract.get_member_info(memberAddress);
+        console.log("Member info:", memberInfo);
+        return memberInfo;
+      } catch (error) {
+        console.error("Error fetching member info:", error);
+        throw error;
+      }
+    },
+    [ajoCoreAddress],
+  );
 
   /**
    * Check if Ajo is active
    */
   const isActive = useCallback(async () => {
     if (!ajoCoreAddress) {
-      throw new Error('Contract address not available');
+      throw new Error("Contract address not available");
     }
 
     try {
@@ -114,21 +146,60 @@ const useStarknetAjoCore = (ajoCoreAddress: string) => {
       );
 
       const active = await ajoCoreContract.is_active();
-      
-      console.log('Is active:', active);
+
+      console.log("Is active:", active);
       return active;
     } catch (error) {
-      console.error('Error checking if active:', error);
+      console.error("Error checking if active:", error);
       throw error;
     }
   }, [ajoCoreAddress]);
+
+  /**
+   * Join Ajo group
+   */
+  const joinAjo = useCallback(
+    async (tokenIndex: number) => {
+      if (!account || !isConnected || !ajoCoreAddress) {
+        throw new Error("Wallet not connected or contract address not available");
+      }
+
+      setLoading(true);
+      try {
+        const provider = getProvider();
+        const ajoCoreContract = new Contract(
+          ajoCoreAbi as any,
+          ajoCoreAddress,
+          provider,
+        );
+
+        ajoCoreContract.connect(account as any);
+
+        const tokenIndexU256 = cairo.uint256(tokenIndex);
+        const result = await ajoCoreContract.join_ajo(tokenIndexU256);
+        await provider.waitForTransaction(result.transaction_hash);
+
+        console.log("Joined Ajo successfully:", result);
+        return {
+          transactionHash: result.transaction_hash,
+          success: true,
+        };
+      } catch (error) {
+        console.error("Error joining Ajo:", error);
+        throw error;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [account, isConnected, ajoCoreAddress],
+  );
 
   /**
    * Start Ajo (begins the first cycle)
    */
   const startAjo = useCallback(async () => {
     if (!account || !isConnected || !ajoCoreAddress) {
-      throw new Error('Wallet not connected or contract address not available');
+      throw new Error("Wallet not connected or contract address not available");
     }
 
     setLoading(true);
@@ -145,13 +216,13 @@ const useStarknetAjoCore = (ajoCoreAddress: string) => {
       const result = await ajoCoreContract.start_ajo();
       await provider.waitForTransaction(result.transaction_hash);
 
-      console.log('Ajo started successfully:', result);
+      console.log("Ajo started successfully:", result);
       return {
         transactionHash: result.transaction_hash,
         success: true,
       };
     } catch (error) {
-      console.error('Error starting Ajo:', error);
+      console.error("Error starting Ajo:", error);
       throw error;
     } finally {
       setLoading(false);
@@ -163,7 +234,7 @@ const useStarknetAjoCore = (ajoCoreAddress: string) => {
    */
   const processPayment = useCallback(async () => {
     if (!account || !isConnected || !ajoCoreAddress) {
-      throw new Error('Wallet not connected or contract address not available');
+      throw new Error("Wallet not connected or contract address not available");
     }
 
     setLoading(true);
@@ -180,13 +251,13 @@ const useStarknetAjoCore = (ajoCoreAddress: string) => {
       const result = await ajoCoreContract.process_payment();
       await provider.waitForTransaction(result.transaction_hash);
 
-      console.log('Payment processed successfully:', result);
+      console.log("Payment processed successfully:", result);
       return {
         transactionHash: result.transaction_hash,
         success: true,
       };
     } catch (error) {
-      console.error('Error processing payment:', error);
+      console.error("Error processing payment:", error);
       throw error;
     } finally {
       setLoading(false);
@@ -198,7 +269,7 @@ const useStarknetAjoCore = (ajoCoreAddress: string) => {
    */
   const exitAjo = useCallback(async () => {
     if (!account || !isConnected || !ajoCoreAddress) {
-      throw new Error('Wallet not connected or contract address not available');
+      throw new Error("Wallet not connected or contract address not available");
     }
 
     setLoading(true);
@@ -215,13 +286,13 @@ const useStarknetAjoCore = (ajoCoreAddress: string) => {
       const result = await ajoCoreContract.exit_ajo();
       await provider.waitForTransaction(result.transaction_hash);
 
-      console.log('Exited Ajo successfully:', result);
+      console.log("Exited Ajo successfully:", result);
       return {
         transactionHash: result.transaction_hash,
         success: true,
       };
     } catch (error) {
-      console.error('Error exiting Ajo:', error);
+      console.error("Error exiting Ajo:", error);
       throw error;
     } finally {
       setLoading(false);
@@ -233,7 +304,7 @@ const useStarknetAjoCore = (ajoCoreAddress: string) => {
    */
   const finalizeAjo = useCallback(async () => {
     if (!account || !isConnected || !ajoCoreAddress) {
-      throw new Error('Wallet not connected or contract address not available');
+      throw new Error("Wallet not connected or contract address not available");
     }
 
     setLoading(true);
@@ -250,13 +321,13 @@ const useStarknetAjoCore = (ajoCoreAddress: string) => {
       const result = await ajoCoreContract.finalize_ajo();
       await provider.waitForTransaction(result.transaction_hash);
 
-      console.log('Ajo finalized successfully:', result);
+      console.log("Ajo finalized successfully:", result);
       return {
         transactionHash: result.transaction_hash,
         success: true,
       };
     } catch (error) {
-      console.error('Error finalizing Ajo:', error);
+      console.error("Error finalizing Ajo:", error);
       throw error;
     } finally {
       setLoading(false);
@@ -268,9 +339,11 @@ const useStarknetAjoCore = (ajoCoreAddress: string) => {
     getConfig,
     getCurrentCycle,
     getAjoStatus,
+    getMemberInfo,
     isActive,
     
     // Write functions
+    joinAjo,
     startAjo,
     processPayment,
     exitAjo,

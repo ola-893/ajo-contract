@@ -2,24 +2,47 @@
 import { EmptyState } from "@/components/dashboard/EmptyState";
 import Header from "@/components/header/Header";
 import AjoCard from "@/components/shared/AjoCard";
-import { useAjoStore } from "@/store/ajoStore";
-import { Shield, Users, Star, RefreshCw } from "lucide-react";
+import type { AjoInfo } from "@/store/ajoStore";
+import { Shield, Star, RefreshCw } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import formatCurrency from "@/utils/formatCurrency";
 import { toast } from "sonner";
 import useStarknetAjoFactory from "@/hooks/useStarknetAjoFactory";
 import { useStarknetWallet } from "@/contexts/StarknetWalletContext";
+import type { StarknetAjoInfo } from "@/hooks/useStarknetAjoFactory";
+
+const mapStarknetAjoToCard = (ajo: StarknetAjoInfo): AjoInfo => ({
+  ajoId: ajo.id,
+  ajoCore: ajo.coreAddress,
+  ajoMembers: ajo.membersAddress,
+  ajoCollateral: ajo.collateralAddress,
+  ajoPayments: ajo.paymentsAddress,
+  ajoGovernance: ajo.governanceAddress,
+  ajoSchedule: ajo.scheduleAddress,
+  creator: ajo.config.creator,
+  createdAt: String(ajo.createdAt),
+  name: ajo.config.name || `Ajo #${ajo.id}`,
+  isActive: ajo.isInitialized,
+  usesHtsTokens: false,
+  usdcToken: "",
+  hbarToken: "",
+  hcsTopicId: "",
+  usesScheduledPayments: true,
+  scheduledPaymentsCount: "0",
+  ajoCycleDuration: String(ajo.config.cycleDuration),
+  ajoMonthlyPaymentUSDC: ajo.config.monthlyContribution.toString(),
+  ajoMonthlyPaymentHBAR: "0",
+});
 
 const Dashboard = () => {
   const { address, isConnected } = useStarknetWallet();
-  const { getUserAjos, loading: factoryLoading } = useStarknetAjoFactory();
+  const { getUserAjos, getAjoInfo, loading: factoryLoading } = useStarknetAjoFactory();
   const navigate = useNavigate();
 
   const [isVisible, setIsVisible] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-  const [userAjos, setUserAjos] = useState<any[]>([]);
+  const [userAjos, setUserAjos] = useState<StarknetAjoInfo[]>([]);
 
   // Fetch user's Ajos from Starknet
   const fetchAjos = useCallback(
@@ -33,10 +56,22 @@ const Dashboard = () => {
         setIsRefreshing(true);
         console.log("🔄 Fetching user Ajos from Starknet...");
         
-        const ajos = await getUserAjos(address);
-        console.log("✅ Fetched Ajos:", ajos);
-        
-        setUserAjos(ajos || []);
+        const ids = await getUserAjos(address);
+        console.log("✅ Fetched Ajo IDs:", ids);
+
+        const details = await Promise.all(
+          (ids || []).map(async (id) => {
+            try {
+              return await getAjoInfo(String(id));
+            } catch (error) {
+              console.error(`Failed to load Ajo ${id}:`, error);
+              return null;
+            }
+          }),
+        );
+
+        const filtered = details.filter((item): item is StarknetAjoInfo => Boolean(item));
+        setUserAjos(filtered);
         setLastUpdate(new Date());
         
         if (showToast) {
@@ -51,7 +86,7 @@ const Dashboard = () => {
         setIsRefreshing(false);
       }
     },
-    [address, isConnected, getUserAjos]
+    [address, isConnected, getUserAjos, getAjoInfo]
   );
 
   // Initial load animation
@@ -174,16 +209,11 @@ const Dashboard = () => {
           ) : userAjos.length > 0 ? (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {userAjos.map((ajo, index) => (
-                <div
-                  key={index}
-                  className="bg-card p-6 rounded-xl shadow-sm border border-border hover:shadow-md transition-all hover:scale-105"
-                >
-                  <h3 className="text-lg font-semibold mb-2">Ajo #{index + 1}</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Click to view details
-                  </p>
-                  {/* TODO: Add more Ajo details once we fetch from getAjoInfo */}
-                </div>
+                <AjoCard
+                  key={`${ajo.id}-${index}`}
+                  ajo={mapStarknetAjoToCard(ajo)}
+                  isVisible={isVisible}
+                />
               ))}
             </div>
           ) : !isConnected ? (

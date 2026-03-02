@@ -11,10 +11,14 @@ const useStarknetAjoPayments = (ajoPaymentsAddress: string) => {
   const { account, isConnected } = useStarknetWallet();
   const [loading, setLoading] = useState(false);
 
+  const RPC_URL =
+    import.meta.env.VITE_STARKNET_RPC_URL ||
+    "https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_7/W7Jx4ZJo0o9FaoLXaNRG4";
+
   // Create provider instance
   const getProvider = () => {
     return new RpcProvider({
-      nodeUrl: "https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_7/W7Jx4ZJo0o9FaoLXaNRG4"
+      nodeUrl: RPC_URL
     });
   };
 

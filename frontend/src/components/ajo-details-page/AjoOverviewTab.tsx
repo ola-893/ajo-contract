@@ -1,64 +1,138 @@
-import { Calendar, DollarSign, Shield, TrendingUp, Users, Database } from "lucide-react";
+import {
+  CheckCircle,
+  Coins,
+  Shield,
+  Target,
+} from "lucide-react";
+import type { StarknetAjoInfo } from "@/hooks/useStarknetAjoFactory";
 
-const AjoOverviewTab = ({ ajo }: { ajo: any }) => {
-  // TODO: Integrate real data from Starknet contracts
+const AjoOverviewTab = ({
+  ajo,
+  memberCount = 0,
+  currentCycle = 1,
+}: {
+  ajo: StarknetAjoInfo | null | undefined;
+  memberCount?: number;
+  currentCycle?: number;
+}) => {
+  const totalParticipants = ajo?.config.totalParticipants ?? 10;
+  const progressPercent =
+    totalParticipants > 0 ? ((currentCycle - 1) / totalParticipants) * 100 : 0;
+  const cycleLengthDays = Math.max(
+    1,
+    Math.floor((ajo?.config.cycleDuration ?? 30 * 24 * 60 * 60) / (24 * 60 * 60)),
+  );
 
   return (
-    <div className="space-y-6">
-      {/* Main Stats - Placeholders */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-card rounded-xl shadow-lg p-6 border border-border hover:shadow-xl transition-all hover:scale-105">
-          <div className="flex items-center justify-between mb-4">
-            <h4 className="font-semibold text-card-foreground">Total Pool</h4>
-            <DollarSign className="w-5 h-5 text-primary" />
+    <div className="grid lg:grid-cols-3 gap-8">
+      <div className="lg:col-span-2 space-y-6">
+        <div className="bg-card rounded-xl shadow-lg p-6 border border-border">
+          <h3 className="text-xl font-bold text-card-foreground mb-4 flex items-center space-x-2">
+            <Target className="w-6 h-6 text-primary" />
+            <span>Current Cycle Progress</span>
+          </h3>
+
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <span className=" text-sm text-muted-foreground">
+                Cycle {currentCycle} of {totalParticipants}
+              </span>
+              <span className="text-sm font-semibold text-card-foreground">
+                Next payout: Queue {Math.max(1, currentCycle)}
+              </span>
+            </div>
+
+            <div className="w-full bg-background/50 rounded-full h-3 border border-border">
+              <div
+                className="bg-gradient-to-r from-primary to-accent h-3 rounded-full transition-all duration-1000"
+                style={{ width: `${Math.min(100, Math.max(0, progressPercent))}%` }}
+              ></div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div>
+                <div className="text-2xl font-bold text-primary">
+                  {Math.max(0, currentCycle - 1)}
+                </div>
+                <div className="text-sm text-muted-foreground">Completed</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-accent">
+                  {memberCount}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  Active Members
+                </div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-muted-foreground">
+                  {Math.max(0, totalParticipants - memberCount)}
+                </div>
+                <div className="text-sm text-muted-foreground">Remaining</div>
+              </div>
+            </div>
           </div>
-          <div className="text-3xl font-bold text-primary">--</div>
-          <div className="text-sm text-muted-foreground mt-2">Coming soon</div>
         </div>
 
-        <div className="bg-card rounded-xl shadow-lg p-6 border border-border hover:shadow-xl transition-all hover:scale-105">
-          <div className="flex items-center justify-between mb-4">
-            <h4 className="font-semibold text-card-foreground">
-              Active Members
-            </h4>
-            <Users className="w-5 h-5 text-accent" />
-          </div>
-          <div className="text-3xl font-bold text-card-foreground">--</div>
-          <div className="text-sm text-muted-foreground mt-2">Coming soon</div>
-        </div>
+        <div className="bg-gradient-to-br from-primary to-accent rounded-xl shadow-lg p-6 text-primary-foreground border border-primary/30">
+          <h3 className="text-lg font-bold mb-4 flex items-center space-x-2">
+            <Shield className="w-5 h-5" />
+            <span>How to participate</span>
+          </h3>
 
-        <div className="bg-card rounded-xl shadow-lg p-6 border border-border hover:shadow-xl transition-all hover:scale-105">
-          <div className="flex items-center justify-between mb-4">
-            <h4 className="font-semibold text-card-foreground">
-              Current Cycle
-            </h4>
-            <Shield className="w-5 h-5 text-green-500" />
+          <div className="space-y-3 text-sm">
+            <div className="flex items-center space-x-2">
+              <CheckCircle className="w-4 h-4 text-green-400" />
+              <span className="font-semibold text-green-400">
+                Fund wallet with USDC and STRK
+              </span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <CheckCircle className="w-4 h-4 text-accent" />
+              <span className="font-semibold text-card-foreground">
+                Join Ajo and lock required collateral
+              </span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <CheckCircle className="w-4 h-4 text-secondary-foreground" />
+              <span className="font-semibold text-card-foreground">
+                Make monthly payments
+              </span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <CheckCircle className="w-4 h-4 text-green-400" />
+              <span className="font-semibold text-green-400">
+                Receive payout when it is your turn
+              </span>
+            </div>
           </div>
-          <div className="text-3xl font-bold text-green-500">--</div>
-          <div className="text-sm text-muted-foreground mt-2">Coming soon</div>
-        </div>
-
-        <div className="bg-card rounded-xl shadow-lg p-6 border border-border hover:shadow-xl transition-all hover:scale-105">
-          <div className="flex items-center justify-between mb-4">
-            <h4 className="font-semibold text-card-foreground">Status</h4>
-            <TrendingUp className="w-5 h-5 text-accent" />
-          </div>
-          <div className="text-3xl font-bold text-accent">--</div>
-          <div className="text-sm text-muted-foreground mt-2">Coming soon</div>
         </div>
       </div>
 
-      {/* Details Placeholder */}
-      <div className="bg-card rounded-xl shadow-lg p-6 border border-border">
-        <h3 className="text-xl font-bold text-card-foreground mb-6">
-          Ajo Details
-        </h3>
-        <div className="text-center py-8 text-muted-foreground">
-          <Database className="w-12 h-12 mx-auto mb-4 opacity-50" />
-          <p className="mb-2">Ajo details coming soon</p>
-          <p className="text-sm">
-            View cycle duration, payments, and payout schedule
-          </p>
+      <div className="space-y-6">
+        <div className="bg-card rounded-xl shadow-lg p-6 border border-border">
+          <h3 className="text-xl font-bold text-card-foreground mb-4">
+            Key Information
+          </h3>
+          <div className="space-y-3 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Payment Token:</span>
+              <span className="font-semibold text-card-foreground flex items-center gap-1">
+                <Coins className="w-4 h-4 text-primary" />
+                {ajo?.config.paymentToken ?? "USDC"}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Cycle Length:</span>
+              <span className="font-semibold text-card-foreground">
+                {cycleLengthDays} days
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Privacy:</span>
+              <span className="font-semibold text-card-foreground">Public</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
