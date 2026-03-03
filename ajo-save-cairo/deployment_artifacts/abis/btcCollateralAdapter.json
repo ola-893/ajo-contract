@@ -1,0 +1,591 @@
+[
+  {
+    "type": "impl",
+    "name": "BTCCollateralAdapterImpl",
+    "interface_name": "ajo_save::interfaces::i_btc_collateral_adapter::IBTCCollateralAdapter"
+  },
+  {
+    "type": "struct",
+    "name": "core::integer::u256",
+    "members": [
+      {
+        "name": "low",
+        "type": "core::integer::u128"
+      },
+      {
+        "name": "high",
+        "type": "core::integer::u128"
+      }
+    ]
+  },
+  {
+    "type": "struct",
+    "name": "core::array::Span::<core::felt252>",
+    "members": [
+      {
+        "name": "snapshot",
+        "type": "@core::array::Array::<core::felt252>"
+      }
+    ]
+  },
+  {
+    "type": "enum",
+    "name": "ajo_save::interfaces::i_btc_collateral_adapter::CommitmentStatus",
+    "variants": [
+      {
+        "name": "Registered",
+        "type": "()"
+      },
+      {
+        "name": "Verified",
+        "type": "()"
+      },
+      {
+        "name": "EnforcementStarted",
+        "type": "()"
+      },
+      {
+        "name": "EnforcementConfirmed",
+        "type": "()"
+      },
+      {
+        "name": "Released",
+        "type": "()"
+      }
+    ]
+  },
+  {
+    "type": "struct",
+    "name": "ajo_save::interfaces::i_btc_collateral_adapter::BTCCommitment",
+    "members": [
+      {
+        "name": "commitment_id",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "member",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "ajo_id",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "amount",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "btc_script_hash",
+        "type": "core::felt252"
+      },
+      {
+        "name": "proof_reference",
+        "type": "core::felt252"
+      },
+      {
+        "name": "status",
+        "type": "ajo_save::interfaces::i_btc_collateral_adapter::CommitmentStatus"
+      },
+      {
+        "name": "registered_at",
+        "type": "core::integer::u64"
+      },
+      {
+        "name": "enforcement_tx_hash",
+        "type": "core::felt252"
+      }
+    ]
+  },
+  {
+    "type": "interface",
+    "name": "ajo_save::interfaces::i_btc_collateral_adapter::IBTCCollateralAdapter",
+    "items": [
+      {
+        "type": "function",
+        "name": "set_authorized_core",
+        "inputs": [
+          {
+            "name": "core",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "get_authorized_core",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "register_commitment",
+        "inputs": [
+          {
+            "name": "ajo_id",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "member",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
+          {
+            "name": "amount",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "btc_script_hash",
+            "type": "core::felt252"
+          },
+          {
+            "name": "proof",
+            "type": "core::array::Span::<core::felt252>"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "verify_commitment",
+        "inputs": [
+          {
+            "name": "commitment_id",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "verification_proof",
+            "type": "core::array::Span::<core::felt252>"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "start_enforcement",
+        "inputs": [
+          {
+            "name": "commitment_id",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "default_proof",
+            "type": "core::array::Span::<core::felt252>"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "confirm_enforcement",
+        "inputs": [
+          {
+            "name": "commitment_id",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "btc_tx_hash",
+            "type": "core::felt252"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "release_commitment",
+        "inputs": [
+          {
+            "name": "commitment_id",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "get_commitment",
+        "inputs": [
+          {
+            "name": "commitment_id",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "ajo_save::interfaces::i_btc_collateral_adapter::BTCCommitment"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_member_commitment",
+        "inputs": [
+          {
+            "name": "member",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_commitment_status",
+        "inputs": [
+          {
+            "name": "commitment_id",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "ajo_save::interfaces::i_btc_collateral_adapter::CommitmentStatus"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "set_op_cat_verifier",
+        "inputs": [
+          {
+            "name": "verifier",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "get_op_cat_verifier",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "emergency_pause",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "unpause",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      }
+    ]
+  },
+  {
+    "type": "impl",
+    "name": "OwnableImpl",
+    "interface_name": "ajo_save::components::ownable::IOwnable"
+  },
+  {
+    "type": "interface",
+    "name": "ajo_save::components::ownable::IOwnable",
+    "items": [
+      {
+        "type": "function",
+        "name": "owner",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "transfer_ownership",
+        "inputs": [
+          {
+            "name": "new_owner",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "renounce_ownership",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      }
+    ]
+  },
+  {
+    "type": "constructor",
+    "name": "constructor",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "op_cat_verifier",
+        "type": "core::starknet::contract_address::ContractAddress"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::adapters::btc_collateral_adapter::BTCCollateralAdapter::CommitmentRegistered",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "commitment_id",
+        "type": "core::integer::u256",
+        "kind": "key"
+      },
+      {
+        "name": "member",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      },
+      {
+        "name": "ajo_id",
+        "type": "core::integer::u256",
+        "kind": "data"
+      },
+      {
+        "name": "amount",
+        "type": "core::integer::u256",
+        "kind": "data"
+      },
+      {
+        "name": "btc_script_hash",
+        "type": "core::felt252",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::adapters::btc_collateral_adapter::BTCCollateralAdapter::CommitmentVerified",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "commitment_id",
+        "type": "core::integer::u256",
+        "kind": "key"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::adapters::btc_collateral_adapter::BTCCollateralAdapter::EnforcementStarted",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "commitment_id",
+        "type": "core::integer::u256",
+        "kind": "key"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::adapters::btc_collateral_adapter::BTCCollateralAdapter::EnforcementConfirmed",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "commitment_id",
+        "type": "core::integer::u256",
+        "kind": "key"
+      },
+      {
+        "name": "btc_tx_hash",
+        "type": "core::felt252",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::adapters::btc_collateral_adapter::BTCCollateralAdapter::CommitmentReleased",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "commitment_id",
+        "type": "core::integer::u256",
+        "kind": "key"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::adapters::btc_collateral_adapter::BTCCollateralAdapter::AuthorizedCoreUpdated",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "core",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::adapters::btc_collateral_adapter::BTCCollateralAdapter::OpCatVerifierUpdated",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "verifier",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::components::ownable::OwnableComponent::OwnershipTransferred",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "previous_owner",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      },
+      {
+        "name": "new_owner",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::components::ownable::OwnableComponent::Event",
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "OwnershipTransferred",
+        "type": "ajo_save::components::ownable::OwnableComponent::OwnershipTransferred",
+        "kind": "nested"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::components::pausable::PausableComponent::Paused",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "account",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::components::pausable::PausableComponent::Unpaused",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "account",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::components::pausable::PausableComponent::Event",
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "Paused",
+        "type": "ajo_save::components::pausable::PausableComponent::Paused",
+        "kind": "nested"
+      },
+      {
+        "name": "Unpaused",
+        "type": "ajo_save::components::pausable::PausableComponent::Unpaused",
+        "kind": "nested"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::adapters::btc_collateral_adapter::BTCCollateralAdapter::Event",
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "CommitmentRegistered",
+        "type": "ajo_save::adapters::btc_collateral_adapter::BTCCollateralAdapter::CommitmentRegistered",
+        "kind": "nested"
+      },
+      {
+        "name": "CommitmentVerified",
+        "type": "ajo_save::adapters::btc_collateral_adapter::BTCCollateralAdapter::CommitmentVerified",
+        "kind": "nested"
+      },
+      {
+        "name": "EnforcementStarted",
+        "type": "ajo_save::adapters::btc_collateral_adapter::BTCCollateralAdapter::EnforcementStarted",
+        "kind": "nested"
+      },
+      {
+        "name": "EnforcementConfirmed",
+        "type": "ajo_save::adapters::btc_collateral_adapter::BTCCollateralAdapter::EnforcementConfirmed",
+        "kind": "nested"
+      },
+      {
+        "name": "CommitmentReleased",
+        "type": "ajo_save::adapters::btc_collateral_adapter::BTCCollateralAdapter::CommitmentReleased",
+        "kind": "nested"
+      },
+      {
+        "name": "AuthorizedCoreUpdated",
+        "type": "ajo_save::adapters::btc_collateral_adapter::BTCCollateralAdapter::AuthorizedCoreUpdated",
+        "kind": "nested"
+      },
+      {
+        "name": "OpCatVerifierUpdated",
+        "type": "ajo_save::adapters::btc_collateral_adapter::BTCCollateralAdapter::OpCatVerifierUpdated",
+        "kind": "nested"
+      },
+      {
+        "name": "OwnableEvent",
+        "type": "ajo_save::components::ownable::OwnableComponent::Event",
+        "kind": "flat"
+      },
+      {
+        "name": "PausableEvent",
+        "type": "ajo_save::components::pausable::PausableComponent::Event",
+        "kind": "flat"
+      }
+    ]
+  }
+]

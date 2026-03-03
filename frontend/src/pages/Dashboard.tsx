@@ -30,6 +30,7 @@ const mapStarknetAjoToCard = (ajo: StarknetAjoInfo): AjoInfo => ({
   usesScheduledPayments: true,
   scheduledPaymentsCount: "0",
   ajoCycleDuration: String(ajo.config.cycleDuration),
+  ajoTotalParticipants: String(ajo.config.totalParticipants),
   ajoMonthlyPaymentUSDC: ajo.config.monthlyContribution.toString(),
   ajoMonthlyPaymentHBAR: "0",
 });

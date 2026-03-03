@@ -59,6 +59,14 @@ const parseTokenAmountToUnits = (amount: string, decimals: number): bigint => {
   return BigInt(combined);
 };
 
+const normalizeAddressForCompare = (value: string): string => {
+  try {
+    return `0x${BigInt(value).toString(16)}`.toLowerCase();
+  } catch {
+    return value.toLowerCase();
+  }
+};
+
 const buildPaymentTokenEnum = (token: "USDC" | "BTC") =>
   token === "BTC"
     ? new CairoCustomEnum({ BTC: {} })
@@ -97,6 +105,16 @@ const toHexAddress = (value: any): string => {
       return `0x${BigInt(value).toString(16)}`;
     } catch {
       return value;
+    }
+  }
+
+  if (typeof value === "object" && value !== null) {
+    if ("value" in value) {
+      return toHexAddress((value as any).value);
+    }
+
+    if ("address" in value) {
+      return toHexAddress((value as any).address);
     }
   }
 
@@ -153,49 +171,191 @@ const extractSpanValues = (value: any): any[] => {
   return [];
 };
 
+const extractTupleValues = (value: any): any[] => {
+  if (Array.isArray(value)) return value;
+  if (!value || typeof value !== "object") return [];
+
+  const numericKeys = Object.keys(value)
+    .filter((key) => /^\d+$/.test(key))
+    .map((key) => Number(key))
+    .sort((a, b) => a - b);
+
+  if (numericKeys.length === 0) return [];
+  return numericKeys.map((index) => value[index]);
+};
+
+const tupleU256 = (tuple: any[], lowIndex: number, highIndex: number) => ({
+  low: tuple[lowIndex] ?? 0,
+  high: tuple[highIndex] ?? 0,
+});
+
 const normalizeAjoInfo = (raw: any, fallbackId = 0): StarknetAjoInfo => {
+  const tuple = extractTupleValues(raw);
+  const hasFlattenedTupleLayout = tuple.length >= 17;
+  const hasStructuredTupleLayout =
+    !hasFlattenedTupleLayout && tuple.length >= 10;
+  const hasNamedStructLayout =
+    raw &&
+    typeof raw === "object" &&
+    ("config" in raw ||
+      "core_address" in raw ||
+      "members_address" in raw ||
+      "collateral_address" in raw ||
+      "payments_address" in raw ||
+      "governance_address" in raw ||
+      "schedule_address" in raw);
+
   const configRaw = raw?.config ?? {};
+  const configTuple = extractTupleValues(configRaw);
 
-  const idRaw = raw?.id ?? fallbackId;
-  const coreRaw = raw?.core_address ?? raw?.coreAddress ?? 0;
-  const membersRaw = raw?.members_address ?? raw?.membersAddress ?? 0;
-  const collateralRaw = raw?.collateral_address ?? raw?.collateralAddress ?? 0;
-  const paymentsRaw = raw?.payments_address ?? raw?.paymentsAddress ?? 0;
-  const governanceRaw = raw?.governance_address ?? raw?.governanceAddress ?? 0;
-  const scheduleRaw = raw?.schedule_address ?? raw?.scheduleAddress ?? 0;
-  const initializedRaw =
-    raw?.is_initialized ?? raw?.isInitialized ?? raw?.is_active ?? false;
-  const createdAtRaw = raw?.created_at ?? raw?.createdAt ?? 0;
+  const fromFlattened = () => {
+    const createdAtIndex = tuple.length - 1;
+    const initializedIndex = tuple.length - 2;
+    const scheduleIndex = tuple.length - 3;
+    const governanceIndex = tuple.length - 4;
+    const paymentsIndex = tuple.length - 5;
+    const collateralIndex = tuple.length - 6;
+    const membersIndex = tuple.length - 7;
+    const coreIndex = tuple.length - 8;
+    const creatorIndex = tuple.length - 9;
 
-  const nameRaw = configRaw?.name ?? raw?.name ?? "";
-  const monthlyRaw =
-    configRaw?.monthly_contribution ?? configRaw?.monthlyContribution ?? raw?.monthly_contribution ?? 0;
-  const participantsRaw =
-    configRaw?.total_participants ?? configRaw?.totalParticipants ?? raw?.total_participants ?? 0;
-  const cycleRaw =
-    configRaw?.cycle_duration ?? configRaw?.cycleDuration ?? raw?.cycle_duration ?? 0;
-  const tokenRaw =
-    configRaw?.payment_token ?? configRaw?.paymentToken ?? raw?.payment_token ?? {};
-  const creatorRaw = configRaw?.creator ?? raw?.creator ?? 0;
+    return {
+      idRaw: tupleU256(tuple, 0, 1),
+      nameRaw: tuple[2] ?? "",
+      monthlyRaw: tupleU256(tuple, 3, 4),
+      participantsRaw: tupleU256(tuple, 5, 6),
+      cycleRaw: tuple[7] ?? 0,
+      tokenRaw: tuple[8] ?? {},
+      creatorRaw: tuple[creatorIndex] ?? 0,
+      coreRaw: tuple[coreIndex] ?? 0,
+      membersRaw: tuple[membersIndex] ?? 0,
+      collateralRaw: tuple[collateralIndex] ?? 0,
+      paymentsRaw: tuple[paymentsIndex] ?? 0,
+      governanceRaw: tuple[governanceIndex] ?? 0,
+      scheduleRaw: tuple[scheduleIndex] ?? 0,
+      initializedRaw: tuple[initializedIndex] ?? false,
+      createdAtRaw: tuple[createdAtIndex] ?? 0,
+    };
+  };
+
+  const fromStructured = () => {
+    const structConfig = tuple[1] ?? {};
+    const structConfigTuple = extractTupleValues(structConfig);
+
+    return {
+      idRaw: tuple[0] ?? fallbackId,
+      nameRaw:
+        (structConfigTuple.length > 0
+          ? structConfigTuple[0]
+          : structConfig?.name ?? configRaw?.name) ?? "",
+      monthlyRaw:
+        structConfigTuple.length >= 3
+          ? tupleU256(structConfigTuple, 1, 2)
+          : (structConfig?.monthly_contribution ??
+            structConfig?.monthlyContribution ??
+            configRaw?.monthly_contribution ??
+            configRaw?.monthlyContribution ??
+            0),
+      participantsRaw:
+        structConfigTuple.length >= 5
+          ? tupleU256(structConfigTuple, 3, 4)
+          : (structConfig?.total_participants ??
+            structConfig?.totalParticipants ??
+            configRaw?.total_participants ??
+            configRaw?.totalParticipants ??
+            0),
+      cycleRaw:
+        (structConfigTuple.length > 5
+          ? structConfigTuple[5]
+          : structConfig?.cycle_duration ??
+            structConfig?.cycleDuration ??
+            configRaw?.cycle_duration ??
+            configRaw?.cycleDuration) ?? 0,
+      tokenRaw:
+        (structConfigTuple.length > 6
+          ? structConfigTuple[6]
+          : structConfig?.payment_token ??
+            structConfig?.paymentToken ??
+            configRaw?.payment_token ??
+            configRaw?.paymentToken) ?? {},
+      creatorRaw:
+        (structConfigTuple.length > 0
+          ? structConfigTuple[structConfigTuple.length - 1]
+          : structConfig?.creator ?? configRaw?.creator) ?? 0,
+      coreRaw: tuple[2] ?? 0,
+      membersRaw: tuple[3] ?? 0,
+      collateralRaw: tuple[4] ?? 0,
+      paymentsRaw: tuple[5] ?? 0,
+      governanceRaw: tuple[6] ?? 0,
+      scheduleRaw: tuple[7] ?? 0,
+      initializedRaw: tuple[8] ?? false,
+      createdAtRaw: tuple[9] ?? 0,
+    };
+  };
+
+  const fromNamed = () => ({
+    idRaw: raw?.id ?? fallbackId,
+    nameRaw: configRaw?.name ?? raw?.name ?? configTuple[0] ?? "",
+    monthlyRaw:
+      configRaw?.monthly_contribution ??
+      configRaw?.monthlyContribution ??
+      raw?.monthly_contribution ??
+      (configTuple.length >= 3 ? tupleU256(configTuple, 1, 2) : 0),
+    participantsRaw:
+      configRaw?.total_participants ??
+      configRaw?.totalParticipants ??
+      raw?.total_participants ??
+      (configTuple.length >= 5 ? tupleU256(configTuple, 3, 4) : 0),
+    cycleRaw:
+      configRaw?.cycle_duration ??
+      configRaw?.cycleDuration ??
+      raw?.cycle_duration ??
+      (configTuple.length > 5 ? configTuple[5] : 0),
+    tokenRaw:
+      configRaw?.payment_token ??
+      configRaw?.paymentToken ??
+      raw?.payment_token ??
+      (configTuple.length > 6 ? configTuple[6] : {}),
+    creatorRaw:
+      configRaw?.creator ??
+      raw?.creator ??
+      (configTuple.length > 0 ? configTuple[configTuple.length - 1] : 0),
+    coreRaw: raw?.core_address ?? raw?.coreAddress ?? 0,
+    membersRaw: raw?.members_address ?? raw?.membersAddress ?? 0,
+    collateralRaw: raw?.collateral_address ?? raw?.collateralAddress ?? 0,
+    paymentsRaw: raw?.payments_address ?? raw?.paymentsAddress ?? 0,
+    governanceRaw: raw?.governance_address ?? raw?.governanceAddress ?? 0,
+    scheduleRaw: raw?.schedule_address ?? raw?.scheduleAddress ?? 0,
+    initializedRaw: raw?.is_initialized ?? raw?.isInitialized ?? raw?.is_active ?? false,
+    createdAtRaw: raw?.created_at ?? raw?.createdAt ?? 0,
+  });
+
+  const parsed = hasNamedStructLayout
+    ? fromNamed()
+    : hasFlattenedTupleLayout
+    ? fromFlattened()
+    : hasStructuredTupleLayout
+      ? fromStructured()
+      : fromNamed();
 
   return {
-    id: toNumberValue(idRaw),
+    id: toNumberValue(parsed.idRaw),
     config: {
-      name: decodeFeltToString(nameRaw),
-      monthlyContribution: toBigIntValue(monthlyRaw),
-      totalParticipants: toNumberValue(participantsRaw),
-      cycleDuration: toNumberValue(cycleRaw),
-      paymentToken: parsePaymentToken(tokenRaw),
-      creator: toHexAddress(creatorRaw),
+      name: decodeFeltToString(parsed.nameRaw),
+      monthlyContribution: toBigIntValue(parsed.monthlyRaw),
+      totalParticipants: toNumberValue(parsed.participantsRaw),
+      cycleDuration: toNumberValue(parsed.cycleRaw),
+      paymentToken: parsePaymentToken(parsed.tokenRaw),
+      creator: toHexAddress(parsed.creatorRaw),
     },
-    coreAddress: toHexAddress(coreRaw),
-    membersAddress: toHexAddress(membersRaw),
-    collateralAddress: toHexAddress(collateralRaw),
-    paymentsAddress: toHexAddress(paymentsRaw),
-    governanceAddress: toHexAddress(governanceRaw),
-    scheduleAddress: toHexAddress(scheduleRaw),
-    isInitialized: parseBool(initializedRaw),
-    createdAt: toNumberValue(createdAtRaw),
+    coreAddress: toHexAddress(parsed.coreRaw),
+    membersAddress: toHexAddress(parsed.membersRaw),
+    collateralAddress: toHexAddress(parsed.collateralRaw),
+    paymentsAddress: toHexAddress(parsed.paymentsRaw),
+    governanceAddress: toHexAddress(parsed.governanceRaw),
+    scheduleAddress: toHexAddress(parsed.scheduleRaw),
+    isInitialized: parseBool(parsed.initializedRaw),
+    createdAt: toNumberValue(parsed.createdAtRaw),
   };
 };
 
@@ -204,6 +364,33 @@ const useStarknetAjoFactory = () => {
   const [loading, setLoading] = useState(false);
 
   const getProvider = () => new RpcProvider({ nodeUrl: RPC_URL });
+
+  const getReadFactoryContract = () => {
+    const factoryAddress = CONTRACT_ADDRESSES.sepolia.ajoFactory;
+    if (!factoryAddress) throw new Error("Factory contract not deployed yet");
+    const provider = getProvider();
+    return new Contract(ajoFactoryAbi as any, factoryAddress, provider);
+  };
+
+  const getWriteFactoryContract = () => {
+    if (!account || !isConnected) {
+      throw new Error("Wallet not connected");
+    }
+    const factoryAddress = CONTRACT_ADDRESSES.sepolia.ajoFactory;
+    if (!factoryAddress) throw new Error("Factory contract not deployed yet");
+    const provider = getProvider();
+    const contract = new Contract(ajoFactoryAbi as any, factoryAddress, account);
+    return { contract, provider };
+  };
+
+  const withWrite = async (fn: () => Promise<any>) => {
+    setLoading(true);
+    try {
+      return await fn();
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const runPhaseDeployments = useCallback(
     async (factoryContract: Contract, provider: RpcProvider, ajoIdU256: any) => {
@@ -295,16 +482,45 @@ const useStarknetAjoFactory = () => {
         const ajoId = totalAfter > totalBefore ? totalAfter : totalBefore + 1;
         const ajoIdU256 = cairo.uint256(ajoId);
 
-        const deploymentTxs = await runPhaseDeployments(
-          factoryContract,
-          provider,
-          ajoIdU256,
-        );
+        let deploymentTxs: Array<{ method: string; txHash: string }> = [];
+        let deploymentWarning: string | undefined;
+
+        try {
+          const ownerAddressRaw = await factoryContract.owner();
+          const ownerAddress = normalizeAddressForCompare(
+            toHexAddress(ownerAddressRaw),
+          );
+          const callerAddress = normalizeAddressForCompare(address);
+          const callerIsFactoryOwner = ownerAddress === callerAddress;
+
+          if (callerIsFactoryOwner) {
+            deploymentTxs = await runPhaseDeployments(
+              factoryContract,
+              provider,
+              ajoIdU256,
+            );
+          } else {
+            deploymentWarning =
+              "Ajo created, but module deployment is owner-restricted on this factory. Ask factory owner to deploy phases for this Ajo.";
+          }
+        } catch (deploymentError: any) {
+          const message = String(deploymentError?.message || deploymentError || "");
+          if (
+            message.toLowerCase().includes("caller is not the owner") ||
+            message.toLowerCase().includes("not the owner")
+          ) {
+            deploymentWarning =
+              "Ajo created, but module deployment is owner-restricted on this factory. Ask factory owner to deploy phases for this Ajo.";
+          } else {
+            throw deploymentError;
+          }
+        }
 
         return {
           transactionHash: tx.transaction_hash,
           ajoId,
           deploymentTxs,
+          deploymentWarning,
           success: true,
         };
       } catch (error: any) {
@@ -319,16 +535,7 @@ const useStarknetAjoFactory = () => {
 
   const getAjoInfo = useCallback(async (ajoId: string) => {
     try {
-      const factoryAddress = CONTRACT_ADDRESSES.sepolia.ajoFactory;
-      if (!factoryAddress) throw new Error("Factory contract not deployed yet");
-
-      const provider = getProvider();
-      const factoryContract = new Contract(
-        ajoFactoryAbi as any,
-        factoryAddress,
-        provider,
-      );
-
+      const factoryContract = getReadFactoryContract();
       const ajoIdU256 = cairo.uint256(ajoId);
       const response = await factoryContract.get_ajo_info(ajoIdU256);
       return normalizeAjoInfo(response, Number(ajoId));
@@ -340,16 +547,7 @@ const useStarknetAjoFactory = () => {
 
   const getUserAjos = useCallback(async (userAddress: string) => {
     try {
-      const factoryAddress = CONTRACT_ADDRESSES.sepolia.ajoFactory;
-      if (!factoryAddress) throw new Error("Factory contract not deployed yet");
-
-      const provider = getProvider();
-      const factoryContract = new Contract(
-        ajoFactoryAbi as any,
-        factoryAddress,
-        provider,
-      );
-
+      const factoryContract = getReadFactoryContract();
       const response = await factoryContract.get_user_ajos(userAddress);
       const ids = extractSpanValues(response)
         .map((item) => toNumberValue(item))
@@ -364,16 +562,7 @@ const useStarknetAjoFactory = () => {
 
   const getTotalAjos = useCallback(async () => {
     try {
-      const factoryAddress = CONTRACT_ADDRESSES.sepolia.ajoFactory;
-      if (!factoryAddress) throw new Error("Factory contract not deployed yet");
-
-      const provider = getProvider();
-      const factoryContract = new Contract(
-        ajoFactoryAbi as any,
-        factoryAddress,
-        provider,
-      );
-
+      const factoryContract = getReadFactoryContract();
       const total = await factoryContract.get_total_ajos();
       return toNumberValue(total);
     } catch (error) {
@@ -440,6 +629,175 @@ const useStarknetAjoFactory = () => {
     [account, isConnected, runPhaseDeployments],
   );
 
+  const deployMembers = useCallback(
+    async (ajoId: string) =>
+      withWrite(async () => {
+        const { contract, provider } = getWriteFactoryContract();
+        const tx = await contract.deploy_members(cairo.uint256(ajoId));
+        await provider.waitForTransaction(tx.transaction_hash);
+        return { success: true, transactionHash: tx.transaction_hash };
+      }),
+    [account, isConnected],
+  );
+
+  const deployCollateralAndPayments = useCallback(
+    async (ajoId: string) =>
+      withWrite(async () => {
+        const { contract, provider } = getWriteFactoryContract();
+        const tx = await contract.deploy_collateral_and_payments(cairo.uint256(ajoId));
+        await provider.waitForTransaction(tx.transaction_hash);
+        return { success: true, transactionHash: tx.transaction_hash };
+      }),
+    [account, isConnected],
+  );
+
+  const deployGovernanceAndSchedule = useCallback(
+    async (ajoId: string) =>
+      withWrite(async () => {
+        const { contract, provider } = getWriteFactoryContract();
+        const tx = await contract.deploy_governance_and_schedule(cairo.uint256(ajoId));
+        await provider.waitForTransaction(tx.transaction_hash);
+        return { success: true, transactionHash: tx.transaction_hash };
+      }),
+    [account, isConnected],
+  );
+
+  const deployCore = useCallback(
+    async (ajoId: string) =>
+      withWrite(async () => {
+        const { contract, provider } = getWriteFactoryContract();
+        const tx = await contract.deploy_core(cairo.uint256(ajoId));
+        await provider.waitForTransaction(tx.transaction_hash);
+        return { success: true, transactionHash: tx.transaction_hash };
+      }),
+    [account, isConnected],
+  );
+
+  const getUsdcTokenAddress = useCallback(async () => {
+    const factoryContract = getReadFactoryContract();
+    return toHexAddress(await factoryContract.get_usdc_token_address());
+  }, []);
+
+  const getBtcTokenAddress = useCallback(async () => {
+    const factoryContract = getReadFactoryContract();
+    return toHexAddress(await factoryContract.get_btc_token_address());
+  }, []);
+
+  const isPaused = useCallback(async () => {
+    const factoryContract = getReadFactoryContract();
+    return parseBool(await factoryContract.is_paused());
+  }, []);
+
+  const setUsdcTokenAddress = useCallback(
+    async (tokenAddress: string) =>
+      withWrite(async () => {
+        const { contract, provider } = getWriteFactoryContract();
+        const tx = await contract.set_usdc_token_address(tokenAddress);
+        await provider.waitForTransaction(tx.transaction_hash);
+        return { success: true, transactionHash: tx.transaction_hash };
+      }),
+    [account, isConnected],
+  );
+
+  const setBtcTokenAddress = useCallback(
+    async (tokenAddress: string) =>
+      withWrite(async () => {
+        const { contract, provider } = getWriteFactoryContract();
+        const tx = await contract.set_btc_token_address(tokenAddress);
+        await provider.waitForTransaction(tx.transaction_hash);
+        return { success: true, transactionHash: tx.transaction_hash };
+      }),
+    [account, isConnected],
+  );
+
+  const setCoreClassHash = useCallback(
+    async (classHash: string) =>
+      withWrite(async () => {
+        const { contract, provider } = getWriteFactoryContract();
+        const tx = await contract.set_core_class_hash(classHash);
+        await provider.waitForTransaction(tx.transaction_hash);
+        return { success: true, transactionHash: tx.transaction_hash };
+      }),
+    [account, isConnected],
+  );
+
+  const setMembersClassHash = useCallback(
+    async (classHash: string) =>
+      withWrite(async () => {
+        const { contract, provider } = getWriteFactoryContract();
+        const tx = await contract.set_members_class_hash(classHash);
+        await provider.waitForTransaction(tx.transaction_hash);
+        return { success: true, transactionHash: tx.transaction_hash };
+      }),
+    [account, isConnected],
+  );
+
+  const setCollateralClassHash = useCallback(
+    async (classHash: string) =>
+      withWrite(async () => {
+        const { contract, provider } = getWriteFactoryContract();
+        const tx = await contract.set_collateral_class_hash(classHash);
+        await provider.waitForTransaction(tx.transaction_hash);
+        return { success: true, transactionHash: tx.transaction_hash };
+      }),
+    [account, isConnected],
+  );
+
+  const setPaymentsClassHash = useCallback(
+    async (classHash: string) =>
+      withWrite(async () => {
+        const { contract, provider } = getWriteFactoryContract();
+        const tx = await contract.set_payments_class_hash(classHash);
+        await provider.waitForTransaction(tx.transaction_hash);
+        return { success: true, transactionHash: tx.transaction_hash };
+      }),
+    [account, isConnected],
+  );
+
+  const setGovernanceClassHash = useCallback(
+    async (classHash: string) =>
+      withWrite(async () => {
+        const { contract, provider } = getWriteFactoryContract();
+        const tx = await contract.set_governance_class_hash(classHash);
+        await provider.waitForTransaction(tx.transaction_hash);
+        return { success: true, transactionHash: tx.transaction_hash };
+      }),
+    [account, isConnected],
+  );
+
+  const setScheduleClassHash = useCallback(
+    async (classHash: string) =>
+      withWrite(async () => {
+        const { contract, provider } = getWriteFactoryContract();
+        const tx = await contract.set_schedule_class_hash(classHash);
+        await provider.waitForTransaction(tx.transaction_hash);
+        return { success: true, transactionHash: tx.transaction_hash };
+      }),
+    [account, isConnected],
+  );
+
+  const pause = useCallback(
+    async () =>
+      withWrite(async () => {
+        const { contract, provider } = getWriteFactoryContract();
+        const tx = await contract.pause();
+        await provider.waitForTransaction(tx.transaction_hash);
+        return { success: true, transactionHash: tx.transaction_hash };
+      }),
+    [account, isConnected],
+  );
+
+  const unpause = useCallback(
+    async () =>
+      withWrite(async () => {
+        const { contract, provider } = getWriteFactoryContract();
+        const tx = await contract.unpause();
+        await provider.waitForTransaction(tx.transaction_hash);
+        return { success: true, transactionHash: tx.transaction_hash };
+      }),
+    [account, isConnected],
+  );
+
   return {
     createAjo,
     getAjoInfo,
@@ -447,6 +805,23 @@ const useStarknetAjoFactory = () => {
     getTotalAjos,
     getAllAjos,
     deployAjoContracts,
+    deployMembers,
+    deployCollateralAndPayments,
+    deployGovernanceAndSchedule,
+    deployCore,
+    getUsdcTokenAddress,
+    getBtcTokenAddress,
+    isPaused,
+    setUsdcTokenAddress,
+    setBtcTokenAddress,
+    setCoreClassHash,
+    setMembersClassHash,
+    setCollateralClassHash,
+    setPaymentsClassHash,
+    setGovernanceClassHash,
+    setScheduleClassHash,
+    pause,
+    unpause,
     loading,
   };
 };

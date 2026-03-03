@@ -1,44 +1,8 @@
 [
   {
     "type": "impl",
-    "name": "AjoGovernanceImpl",
-    "interface_name": "ajo_save::interfaces::i_ajo_governance::IAjoGovernance"
-  },
-  {
-    "type": "enum",
-    "name": "ajo_save::interfaces::i_ajo_governance::ProposalType",
-    "variants": [
-      {
-        "name": "AddMember",
-        "type": "()"
-      },
-      {
-        "name": "RemoveMember",
-        "type": "()"
-      },
-      {
-        "name": "ChangeConfig",
-        "type": "()"
-      },
-      {
-        "name": "HandleDefault",
-        "type": "()"
-      },
-      {
-        "name": "Emergency",
-        "type": "()"
-      }
-    ]
-  },
-  {
-    "type": "struct",
-    "name": "core::array::Span::<core::felt252>",
-    "members": [
-      {
-        "name": "snapshot",
-        "type": "@core::array::Array::<core::felt252>"
-      }
-    ]
+    "name": "SwapRouterImpl",
+    "interface_name": "ajo_save::interfaces::i_swap_router::ISwapRouter"
   },
   {
     "type": "struct",
@@ -56,36 +20,10 @@
   },
   {
     "type": "enum",
-    "name": "core::bool",
-    "variants": [
-      {
-        "name": "False",
-        "type": "()"
-      },
-      {
-        "name": "True",
-        "type": "()"
-      }
-    ]
-  },
-  {
-    "type": "enum",
-    "name": "ajo_save::interfaces::i_ajo_governance::ProposalStatus",
+    "name": "ajo_save::interfaces::i_swap_router::SwapStatus",
     "variants": [
       {
         "name": "Pending",
-        "type": "()"
-      },
-      {
-        "name": "Active",
-        "type": "()"
-      },
-      {
-        "name": "Passed",
-        "type": "()"
-      },
-      {
-        "name": "Rejected",
         "type": "()"
       },
       {
@@ -95,61 +33,77 @@
       {
         "name": "Cancelled",
         "type": "()"
+      },
+      {
+        "name": "Failed",
+        "type": "()"
       }
     ]
   },
   {
     "type": "struct",
-    "name": "ajo_save::interfaces::i_ajo_governance::Proposal",
+    "name": "ajo_save::interfaces::i_swap_router::SwapRequest",
     "members": [
       {
-        "name": "id",
+        "name": "request_id",
         "type": "core::integer::u256"
       },
       {
-        "name": "proposer",
+        "name": "ajo_id",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "requester",
         "type": "core::starknet::contract_address::ContractAddress"
       },
       {
-        "name": "proposal_type",
-        "type": "ajo_save::interfaces::i_ajo_governance::ProposalType"
+        "name": "recipient",
+        "type": "core::starknet::contract_address::ContractAddress"
       },
       {
-        "name": "description",
-        "type": "core::felt252"
+        "name": "source_token",
+        "type": "core::starknet::contract_address::ContractAddress"
       },
       {
-        "name": "votes_for",
+        "name": "dest_token",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "source_amount",
         "type": "core::integer::u256"
       },
       {
-        "name": "votes_against",
+        "name": "min_dest_amount",
         "type": "core::integer::u256"
       },
       {
-        "name": "status",
-        "type": "ajo_save::interfaces::i_ajo_governance::ProposalStatus"
-      },
-      {
-        "name": "created_at",
+        "name": "deadline",
         "type": "core::integer::u64"
       },
       {
-        "name": "voting_ends_at",
+        "name": "status",
+        "type": "ajo_save::interfaces::i_swap_router::SwapStatus"
+      },
+      {
+        "name": "actual_dest_amount",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "created_at",
         "type": "core::integer::u64"
       }
     ]
   },
   {
     "type": "interface",
-    "name": "ajo_save::interfaces::i_ajo_governance::IAjoGovernance",
+    "name": "ajo_save::interfaces::i_swap_router::ISwapRouter",
     "items": [
       {
         "type": "function",
-        "name": "set_authorized_core",
+        "name": "set_authorized_executor",
         "inputs": [
           {
-            "name": "core",
+            "name": "executor",
             "type": "core::starknet::contract_address::ContractAddress"
           }
         ],
@@ -158,7 +112,7 @@
       },
       {
         "type": "function",
-        "name": "get_authorized_core",
+        "name": "get_authorized_executor",
         "inputs": [],
         "outputs": [
           {
@@ -169,23 +123,19 @@
       },
       {
         "type": "function",
-        "name": "create_proposal",
+        "name": "get_quote",
         "inputs": [
           {
-            "name": "proposal_type",
-            "type": "ajo_save::interfaces::i_ajo_governance::ProposalType"
-          },
-          {
-            "name": "description",
-            "type": "core::felt252"
-          },
-          {
-            "name": "target",
+            "name": "source_token",
             "type": "core::starknet::contract_address::ContractAddress"
           },
           {
-            "name": "calldata",
-            "type": "core::array::Span::<core::felt252>"
+            "name": "dest_token",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
+          {
+            "name": "amount",
+            "type": "core::integer::u256"
           }
         ],
         "outputs": [
@@ -193,145 +143,111 @@
             "type": "core::integer::u256"
           }
         ],
-        "state_mutability": "external"
+        "state_mutability": "view"
       },
       {
         "type": "function",
-        "name": "cast_vote",
+        "name": "execute_swap",
         "inputs": [
           {
-            "name": "proposal_id",
+            "name": "ajo_id",
             "type": "core::integer::u256"
           },
           {
-            "name": "support",
-            "type": "core::bool"
-          }
-        ],
-        "outputs": [],
-        "state_mutability": "external"
-      },
-      {
-        "type": "function",
-        "name": "get_voting_power",
-        "inputs": [
-          {
-            "name": "voter",
+            "name": "recipient",
             "type": "core::starknet::contract_address::ContractAddress"
-          }
-        ],
-        "outputs": [
+          },
           {
-            "type": "core::integer::u256"
-          }
-        ],
-        "state_mutability": "view"
-      },
-      {
-        "type": "function",
-        "name": "execute_proposal",
-        "inputs": [
+            "name": "source_token",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
           {
-            "name": "proposal_id",
-            "type": "core::integer::u256"
-          }
-        ],
-        "outputs": [],
-        "state_mutability": "external"
-      },
-      {
-        "type": "function",
-        "name": "cancel_proposal",
-        "inputs": [
+            "name": "dest_token",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
           {
-            "name": "proposal_id",
-            "type": "core::integer::u256"
-          }
-        ],
-        "outputs": [],
-        "state_mutability": "external"
-      },
-      {
-        "type": "function",
-        "name": "get_proposal",
-        "inputs": [
-          {
-            "name": "proposal_id",
-            "type": "core::integer::u256"
-          }
-        ],
-        "outputs": [
-          {
-            "type": "ajo_save::interfaces::i_ajo_governance::Proposal"
-          }
-        ],
-        "state_mutability": "view"
-      },
-      {
-        "type": "function",
-        "name": "get_proposal_status",
-        "inputs": [
-          {
-            "name": "proposal_id",
-            "type": "core::integer::u256"
-          }
-        ],
-        "outputs": [
-          {
-            "type": "ajo_save::interfaces::i_ajo_governance::ProposalStatus"
-          }
-        ],
-        "state_mutability": "view"
-      },
-      {
-        "type": "function",
-        "name": "has_voted",
-        "inputs": [
-          {
-            "name": "proposal_id",
+            "name": "source_amount",
             "type": "core::integer::u256"
           },
           {
-            "name": "voter",
-            "type": "core::starknet::contract_address::ContractAddress"
-          }
-        ],
-        "outputs": [
-          {
-            "type": "core::bool"
-          }
-        ],
-        "state_mutability": "view"
-      },
-      {
-        "type": "function",
-        "name": "get_total_proposals",
-        "inputs": [],
-        "outputs": [
-          {
+            "name": "min_dest_amount",
             "type": "core::integer::u256"
-          }
-        ],
-        "state_mutability": "view"
-      },
-      {
-        "type": "function",
-        "name": "get_quorum",
-        "inputs": [],
-        "outputs": [
+          },
           {
-            "type": "core::integer::u256"
-          }
-        ],
-        "state_mutability": "view"
-      },
-      {
-        "type": "function",
-        "name": "get_voting_period",
-        "inputs": [],
-        "outputs": [
-          {
+            "name": "deadline",
             "type": "core::integer::u64"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "cancel_swap",
+        "inputs": [
+          {
+            "name": "request_id",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "get_swap_request",
+        "inputs": [
+          {
+            "name": "request_id",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "ajo_save::interfaces::i_swap_router::SwapRequest"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_swap_status",
+        "inputs": [
+          {
+            "name": "request_id",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "ajo_save::interfaces::i_swap_router::SwapStatus"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "set_dex_router",
+        "inputs": [
+          {
+            "name": "router",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "get_dex_router",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
           }
         ],
         "state_mutability": "view"
@@ -386,92 +302,104 @@
       {
         "name": "owner",
         "type": "core::starknet::contract_address::ContractAddress"
-      },
-      {
-        "name": "members_contract",
-        "type": "core::starknet::contract_address::ContractAddress"
-      },
-      {
-        "name": "voting_period",
-        "type": "core::integer::u64"
-      },
-      {
-        "name": "quorum_percentage",
-        "type": "core::integer::u256"
       }
     ]
   },
   {
     "type": "event",
-    "name": "ajo_save::governance::ajo_governance::AjoGovernance::ProposalCreated",
+    "name": "ajo_save::adapters::swap_router::SwapRouter::SwapQuoted",
     "kind": "struct",
     "members": [
       {
-        "name": "proposal_id",
-        "type": "core::integer::u256",
-        "kind": "key"
-      },
-      {
-        "name": "proposer",
+        "name": "source_token",
         "type": "core::starknet::contract_address::ContractAddress",
         "kind": "data"
       },
       {
-        "name": "proposal_type",
-        "type": "ajo_save::interfaces::i_ajo_governance::ProposalType",
+        "name": "dest_token",
+        "type": "core::starknet::contract_address::ContractAddress",
         "kind": "data"
       },
       {
-        "name": "description",
+        "name": "source_amount",
+        "type": "core::integer::u256",
+        "kind": "data"
+      },
+      {
+        "name": "quoted_dest_amount",
+        "type": "core::integer::u256",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::adapters::swap_router::SwapRouter::SwapExecuted",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "request_id",
+        "type": "core::integer::u256",
+        "kind": "key"
+      },
+      {
+        "name": "recipient",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      },
+      {
+        "name": "source_amount",
+        "type": "core::integer::u256",
+        "kind": "data"
+      },
+      {
+        "name": "dest_amount",
+        "type": "core::integer::u256",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::adapters::swap_router::SwapRouter::SwapCancelled",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "request_id",
+        "type": "core::integer::u256",
+        "kind": "key"
+      },
+      {
+        "name": "reason",
         "type": "core::felt252",
         "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::adapters::swap_router::SwapRouter::SwapFailed",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "request_id",
+        "type": "core::integer::u256",
+        "kind": "key"
       },
       {
-        "name": "voting_ends_at",
-        "type": "core::integer::u64",
+        "name": "reason",
+        "type": "core::felt252",
         "kind": "data"
       }
     ]
   },
   {
     "type": "event",
-    "name": "ajo_save::governance::ajo_governance::AjoGovernance::VoteCast",
+    "name": "ajo_save::adapters::swap_router::SwapRouter::DexRouterUpdated",
     "kind": "struct",
     "members": [
       {
-        "name": "proposal_id",
-        "type": "core::integer::u256",
-        "kind": "key"
-      },
-      {
-        "name": "voter",
-        "type": "core::starknet::contract_address::ContractAddress",
-        "kind": "key"
-      },
-      {
-        "name": "support",
-        "type": "core::bool",
-        "kind": "data"
-      },
-      {
-        "name": "voting_power",
-        "type": "core::integer::u256",
-        "kind": "data"
-      }
-    ]
-  },
-  {
-    "type": "event",
-    "name": "ajo_save::governance::ajo_governance::AjoGovernance::ProposalExecuted",
-    "kind": "struct",
-    "members": [
-      {
-        "name": "proposal_id",
-        "type": "core::integer::u256",
-        "kind": "key"
-      },
-      {
-        "name": "executor",
+        "name": "dex_router",
         "type": "core::starknet::contract_address::ContractAddress",
         "kind": "data"
       }
@@ -479,16 +407,11 @@
   },
   {
     "type": "event",
-    "name": "ajo_save::governance::ajo_governance::AjoGovernance::ProposalCancelled",
+    "name": "ajo_save::adapters::swap_router::SwapRouter::AuthorizedExecutorUpdated",
     "kind": "struct",
     "members": [
       {
-        "name": "proposal_id",
-        "type": "core::integer::u256",
-        "kind": "key"
-      },
-      {
-        "name": "canceller",
+        "name": "authorized_executor",
         "type": "core::starknet::contract_address::ContractAddress",
         "kind": "data"
       }
@@ -525,32 +448,53 @@
   },
   {
     "type": "event",
-    "name": "ajo_save::governance::ajo_governance::AjoGovernance::Event",
+    "name": "ajo_save::components::reentrancy_guard::ReentrancyGuardComponent::Event",
+    "kind": "enum",
+    "variants": []
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::adapters::swap_router::SwapRouter::Event",
     "kind": "enum",
     "variants": [
       {
-        "name": "ProposalCreated",
-        "type": "ajo_save::governance::ajo_governance::AjoGovernance::ProposalCreated",
+        "name": "SwapQuoted",
+        "type": "ajo_save::adapters::swap_router::SwapRouter::SwapQuoted",
         "kind": "nested"
       },
       {
-        "name": "VoteCast",
-        "type": "ajo_save::governance::ajo_governance::AjoGovernance::VoteCast",
+        "name": "SwapExecuted",
+        "type": "ajo_save::adapters::swap_router::SwapRouter::SwapExecuted",
         "kind": "nested"
       },
       {
-        "name": "ProposalExecuted",
-        "type": "ajo_save::governance::ajo_governance::AjoGovernance::ProposalExecuted",
+        "name": "SwapCancelled",
+        "type": "ajo_save::adapters::swap_router::SwapRouter::SwapCancelled",
         "kind": "nested"
       },
       {
-        "name": "ProposalCancelled",
-        "type": "ajo_save::governance::ajo_governance::AjoGovernance::ProposalCancelled",
+        "name": "SwapFailed",
+        "type": "ajo_save::adapters::swap_router::SwapRouter::SwapFailed",
+        "kind": "nested"
+      },
+      {
+        "name": "DexRouterUpdated",
+        "type": "ajo_save::adapters::swap_router::SwapRouter::DexRouterUpdated",
+        "kind": "nested"
+      },
+      {
+        "name": "AuthorizedExecutorUpdated",
+        "type": "ajo_save::adapters::swap_router::SwapRouter::AuthorizedExecutorUpdated",
         "kind": "nested"
       },
       {
         "name": "OwnableEvent",
         "type": "ajo_save::components::ownable::OwnableComponent::Event",
+        "kind": "flat"
+      },
+      {
+        "name": "ReentrancyGuardEvent",
+        "type": "ajo_save::components::reentrancy_guard::ReentrancyGuardComponent::Event",
         "kind": "flat"
       }
     ]

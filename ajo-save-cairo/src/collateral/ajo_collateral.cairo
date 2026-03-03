@@ -357,9 +357,19 @@ pub mod AjoCollateral {
             let btc_adapter = InternalImpl::get_btc_adapter_if_enabled(@self);
             if !btc_adapter.is_zero() {
                 let adapter = IBTCCollateralAdapterDispatcher { contract_address: btc_adapter };
+                let amount_low: felt252 = amount.low.into();
+                let amount_high: felt252 = amount.high.into();
+                let proof_anchor: felt252 = starknet::get_block_timestamp().into();
+                let mut btc_script_hash = amount_low + amount_high + proof_anchor;
+                if btc_script_hash == 0 {
+                    btc_script_hash = 1;
+                }
                 let mut proof = ArrayTrait::new();
-                proof.append(1);
-                adapter.register_commitment(0, caller, amount, 1, proof.span());
+                proof.append(btc_script_hash);
+                proof.append(amount_low);
+                proof.append(amount_high);
+                proof.append(proof_anchor);
+                adapter.register_commitment(0, caller, amount, btc_script_hash, proof.span());
 
                 let current_collateral = self.member_collateral.read(caller);
                 self.member_collateral.write(caller, current_collateral + amount);
@@ -414,9 +424,19 @@ pub mod AjoCollateral {
             let btc_adapter = InternalImpl::get_btc_adapter_if_enabled(@self);
             if !btc_adapter.is_zero() {
                 let adapter = IBTCCollateralAdapterDispatcher { contract_address: btc_adapter };
+                let amount_low: felt252 = amount.low.into();
+                let amount_high: felt252 = amount.high.into();
+                let proof_anchor: felt252 = starknet::get_block_timestamp().into();
+                let mut btc_script_hash = amount_low + amount_high + proof_anchor + 1;
+                if btc_script_hash == 0 {
+                    btc_script_hash = 1;
+                }
                 let mut proof = ArrayTrait::new();
-                proof.append(1);
-                adapter.register_commitment(0, member, amount, 1, proof.span());
+                proof.append(btc_script_hash);
+                proof.append(amount_low);
+                proof.append(amount_high);
+                proof.append(proof_anchor);
+                adapter.register_commitment(0, member, amount, btc_script_hash, proof.span());
 
                 let current_collateral = self.member_collateral.read(member);
                 self.member_collateral.write(member, current_collateral + amount);
@@ -596,8 +616,10 @@ pub mod AjoCollateral {
                 let adapter = IBTCCollateralAdapterDispatcher { contract_address: btc_adapter };
                 let commitment_id = adapter.get_member_commitment(member);
                 if commitment_id > 0 {
+                    let commitment = adapter.get_commitment(commitment_id);
                     let mut default_proof = ArrayTrait::new();
-                    default_proof.append(1);
+                    default_proof.append(commitment.btc_script_hash);
+                    default_proof.append(commitment.amount.low.into());
                     adapter.start_enforcement(commitment_id, default_proof.span());
                 }
 
@@ -668,8 +690,10 @@ pub mod AjoCollateral {
                 let adapter = IBTCCollateralAdapterDispatcher { contract_address: btc_adapter };
                 let commitment_id = adapter.get_member_commitment(member);
                 if commitment_id > 0 {
+                    let commitment = adapter.get_commitment(commitment_id);
                     let mut default_proof = ArrayTrait::new();
-                    default_proof.append(1);
+                    default_proof.append(commitment.btc_script_hash);
+                    default_proof.append(commitment.amount.low.into());
                     adapter.start_enforcement(commitment_id, default_proof.span());
                 }
 

@@ -81,6 +81,18 @@ const toBool = (value: any): boolean => {
   return toBigIntValue(value) === 1n;
 };
 
+const toAddress = (value: any): string => {
+  if (typeof value === "string") {
+    if (value.startsWith("0x")) return value.toLowerCase();
+    try {
+      return `0x${BigInt(value).toString(16)}`;
+    } catch {
+      return value;
+    }
+  }
+  return `0x${toBigIntValue(value).toString(16)}`;
+};
+
 /**
  * Hook for interacting with Ajo Governance Cairo contract
  */
@@ -92,6 +104,55 @@ const useStarknetAjoGovernance = (ajoGovernanceAddress: string) => {
     new RpcProvider({
       nodeUrl: RPC_URL,
     });
+
+  const getAuthorizedCore = useCallback(async (): Promise<string> => {
+    if (!ajoGovernanceAddress) {
+      throw new Error("Contract address not available");
+    }
+
+    const provider = getProvider();
+    const governanceContract = new Contract(
+      ajoGovernanceAbi as any,
+      ajoGovernanceAddress,
+      provider,
+    );
+
+    const coreAddress = await governanceContract.get_authorized_core();
+    return toAddress(coreAddress);
+  }, [ajoGovernanceAddress]);
+
+  const setAuthorizedCore = useCallback(
+    async (coreAddress: string) => {
+      if (!account || !isConnected || !ajoGovernanceAddress) {
+        throw new Error("Wallet not connected or contract address not available");
+      }
+
+      setLoading(true);
+      try {
+        const provider = getProvider();
+        const governanceContract = new Contract(
+          ajoGovernanceAbi as any,
+          ajoGovernanceAddress,
+          provider,
+        );
+        governanceContract.connect(account as any);
+
+        const result = await governanceContract.set_authorized_core(coreAddress);
+        await provider.waitForTransaction(result.transaction_hash);
+
+        return {
+          transactionHash: result.transaction_hash,
+          success: true,
+        };
+      } catch (error) {
+        console.error("Error setting authorized core:", error);
+        throw error;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [account, isConnected, ajoGovernanceAddress],
+  );
 
   /**
    * Create a new proposal
@@ -413,6 +474,7 @@ const useStarknetAjoGovernance = (ajoGovernanceAddress: string) => {
 
   return {
     // View functions
+    getAuthorizedCore,
     getProposal,
     getProposalStatus,
     hasVoted,
@@ -422,6 +484,7 @@ const useStarknetAjoGovernance = (ajoGovernanceAddress: string) => {
     getVotingPeriod,
 
     // Write functions
+    setAuthorizedCore,
     createProposal,
     castVote,
     executeProposal,

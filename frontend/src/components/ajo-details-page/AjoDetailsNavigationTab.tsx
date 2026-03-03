@@ -1,4 +1,4 @@
-import { BarChart3, Eye, Users, Vote, History } from "lucide-react";
+import { Eye, Users, Vote, History, CalendarClock, SlidersHorizontal } from "lucide-react";
 
 const AjoDetailsNavigationTab = ({
   isVisible,
@@ -19,9 +19,10 @@ const AjoDetailsNavigationTab = ({
         {[
           { id: "overview", label: "Overview", icon: Eye },
           { id: "members", label: "Members", icon: Users },
-          // { id: "payments", label: "Payment History", icon: History },
+          { id: "payments", label: "Payment History", icon: History },
+          { id: "schedule", label: "Schedule", icon: CalendarClock },
+          { id: "advanced", label: "Advanced", icon: SlidersHorizontal },
           { id: "governance", label: "Governance", icon: Vote },
-          // { id: "analytics", label: "Analytics", icon: BarChart3 },
         ].map((tab) => (
           <button
             key={tab.id}

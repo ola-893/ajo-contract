@@ -26,6 +26,7 @@ export interface AjoInfo {
   usesScheduledPayments: boolean;
   scheduledPaymentsCount: string;
   ajoCycleDuration: string;
+  ajoTotalParticipants?: string;
   ajoMonthlyPaymentUSDC: string;
   ajoMonthlyPaymentHBAR: string;
 }

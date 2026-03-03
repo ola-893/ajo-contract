@@ -100,6 +100,7 @@ pub mod BTCCollateralAdapter {
         pub const INVALID_MEMBER: felt252 = 'Member address is zero';
         pub const INVALID_AMOUNT: felt252 = 'Amount must be greater than 0';
         pub const INVALID_SCRIPT_HASH: felt252 = 'Invalid BTC script hash';
+        pub const INVALID_PROOF: felt252 = 'Invalid proof';
         pub const COMMITMENT_NOT_FOUND: felt252 = 'Commitment not found';
         pub const INVALID_STATUS: felt252 = 'Invalid commitment status';
         pub const UNAUTHORIZED_CORE: felt252 = 'Caller is not authorized core';
@@ -131,6 +132,27 @@ pub mod BTCCollateralAdapter {
             let owner = self.ownable.owner();
             assert(caller == verifier || caller == owner, Errors::UNAUTHORIZED_VERIFIER);
         }
+
+        fn validate_registration_proof(
+            self: @ContractState,
+            amount: u256,
+            btc_script_hash: felt252,
+            proof: Span<felt252>,
+        ) {
+            // Proof format:
+            // [0] = btc_script_hash
+            // [1] = amount.low
+            // [2] = amount.high
+            // [3] = proof reference/anchor
+            assert(proof.len() >= 4, Errors::INVALID_PROOF);
+            assert(*proof.at(0) == btc_script_hash, Errors::INVALID_PROOF);
+
+            let amount_low: felt252 = amount.low.into();
+            let amount_high: felt252 = amount.high.into();
+            assert(*proof.at(1) == amount_low, Errors::INVALID_PROOF);
+            assert(*proof.at(2) == amount_high, Errors::INVALID_PROOF);
+            assert(*proof.at(3) != 0, Errors::INVALID_PROOF);
+        }
     }
 
     #[abi(embed_v0)]
@@ -159,11 +181,12 @@ pub mod BTCCollateralAdapter {
             assert(!member.is_zero(), Errors::INVALID_MEMBER);
             assert(amount > 0, Errors::INVALID_AMOUNT);
             assert(btc_script_hash != 0, Errors::INVALID_SCRIPT_HASH);
+            InternalImpl::validate_registration_proof(@self, amount, btc_script_hash, proof);
 
             let commitment_id = self.next_commitment_id.read() + 1;
             self.next_commitment_id.write(commitment_id);
 
-            let proof_reference = if proof.len() > 0 { *proof.at(0) } else { 0 };
+            let proof_reference = *proof.at(3);
             let commitment = BTCCommitment {
                 commitment_id,
                 member,
@@ -198,6 +221,10 @@ pub mod BTCCollateralAdapter {
             let mut commitment = self.commitments.read(commitment_id);
             assert(commitment.commitment_id != 0, Errors::COMMITMENT_NOT_FOUND);
             assert(commitment.status == CommitmentStatus::Registered, Errors::INVALID_STATUS);
+            assert(
+                *verification_proof.at(0) == commitment.proof_reference,
+                Errors::INVALID_PROOF
+            );
 
             commitment.status = CommitmentStatus::Verified;
             self.commitments.write(commitment_id, commitment);
@@ -209,11 +236,14 @@ pub mod BTCCollateralAdapter {
         ) {
             self.pausable.assert_not_paused();
             InternalImpl::assert_only_core(@self);
-            assert(default_proof.len() > 0, 'Default proof required');
+            assert(default_proof.len() >= 2, 'Default proof required');
 
             let mut commitment = self.commitments.read(commitment_id);
             assert(commitment.commitment_id != 0, Errors::COMMITMENT_NOT_FOUND);
             assert(commitment.status == CommitmentStatus::Verified, Errors::INVALID_STATUS);
+            let amount_low: felt252 = commitment.amount.low.into();
+            assert(*default_proof.at(0) == commitment.btc_script_hash, Errors::INVALID_PROOF);
+            assert(*default_proof.at(1) == amount_low, Errors::INVALID_PROOF);
 
             commitment.status = CommitmentStatus::EnforcementStarted;
             self.commitments.write(commitment_id, commitment);

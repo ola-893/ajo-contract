@@ -181,11 +181,14 @@ pub mod AjoSchedule {
                     payments.end_cycle(cycle);
                 },
                 ScheduleType::CollateralCheck => {
-                    // Collateral verification: This is a placeholder for future implementation
-                    // Could be used to trigger automated collateral checks or default detection
-                    // The calldata would contain parameters for the check
-                    // For now, this is a no-op that just marks the task as executed
-                    // In production, this could call handle_default or other verification functions
+                    // Calldata contains the defaulter address (felt252).
+                    // This enables automated default handling from keeper executions.
+                    let core = ajo_save::interfaces::i_ajo_core::IAjoCoreDispatcher {
+                        contract_address: task.target
+                    };
+                    let defaulter: ContractAddress = task.calldata.try_into().unwrap();
+                    assert(!defaulter.is_zero(), 'Invalid defaulter address');
+                    core.handle_default(defaulter);
                 },
             }
 

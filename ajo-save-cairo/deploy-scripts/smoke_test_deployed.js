@@ -1,4 +1,4 @@
-import { RpcProvider, Account, Contract, CairoCustomEnum } from "starknet";
+import { RpcProvider, Account, Contract, CairoCustomEnum, constants } from "starknet";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -14,6 +14,7 @@ const ERC20_ABI_PATH = path.resolve(ABIS_DIR, "erc20.json");
 
 const DEPLOYMENT_INFO_PATH = path.resolve(PROJECT_ROOT, "deployment_info.json");
 const SMOKE_REPORT_PATH = path.resolve(PROJECT_ROOT, "smoke_test_report.json");
+const DEFAULT_MAX_FEE = BigInt(process.env.STARKNET_MAX_FEE ?? "300000000000000");
 
 function parseError(error) {
   return String(error?.message ?? error?.stack ?? error);
@@ -87,7 +88,10 @@ async function invokeAndWait(provider, account, contract, method, args, network)
   let tx;
   try {
     const call = contract.populate(method, args);
-    tx = await account.execute(call);
+    tx = await account.execute(call, {
+      version: constants.TRANSACTION_VERSION.V1,
+      maxFee: DEFAULT_MAX_FEE,
+    });
   } catch (error) {
     throw new Error(`Failed to submit ${method}: ${parseError(error)}`);
   }

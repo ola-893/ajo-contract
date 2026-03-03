@@ -1,4 +1,4 @@
-import { RpcProvider, Account, Contract, CairoCustomEnum } from "starknet";
+import { RpcProvider, Account, Contract, CairoCustomEnum, constants } from "starknet";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -12,6 +12,7 @@ const FACTORY_ABI_PATH = path.resolve(ABIS_DIR, "factory.json");
 const DECLARED_HASHES_PATH = path.resolve(PROJECT_ROOT, "declared_class_hashes.json");
 const DEPLOYMENT_INFO_PATH = path.resolve(PROJECT_ROOT, "deployment_info.json");
 const VERIFICATION_REPORT_PATH = path.resolve(PROJECT_ROOT, "verification_report.json");
+const DEFAULT_MAX_FEE = BigInt(process.env.STARKNET_MAX_FEE ?? "300000000000000");
 
 const REQUIRED_CLASS_KEYS = [
   "AjoCore",
@@ -95,7 +96,10 @@ async function waitForInvoke(provider, account, contract, method, args, network)
   let tx;
   try {
     const call = contract.populate(method, args);
-    tx = await account.execute(call);
+    tx = await account.execute(call, {
+      version: constants.TRANSACTION_VERSION.V1,
+      maxFee: DEFAULT_MAX_FEE,
+    });
   } catch (error) {
     throw new Error(`Failed to submit ${method}: ${parseError(error)}`);
   }

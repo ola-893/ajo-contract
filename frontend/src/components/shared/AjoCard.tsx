@@ -26,6 +26,10 @@ const AjoCard = ({ ajo, isVisible }: AjoCardProps) => {
   const navigate = useNavigate();
   const { nairaRate } = useTokenStore();
   const { accountId } = useWalletInterface();
+  const totalParticipants = Math.max(
+    1,
+    Number.parseInt(String(ajo.ajoTotalParticipants ?? "10"), 10) || 10,
+  );
 
   const handleAjoRoute = () => {
     if (accountId) {
@@ -143,14 +147,14 @@ const AjoCard = ({ ajo, isVisible }: AjoCardProps) => {
             <span className="text-xs text-muted-foreground">Cycle:</span>
             <span className="font-semibold text-card-foreground flex items-center space-x-1">
               <Calendar className="w-4 h-4 text-primary" />
-              <span>10</span>
+              <span>{totalParticipants}</span>
             </span>
           </div>
           <div className="flex justify-between items-center">
             <div className="text-xs text-muted-foreground">Expected Payout</div>
             <div className="text-lg font-bold text-primary">
               {formatCurrencyUSD(
-                (Number(ajo.ajoMonthlyPaymentUSDC) / 1000000) * 10
+                (Number(ajo.ajoMonthlyPaymentUSDC) / 1000000) * totalParticipants
               )}
             </div>
           </div>

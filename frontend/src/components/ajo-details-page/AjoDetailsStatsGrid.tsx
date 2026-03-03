@@ -10,6 +10,7 @@ interface AjoDetailsStatsGridProps {
   monthlyPayment?: number | null;
   memberCount?: number;
   totalParticipants?: number;
+  guarantorAddress?: string;
 }
 
 const AjoDetailsStatsGrid = ({
@@ -17,6 +18,7 @@ const AjoDetailsStatsGrid = ({
   monthlyPayment = null,
   memberCount = 0,
   totalParticipants = 10,
+  guarantorAddress = "0x0000...0000",
 }: AjoDetailsStatsGridProps) => {
   const paymentAmount =
     monthlyPayment !== null && monthlyPayment !== undefined
@@ -80,7 +82,7 @@ const AjoDetailsStatsGrid = ({
           </div>
         </div>
         <div className="text-lg md:text-2xl font-bold text-card-foreground">
-          0x0000...0000
+          {guarantorAddress}
         </div>
         <div className="text-sm text-muted-foreground">Guarantor address</div>
       </div>

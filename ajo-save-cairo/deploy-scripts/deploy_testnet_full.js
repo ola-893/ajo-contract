@@ -1,4 +1,4 @@
-import { RpcProvider, Account, Contract, CallData, hash, json } from "starknet";
+import { RpcProvider, Account, Contract, CallData, constants, hash, json } from "starknet";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -34,6 +34,7 @@ const FACTORY_CLASS_KEYS = [
 ];
 
 const FACTORY_ABI_PATH = path.resolve(ABIS_DIR, "factory.json");
+const DEFAULT_MAX_FEE = BigInt(process.env.STARKNET_MAX_FEE ?? "300000000000000");
 
 function nowIso() {
   return new Date().toISOString();
@@ -145,6 +146,9 @@ async function ensureDeclared(
       declared = await account.declare({
         contract: contractClass,
         casm: compiledClass,
+      }, {
+        version: constants.TRANSACTION_VERSION.V1,
+        maxFee: DEFAULT_MAX_FEE,
       });
     } catch (error) {
       throw new Error(`Failed to declare ${className}: ${parseError(error)}`);
@@ -174,6 +178,9 @@ async function deployContract(provider, account, className, classHash, construct
     deployResponse = await account.deployContract({
       classHash,
       constructorCalldata,
+    }, {
+      version: constants.TRANSACTION_VERSION.V1,
+      maxFee: DEFAULT_MAX_FEE,
     });
   } catch (error) {
     throw new Error(`Failed to submit deployment for ${className}: ${parseError(error)}`);
@@ -205,7 +212,10 @@ async function executeFactoryCall(provider, account, factory, method, args, netw
   let tx;
   try {
     const call = factory.populate(method, args);
-    tx = await account.execute(call);
+    tx = await account.execute(call, {
+      version: constants.TRANSACTION_VERSION.V1,
+      maxFee: DEFAULT_MAX_FEE,
+    });
   } catch (error) {
     throw new Error(`Failed to submit factory.${method}: ${parseError(error)}`);
   }

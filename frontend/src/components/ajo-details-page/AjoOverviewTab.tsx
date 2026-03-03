@@ -10,17 +10,32 @@ const AjoOverviewTab = ({
   ajo,
   memberCount = 0,
   currentCycle = 1,
+  advancedFeatures,
+  collateralSummary,
 }: {
   ajo: StarknetAjoInfo | null | undefined;
   memberCount?: number;
   currentCycle?: number;
+  advancedFeatures?: {
+    bridgeEnabled?: boolean;
+    swapEnabled?: boolean;
+    btcCommitmentEnabled?: boolean;
+    collateralMode?: string;
+  } | null;
+  collateralSummary?: {
+    totalCollateral?: bigint;
+    userCollateral?: bigint;
+    isSufficient?: boolean;
+  } | null;
 }) => {
   const totalParticipants = ajo?.config.totalParticipants ?? 10;
   const progressPercent =
     totalParticipants > 0 ? ((currentCycle - 1) / totalParticipants) * 100 : 0;
   const cycleLengthDays = Math.max(
     1,
-    Math.floor((ajo?.config.cycleDuration ?? 30 * 24 * 60 * 60) / (24 * 60 * 60)),
+    Math.floor(
+      (ajo?.config.cycleDuration ?? (30 * 24 * 60 * 60)) / (24 * 60 * 60),
+    ),
   );
 
   return (
@@ -131,6 +146,44 @@ const AjoOverviewTab = ({
             <div className="flex justify-between">
               <span className="text-muted-foreground">Privacy:</span>
               <span className="font-semibold text-card-foreground">Public</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-card rounded-xl shadow-lg p-6 border border-border">
+          <h3 className="text-xl font-bold text-card-foreground mb-4">
+            Module Status
+          </h3>
+          <div className="space-y-3 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Collateral Mode:</span>
+              <span className="font-semibold text-card-foreground">
+                {advancedFeatures?.collateralMode ?? "L2Escrow"}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Bridge:</span>
+              <span className="font-semibold text-card-foreground">
+                {advancedFeatures?.bridgeEnabled ? "Enabled" : "Disabled"}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Swap Router:</span>
+              <span className="font-semibold text-card-foreground">
+                {advancedFeatures?.swapEnabled ? "Enabled" : "Disabled"}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">BTC Commitments:</span>
+              <span className="font-semibold text-card-foreground">
+                {advancedFeatures?.btcCommitmentEnabled ? "Enabled" : "Disabled"}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Collateral Status:</span>
+              <span className="font-semibold text-card-foreground">
+                {collateralSummary?.isSufficient ? "Sufficient" : "Needs Top-up"}
+              </span>
             </div>
           </div>
         </div>

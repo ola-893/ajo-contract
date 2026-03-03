@@ -20,6 +20,10 @@ pub trait IAjoCore<TContractState> {
     fn process_payment(ref self: TContractState);
     fn process_cycle(ref self: TContractState, cycle_number: u256);
     fn handle_default(ref self: TContractState, defaulter: ContractAddress);
+    fn governance_add_member(
+        ref self: TContractState, member: ContractAddress, position: u256
+    );
+    fn governance_remove_member(ref self: TContractState, member: ContractAddress);
     fn exit_ajo(ref self: TContractState);
     fn finalize_ajo(ref self: TContractState);
 

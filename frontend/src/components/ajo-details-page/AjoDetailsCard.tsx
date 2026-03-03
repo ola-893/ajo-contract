@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CheckCircle,
   Clock,
@@ -14,6 +14,8 @@ import { formatAddress } from "@/utils/utils";
 import type { StarknetAjoInfo } from "@/hooks/useStarknetAjoFactory";
 import { useStarknetWallet } from "@/contexts/StarknetWalletContext";
 import useStarknetAjoCore from "@/hooks/useStarknetAjoCore";
+import useStarknetAjoMembers from "@/hooks/useStarknetAjoMembers";
+import useStarknetAjoCollateral from "@/hooks/useStarknetAjoCollateral";
 import useStarknetErc20 from "@/hooks/useStarknetErc20";
 import { TOKEN_ADDRESSES } from "@/config/constants";
 
@@ -37,16 +39,92 @@ const AjoDetailsCard = ({
 }: AjoDetailsCardProps) => {
   const { address, isConnected } = useStarknetWallet();
   const { joinAjo } = useStarknetAjoCore(ajo?.coreAddress || "");
+  const { getTotalMembers, isMember } = useStarknetAjoMembers(
+    ajo?.membersAddress || "",
+  );
+  const { calculateRequiredCollateral } = useStarknetAjoCollateral(
+    ajo?.collateralAddress || "",
+  );
+  const paymentToken = ajo?.config.paymentToken === "BTC" ? "BTC" : "USDC";
   const paymentTokenAddress =
-    ajo?.config.paymentToken === "USDC"
-      ? TOKEN_ADDRESSES.sepolia.USDC.toLowerCase()
-      : "";
+    paymentToken === "BTC"
+      ? (TOKEN_ADDRESSES.sepolia.BTC || "").toLowerCase()
+      : TOKEN_ADDRESSES.sepolia.USDC.toLowerCase();
+  const paymentTokenIndex = paymentToken === "BTC" ? 1 : 0;
   const { getAllowance, approve } = useStarknetErc20(paymentTokenAddress);
 
   const [isAjoFull, setIsAjoFull] = useState(false);
   const [isActiveMember, setIsActiveMember] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
+  const [requiredCollateral, setRequiredCollateral] = useState<bigint | null>(
+    null,
+  );
   const userHasPaid = false;
+  const isZeroAddress = (value?: string | null) =>
+    !value || /^0x0+$/i.test(value);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadJoinState = async () => {
+      if (!ajo) return;
+      if (isZeroAddress(ajo.membersAddress)) {
+        if (!cancelled) {
+          setIsAjoFull(false);
+          setIsActiveMember(false);
+          setRequiredCollateral(null);
+        }
+        return;
+      }
+
+      try {
+        const total = await getTotalMembers().catch(() => 0);
+        const full = total >= Number(ajo.config.totalParticipants || 0);
+
+        let activeMember = false;
+        if (address) {
+          activeMember = await isMember(address).catch(() => false);
+        }
+
+        if (!cancelled) {
+          setIsAjoFull(full);
+          setIsActiveMember(activeMember);
+        }
+
+        if (!full && !activeMember && total >= 0) {
+          const nextPosition = Math.max(1, total + 1);
+          const required = await calculateRequiredCollateral(
+            nextPosition,
+            ajo.config.monthlyContribution.toString(),
+            ajo.config.totalParticipants,
+          ).catch(() => 0n);
+
+          if (!cancelled) {
+            setRequiredCollateral(required > 0n ? required : null);
+          }
+        } else if (!cancelled) {
+          setRequiredCollateral(null);
+        }
+      } catch (error) {
+        console.error("Failed to load join state:", error);
+        if (!cancelled) {
+          setRequiredCollateral(null);
+        }
+      }
+    };
+
+    loadJoinState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    ajo,
+    address,
+    getTotalMembers,
+    isMember,
+    calculateRequiredCollateral,
+  ]);
 
   const handleJoinAjo = async () => {
     if (!isConnected || !address) {
@@ -74,16 +152,21 @@ const AjoDetailsCard = ({
       return;
     }
 
-    if (!ajo.coreAddress || /^0x0+$/i.test(ajo.coreAddress)) {
+    if (isZeroAddress(ajo.coreAddress)) {
       toast.error("Ajo core contract is not deployed yet");
+      return;
+    }
+    if (isZeroAddress(ajo.collateralAddress)) {
+      toast.error("Ajo collateral contract is not deployed yet");
       return;
     }
 
     setIsJoining(true);
     try {
-      // Conservative approval amount (covers max expected collateral at early queue positions)
       const approvalAmount =
-        ajo.config.monthlyContribution * BigInt(ajo.config.totalParticipants);
+        requiredCollateral && requiredCollateral > 0n
+          ? requiredCollateral
+          : ajo.config.monthlyContribution * BigInt(ajo.config.totalParticipants);
 
       const currentAllowance = await getAllowance(address, ajo.collateralAddress);
       if (currentAllowance < approvalAmount) {
@@ -92,7 +175,7 @@ const AjoDetailsCard = ({
       }
 
       toast.info("Joining Ajo...");
-      await joinAjo(0);
+      await joinAjo(paymentTokenIndex);
 
       toast.success("Collateral locked and Ajo joined successfully");
       setIsActiveMember(true);
@@ -119,16 +202,19 @@ const AjoDetailsCard = ({
       : "$1 USDC";
   const collateralDisplay = useMemo(() => {
     if (!ajo) return "5.4 USDC";
-    const estimatedRequired = estimateRequiredCollateral(
-      ajo.config.monthlyContribution,
-      ajo.config.totalParticipants,
-    );
-    if (estimatedRequired <= 0n) return "0";
+    const amount =
+      requiredCollateral && requiredCollateral > 0n
+        ? requiredCollateral
+        : estimateRequiredCollateral(
+            ajo.config.monthlyContribution,
+            ajo.config.totalParticipants,
+          );
+    if (amount <= 0n) return "0";
     const decimals = ajo?.config.paymentToken === "BTC" ? 8 : 6;
-    return `${formatTokenAmount(estimatedRequired, decimals)} ${
+    return `${formatTokenAmount(amount, decimals)} ${
       ajo?.config.paymentToken || "USDC"
     }`;
-  }, [ajo]);
+  }, [ajo, requiredCollateral]);
 
   return (
     <div

@@ -27,6 +27,7 @@ pub mod BridgeAdapter {
         withdrawal_requests: Map<u256, WithdrawalRequest>,
         request_statuses: Map<u256, BridgeRequestStatus>,
         request_exists: Map<u256, bool>,
+        deposit_proof_reference: Map<u256, felt252>,
         next_request_id: u256,
 
         // Replay protection
@@ -117,6 +118,7 @@ pub mod BridgeAdapter {
         pub const INVALID_BTC_ADDRESS: felt252 = 'Invalid BTC address';
         pub const INVALID_BTC_TX_HASH: felt252 = 'Invalid BTC tx hash';
         pub const INVALID_PROOF: felt252 = 'Invalid deposit proof';
+        pub const INVALID_PROOF_FORMAT: felt252 = 'Invalid proof format';
         pub const REQUEST_NOT_FOUND: felt252 = 'Request not found';
         pub const REQUEST_NOT_PENDING: felt252 = 'Request is not pending';
         pub const DUPLICATE_BTC_TX_HASH: felt252 = 'Duplicate BTC tx hash';
@@ -146,6 +148,27 @@ pub mod BridgeAdapter {
             let caller = get_caller_address();
             assert(caller == self.authorized_core.read(), Errors::UNAUTHORIZED_CORE);
         }
+
+        fn validate_deposit_proof(
+            self: @ContractState,
+            amount: u256,
+            btc_tx_hash: felt252,
+            proof: Span<felt252>,
+        ) {
+            // Proof format:
+            // [0] = btc_tx_hash
+            // [1] = amount.low
+            // [2] = amount.high
+            // [3] = arbitrary proof reference/anchor
+            assert(proof.len() >= 4, Errors::INVALID_PROOF_FORMAT);
+            assert(*proof.at(0) == btc_tx_hash, Errors::INVALID_PROOF);
+
+            let amount_low: felt252 = amount.low.into();
+            let amount_high: felt252 = amount.high.into();
+            assert(*proof.at(1) == amount_low, Errors::INVALID_PROOF);
+            assert(*proof.at(2) == amount_high, Errors::INVALID_PROOF);
+            assert(*proof.at(3) != 0, Errors::INVALID_PROOF);
+        }
     }
 
     #[abi(embed_v0)]
@@ -174,8 +197,8 @@ pub mod BridgeAdapter {
             assert(!member.is_zero(), Errors::INVALID_MEMBER);
             assert(amount > 0, Errors::INVALID_AMOUNT);
             assert(btc_tx_hash != 0, Errors::INVALID_BTC_TX_HASH);
-            assert(proof.len() > 0, Errors::INVALID_PROOF);
             assert(!self.used_btc_tx_hashes.read(btc_tx_hash), Errors::DUPLICATE_BTC_TX_HASH);
+            InternalImpl::validate_deposit_proof(@self, amount, btc_tx_hash, proof);
 
             let request_id = self.next_request_id.read() + 1;
             self.next_request_id.write(request_id);
@@ -194,6 +217,7 @@ pub mod BridgeAdapter {
             self.request_statuses.write(request_id, BridgeRequestStatus::Pending);
             self.request_exists.write(request_id, true);
             self.used_btc_tx_hashes.write(btc_tx_hash, true);
+            self.deposit_proof_reference.write(request_id, *proof.at(3));
 
             self.emit(DepositRegistered { request_id, member, ajo_id, amount, btc_tx_hash });
             request_id

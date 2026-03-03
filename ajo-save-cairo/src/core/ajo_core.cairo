@@ -458,9 +458,9 @@ pub mod AjoCore {
         fn handle_default(ref self: ContractState, defaulter: ContractAddress) {
             // Apply reentrancy protection
             self.reentrancy_guard.start();
-            
-            // Only owner can handle defaults
-            self.ownable.assert_only_owner();
+
+            // Default handling can be triggered by owner, governance, or schedule automation.
+            InternalImpl::assert_owner_governance_or_schedule(@self);
             
             // Verify defaulter is a member
             let members_dispatcher = IAjoMembersDispatcher {
@@ -524,6 +524,28 @@ pub mod AjoCore {
             
             // End reentrancy protection
             self.reentrancy_guard.end();
+        }
+
+        fn governance_add_member(
+            ref self: ContractState, member: ContractAddress, position: u256
+        ) {
+            let caller = starknet::get_caller_address();
+            assert(caller == self.governance_contract.read(), 'Only governance');
+
+            let members_dispatcher = IAjoMembersDispatcher {
+                contract_address: self.members_contract.read()
+            };
+            members_dispatcher.add_member(member, position);
+        }
+
+        fn governance_remove_member(ref self: ContractState, member: ContractAddress) {
+            let caller = starknet::get_caller_address();
+            assert(caller == self.governance_contract.read(), 'Only governance');
+
+            let members_dispatcher = IAjoMembersDispatcher {
+                contract_address: self.members_contract.read()
+            };
+            members_dispatcher.remove_member(member);
         }
 
         fn exit_ajo(ref self: ContractState) {
@@ -790,12 +812,12 @@ pub mod AjoCore {
         }
 
         fn pause(ref self: ContractState) {
-            self.ownable.assert_only_owner();
+            InternalImpl::assert_owner_or_governance(@self);
             self.pausable.pause();
         }
 
         fn unpause(ref self: ContractState) {
-            self.ownable.assert_only_owner();
+            InternalImpl::assert_owner_or_governance(@self);
             self.pausable.unpause();
         }
 
@@ -910,7 +932,7 @@ pub mod AjoCore {
         }
 
         fn emergency_disable_bridge(ref self: ContractState) {
-            self.ownable.assert_only_owner();
+            InternalImpl::assert_owner_or_governance(@self);
             self.bridge_enabled.write(false);
             self.bridge_adapter.write(Zero::zero());
             self.emit(FeatureFlagToggled { feature: 'bridge', enabled: false });
@@ -921,7 +943,7 @@ pub mod AjoCore {
         }
 
         fn emergency_disable_swap(ref self: ContractState) {
-            self.ownable.assert_only_owner();
+            InternalImpl::assert_owner_or_governance(@self);
             self.swap_enabled.write(false);
             self.swap_router.write(Zero::zero());
             self.emit(FeatureFlagToggled { feature: 'swap', enabled: false });
@@ -932,7 +954,7 @@ pub mod AjoCore {
         }
 
         fn emergency_disable_btc_collateral(ref self: ContractState) {
-            self.ownable.assert_only_owner();
+            InternalImpl::assert_owner_or_governance(@self);
             self.btc_commitment_enabled.write(false);
             self.btc_collateral_adapter.write(Zero::zero());
             let old_mode = self.collateral_mode.read();
@@ -953,6 +975,24 @@ pub mod AjoCore {
     // Internal helper functions
     #[generate_trait]
     impl InternalImpl of InternalTrait {
+        fn assert_owner_or_governance(self: @ContractState) {
+            let caller = starknet::get_caller_address();
+            let owner = self.ownable.owner();
+            let governance = self.governance_contract.read();
+            assert(caller == owner || caller == governance, 'Only owner or governance');
+        }
+
+        fn assert_owner_governance_or_schedule(self: @ContractState) {
+            let caller = starknet::get_caller_address();
+            let owner = self.ownable.owner();
+            let governance = self.governance_contract.read();
+            let schedule = self.schedule_contract.read();
+            assert(
+                caller == owner || caller == governance || caller == schedule,
+                'Only owner/governance/schedule'
+            );
+        }
+
         fn assert_governance_approved(self: @ContractState) {
             let governance_address = self.governance_contract.read();
             assert(!governance_address.is_zero(), 'Governance not configured');

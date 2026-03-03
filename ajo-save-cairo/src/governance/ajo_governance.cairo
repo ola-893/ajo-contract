@@ -14,6 +14,8 @@ pub mod AjoGovernance {
     use ajo_save::interfaces::i_ajo_governance::{
         IAjoGovernance, Proposal, ProposalType, ProposalStatus
     };
+    use ajo_save::interfaces::types::CollateralMode;
+    use ajo_save::interfaces::i_ajo_core::{IAjoCoreDispatcher, IAjoCoreDispatcherTrait};
     use ajo_save::interfaces::i_ajo_members::{IAjoMembersDispatcher, IAjoMembersDispatcherTrait};
     use ajo_save::components::ownable::{OwnableComponent, IOwnable};
     use core::num::traits::Zero;
@@ -34,6 +36,13 @@ pub mod AjoGovernance {
         
         // Vote tracking: (proposal_id, voter) → Vote
         votes: Map<(u256, ContractAddress), Vote>,
+
+        // Proposal execution routing data.
+        proposal_target: Map<u256, ContractAddress>,
+        proposal_arg_len: Map<u256, u256>,
+        proposal_arg0: Map<u256, felt252>,
+        proposal_arg1: Map<u256, felt252>,
+        proposal_arg2: Map<u256, felt252>,
         
         // Configuration
         voting_period: u64,
@@ -111,6 +120,8 @@ pub mod AjoGovernance {
         pub const VOTING_NOT_ENDED: felt252 = 'Voting period not ended';
         pub const PROPOSAL_NOT_PASSED: felt252 = 'Proposal not passed';
         pub const ALREADY_EXECUTED: felt252 = 'Already executed';
+        pub const INVALID_PROPOSAL_DATA: felt252 = 'Invalid proposal data';
+        pub const INVALID_TARGET: felt252 = 'Invalid proposal target';
     }
 
     #[constructor]
@@ -201,6 +212,32 @@ pub mod AjoGovernance {
             // Proposal passes if votes_for > votes_against
             proposal.votes_for > proposal.votes_against
         }
+
+        fn read_target(self: @ContractState, proposal_id: u256) -> ContractAddress {
+            let target = self.proposal_target.read(proposal_id);
+            if target.is_zero() {
+                self.authorized_core.read()
+            } else {
+                target
+            }
+        }
+
+        fn read_arg(self: @ContractState, proposal_id: u256, index: u256) -> felt252 {
+            if index == 0 {
+                self.proposal_arg0.read(proposal_id)
+            } else if index == 1 {
+                self.proposal_arg1.read(proposal_id)
+            } else if index == 2 {
+                self.proposal_arg2.read(proposal_id)
+            } else {
+                0
+            }
+        }
+
+        fn require_args(self: @ContractState, proposal_id: u256, min_len: u256) {
+            let arg_len = self.proposal_arg_len.read(proposal_id);
+            assert(arg_len >= min_len, Errors::INVALID_PROPOSAL_DATA);
+        }
     }
 
     #[abi(embed_v0)]
@@ -254,6 +291,28 @@ pub mod AjoGovernance {
             
             // Store proposal
             self.proposals.write(proposal_id, new_proposal);
+            self.proposal_target.write(proposal_id, target);
+
+            let arg_len: u256 = calldata.len().try_into().unwrap();
+            self.proposal_arg_len.write(proposal_id, arg_len);
+
+            if calldata.len() > 0 {
+                self.proposal_arg0.write(proposal_id, *calldata.at(0));
+            } else {
+                self.proposal_arg0.write(proposal_id, 0);
+            }
+
+            if calldata.len() > 1 {
+                self.proposal_arg1.write(proposal_id, *calldata.at(1));
+            } else {
+                self.proposal_arg1.write(proposal_id, 0);
+            }
+
+            if calldata.len() > 2 {
+                self.proposal_arg2.write(proposal_id, *calldata.at(2));
+            } else {
+                self.proposal_arg2.write(proposal_id, 0);
+            }
             
             // Emit ProposalCreated event for indexing
             self.emit(ProposalCreated {
@@ -320,66 +379,115 @@ pub mod AjoGovernance {
         }
 
         fn get_voting_power(self: @ContractState, voter: ContractAddress) -> u256 {
-            // TODO: Implement voting power calculation (could be based on reputation)
-            // For now, return 1 (equal voting power for all members)
+            let members_contract = self.members_contract.read();
+            let members_dispatcher = IAjoMembersDispatcher { contract_address: members_contract };
+            if !members_dispatcher.is_member(voter) {
+                return 0;
+            }
+
+            let member = members_dispatcher.get_member(voter);
+            if member.status == ajo_save::interfaces::types::MemberStatus::Removed
+                || member.status == ajo_save::interfaces::types::MemberStatus::Defaulted {
+                return 0;
+            }
+
             1
         }
 
         fn execute_proposal(ref self: ContractState, proposal_id: u256) {
-                    let caller = starknet::get_caller_address();
+            let caller = starknet::get_caller_address();
 
-                    // Validate proposal exists
-                    let mut proposal = self.proposals.read(proposal_id);
-                    assert(proposal.id != 0, Errors::PROPOSAL_NOT_FOUND);
+            // Validate proposal exists
+            let mut proposal = self.proposals.read(proposal_id);
+            assert(proposal.id != 0, Errors::PROPOSAL_NOT_FOUND);
 
-                    // Verify voting period has ended
-                    let current_time = starknet::get_block_timestamp();
-                    assert(current_time >= proposal.voting_ends_at, Errors::VOTING_NOT_ENDED);
+            // Verify voting period has ended
+            let current_time = starknet::get_block_timestamp();
+            assert(current_time >= proposal.voting_ends_at, Errors::VOTING_NOT_ENDED);
 
-                    // Verify proposal hasn't already been executed
-                    assert(proposal.status != ProposalStatus::Executed, Errors::ALREADY_EXECUTED);
+            // Verify proposal hasn't already been executed
+            assert(proposal.status != ProposalStatus::Executed, Errors::ALREADY_EXECUTED);
 
-                    // Verify proposal has quorum
-                    assert(self.has_quorum(proposal_id), 'Quorum not met');
+            // Verify proposal has quorum
+            assert(self.has_quorum(proposal_id), 'Quorum not met');
 
-                    // Verify proposal has passed
-                    assert(self.is_passed(proposal_id), Errors::PROPOSAL_NOT_PASSED);
+            // Verify proposal has passed
+            assert(self.is_passed(proposal_id), Errors::PROPOSAL_NOT_PASSED);
 
-                    // Execute proposal based on proposal_type
-                    // Note: The current ProposalType enum has: AddMember, RemoveMember, ChangeConfig, HandleDefault, Emergency
-                    // The requirements mention more types, but we'll work with what's defined in the interface
-                    match proposal.proposal_type {
-                        ProposalType::AddMember => {
-                            // TODO: Implement add member logic
-                            // This would call AjoCore or AjoMembers to add a new member
-                        },
-                        ProposalType::RemoveMember => {
-                            // TODO: Implement remove member logic
-                            // This would call AjoMembers to remove a member
-                        },
-                        ProposalType::ChangeConfig => {
-                            // TODO: Implement config change logic
-                            // This could change monthly payment, duration, or other parameters
-                        },
-                        ProposalType::HandleDefault => {
-                            // TODO: Implement default handling logic
-                            // This would call AjoCore.handle_default()
-                        },
-                        ProposalType::Emergency => {
-                            // TODO: Implement emergency pause logic
-                            // This would call AjoCore.pause()
-                        },
+            let target = InternalImpl::read_target(@self, proposal_id);
+            assert(!target.is_zero(), Errors::INVALID_TARGET);
+            let core = IAjoCoreDispatcher { contract_address: target };
+
+            // Execute proposal based on proposal_type
+            match proposal.proposal_type {
+                ProposalType::AddMember => {
+                    InternalImpl::require_args(@self, proposal_id, 2);
+                    let member_felt = InternalImpl::read_arg(@self, proposal_id, 0);
+                    let position_felt = InternalImpl::read_arg(@self, proposal_id, 1);
+                    let member: ContractAddress = member_felt.try_into().unwrap();
+                    let position: u256 = position_felt.into();
+                    core.governance_add_member(member, position);
+                },
+                ProposalType::RemoveMember => {
+                    InternalImpl::require_args(@self, proposal_id, 1);
+                    let member_felt = InternalImpl::read_arg(@self, proposal_id, 0);
+                    let member: ContractAddress = member_felt.try_into().unwrap();
+                    core.governance_remove_member(member);
+                },
+                ProposalType::ChangeConfig => {
+                    InternalImpl::require_args(@self, proposal_id, 1);
+                    let action = InternalImpl::read_arg(@self, proposal_id, 0);
+                    let value = InternalImpl::read_arg(@self, proposal_id, 1);
+
+                    if action == 1 {
+                        if value == 0 {
+                            core.set_collateral_mode(CollateralMode::L2Escrow);
+                        } else {
+                            core.set_collateral_mode(CollateralMode::BTCCommitment);
+                        }
+                    } else if action == 2 {
+                        core.enable_btc_commitment();
+                    } else if action == 3 {
+                        core.disable_btc_commitment();
+                    } else {
+                        assert(false, Errors::INVALID_PROPOSAL_DATA);
                     }
+                },
+                ProposalType::HandleDefault => {
+                    InternalImpl::require_args(@self, proposal_id, 1);
+                    let defaulter_felt = InternalImpl::read_arg(@self, proposal_id, 0);
+                    let defaulter: ContractAddress = defaulter_felt.try_into().unwrap();
+                    core.handle_default(defaulter);
+                },
+                ProposalType::Emergency => {
+                    InternalImpl::require_args(@self, proposal_id, 1);
+                    let action = InternalImpl::read_arg(@self, proposal_id, 0);
 
-                    // Mark proposal as executed
-                    proposal.status = ProposalStatus::Executed;
-                    self.proposals.write(proposal_id, proposal);
+                    if action == 0 {
+                        core.pause();
+                    } else if action == 1 {
+                        core.unpause();
+                    } else if action == 2 {
+                        core.emergency_disable_bridge();
+                    } else if action == 3 {
+                        core.emergency_disable_swap();
+                    } else if action == 4 {
+                        core.emergency_disable_btc_collateral();
+                    } else {
+                        assert(false, Errors::INVALID_PROPOSAL_DATA);
+                    }
+                },
+            }
 
-                    // Emit ProposalExecuted event
-                    self.emit(ProposalExecuted {
-                        proposal_id: proposal_id,
-                        executor: caller,
-                    });
+            // Mark proposal as executed
+            proposal.status = ProposalStatus::Executed;
+            self.proposals.write(proposal_id, proposal);
+
+            // Emit ProposalExecuted event
+            self.emit(ProposalExecuted {
+                proposal_id: proposal_id,
+                executor: caller,
+            });
         }
 
         fn cancel_proposal(ref self: ContractState, proposal_id: u256) {
