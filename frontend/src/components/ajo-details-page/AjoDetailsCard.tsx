@@ -74,6 +74,11 @@ const AjoDetailsCard = ({
       return;
     }
 
+    if (!ajo.coreAddress || /^0x0+$/i.test(ajo.coreAddress)) {
+      toast.error("Ajo core contract is not deployed yet");
+      return;
+    }
+
     setIsJoining(true);
     try {
       // Conservative approval amount (covers max expected collateral at early queue positions)

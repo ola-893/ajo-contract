@@ -146,6 +146,29 @@
     "items": [
       {
         "type": "function",
+        "name": "set_authorized_core",
+        "inputs": [
+          {
+            "name": "core",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "get_authorized_core",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
         "name": "create_proposal",
         "inputs": [
           {

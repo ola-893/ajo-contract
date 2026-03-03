@@ -38,8 +38,51 @@
     "items": [
       {
         "type": "function",
+        "name": "set_authorized_core",
+        "inputs": [
+          {
+            "name": "core",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "get_authorized_core",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
         "name": "make_payment",
         "inputs": [
+          {
+            "name": "cycle",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "amount",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "make_payment_for",
+        "inputs": [
+          {
+            "name": "member",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
           {
             "name": "cycle",
             "type": "core::integer::u256"
@@ -186,6 +229,17 @@
       },
       {
         "type": "function",
+        "name": "get_payment_token",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
         "name": "get_payout_recipient",
         "inputs": [
           {
@@ -263,6 +317,82 @@
           }
         ],
         "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "set_swap_router",
+        "inputs": [
+          {
+            "name": "router",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "get_swap_router",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "enable_swap",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "disable_swap",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "is_swap_enabled",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::bool"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "set_token_preference",
+        "inputs": [
+          {
+            "name": "token",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "get_token_preference",
+        "inputs": [
+          {
+            "name": "member",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
       }
     ]
   },
@@ -304,6 +434,36 @@
         "inputs": [],
         "outputs": [],
         "state_mutability": "external"
+      }
+    ]
+  },
+  {
+    "type": "constructor",
+    "name": "constructor",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "monthly_contribution",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "total_participants",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "cycle_duration",
+        "type": "core::integer::u64"
+      },
+      {
+        "name": "payment_token",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "members_contract",
+        "type": "core::starknet::contract_address::ContractAddress"
       }
     ]
   },

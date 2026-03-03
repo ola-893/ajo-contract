@@ -40,6 +40,24 @@ const CreateAjo = () => {
     setIsVisible(true);
   }, []);
 
+  const normalizeIntegerInput = (value: string) => {
+    const digitsOnly = value.replace(/[^\d]/g, "");
+    return digitsOnly;
+  };
+
+  const clampIntegerField = (
+    rawValue: string,
+    min: number,
+    max: number,
+    fallback: string,
+  ) => {
+    if (!rawValue.trim()) return fallback;
+    const parsed = Number(rawValue);
+    if (!Number.isFinite(parsed)) return fallback;
+    const integer = Math.trunc(parsed);
+    return String(Math.min(max, Math.max(min, integer)));
+  };
+
   const handleInputChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
@@ -54,10 +72,24 @@ const CreateAjo = () => {
         [name]: checked,
       }));
     } else {
-      setFormData((prev) => ({
-        ...prev,
-        [name]: value,
-      }));
+      if (name === "totalParticipants") {
+        const sanitized = normalizeIntegerInput(value);
+        setFormData((prev) => ({
+          ...prev,
+          [name]: sanitized,
+        }));
+      } else if (name === "cycleDuration") {
+        const sanitized = normalizeIntegerInput(value);
+        setFormData((prev) => ({
+          ...prev,
+          [name]: sanitized,
+        }));
+      } else {
+        setFormData((prev) => ({
+          ...prev,
+          [name]: value,
+        }));
+      }
     }
 
     // Clear error when user starts typing
@@ -80,8 +112,8 @@ const CreateAjo = () => {
       errors.name = "Name must be 31 characters or less (Cairo felt252 limit)";
     }
 
-    const cycleDays = parseInt(formData.cycleDuration);
-    if (isNaN(cycleDays) || cycleDays < 1) {
+    const cycleDays = Number(formData.cycleDuration);
+    if (!Number.isFinite(cycleDays) || !Number.isInteger(cycleDays) || cycleDays < 1) {
       errors.cycleDuration = "Cycle duration must be at least 1 day";
     } else if (cycleDays > 62) {
       errors.cycleDuration = "Cycle duration cannot exceed 62 days (Cairo contract limit)";
@@ -94,8 +126,8 @@ const CreateAjo = () => {
       errors.monthlyContribution = "Contribution amount is too large";
     }
 
-    const participants = parseInt(formData.totalParticipants);
-    if (isNaN(participants) || participants < 3) {
+    const participants = Number(formData.totalParticipants);
+    if (!Number.isFinite(participants) || !Number.isInteger(participants) || participants < 3) {
       errors.totalParticipants = "Must have at least 3 participants (Cairo contract requirement)";
     } else if (participants > 100) {
       errors.totalParticipants = "Cannot exceed 100 participants";
@@ -117,12 +149,22 @@ const CreateAjo = () => {
 
     try {
       toast.info("Creating Ajo on Starknet...");
+      const parsedCycleDuration = Number(formData.cycleDuration);
+      const parsedTotalParticipants = Number(formData.totalParticipants);
+      console.log("Create Ajo payload:", {
+        name: formData.name,
+        monthlyContribution: formData.monthlyContribution,
+        cycleDuration: parsedCycleDuration,
+        totalParticipantsInput: formData.totalParticipants,
+        totalParticipantsParsed: parsedTotalParticipants,
+        paymentToken: formData.paymentToken,
+      });
 
       const result = await createAjo({
         name: formData.name,
         monthlyContribution: formData.monthlyContribution,
-        totalParticipants: parseInt(formData.totalParticipants),
-        cycleDuration: parseInt(formData.cycleDuration),
+        totalParticipants: parsedTotalParticipants,
+        cycleDuration: parsedCycleDuration,
         paymentToken: formData.paymentToken,
       });
 
@@ -286,13 +328,25 @@ const CreateAjo = () => {
                         Cycle Duration (days) *
                       </label>
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="off"
                         name="cycleDuration"
                         value={formData.cycleDuration}
                         onChange={handleInputChange}
+                        onBlur={(e) => {
+                          const nextValue = clampIntegerField(
+                            e.target.value,
+                            1,
+                            62,
+                            "30",
+                          );
+                          setFormData((prev) => ({
+                            ...prev,
+                            cycleDuration: nextValue,
+                          }));
+                        }}
                         placeholder="30"
-                        min="1"
-                        max="365"
                         className={`w-full px-4 py-3 bg-background border rounded-lg focus:ring-0 outline-none focus:ring-primary focus:border-primary transition-colors text-foreground ${
                           formErrors.cycleDuration
                             ? "border-destructive"
@@ -375,13 +429,25 @@ const CreateAjo = () => {
                         Total Participants *
                       </label>
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="off"
                         name="totalParticipants"
                         value={formData.totalParticipants}
                         onChange={handleInputChange}
+                        onBlur={(e) => {
+                          const nextValue = clampIntegerField(
+                            e.target.value,
+                            3,
+                            100,
+                            "3",
+                          );
+                          setFormData((prev) => ({
+                            ...prev,
+                            totalParticipants: nextValue,
+                          }));
+                        }}
                         placeholder="3"
-                        min="3"
-                        max="100"
                         className={`w-full px-4 py-3 bg-background border rounded-lg focus:ring-0 outline-none focus:ring-primary focus:border-primary transition-colors text-foreground ${
                           formErrors.totalParticipants
                             ? "border-destructive"

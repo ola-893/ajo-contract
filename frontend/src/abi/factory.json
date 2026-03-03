@@ -33,6 +33,20 @@
     ]
   },
   {
+    "type": "enum",
+    "name": "ajo_save::interfaces::types::CollateralMode",
+    "variants": [
+      {
+        "name": "L2Escrow",
+        "type": "()"
+      },
+      {
+        "name": "BTCCommitment",
+        "type": "()"
+      }
+    ]
+  },
+  {
     "type": "struct",
     "name": "ajo_save::interfaces::types::AjoConfig",
     "members": [
@@ -55,6 +69,10 @@
       {
         "name": "payment_token",
         "type": "ajo_save::interfaces::types::PaymentToken"
+      },
+      {
+        "name": "collateral_mode",
+        "type": "ajo_save::interfaces::types::CollateralMode"
       },
       {
         "name": "creator",
@@ -346,6 +364,52 @@
         ],
         "outputs": [],
         "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "set_usdc_token_address",
+        "inputs": [
+          {
+            "name": "token_address",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "set_btc_token_address",
+        "inputs": [
+          {
+            "name": "token_address",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "get_usdc_token_address",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_btc_token_address",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
       }
     ]
   },

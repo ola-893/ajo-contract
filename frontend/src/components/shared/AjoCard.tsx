@@ -29,7 +29,7 @@ const AjoCard = ({ ajo, isVisible }: AjoCardProps) => {
 
   const handleAjoRoute = () => {
     if (accountId) {
-      navigate(`/ajo/${ajo.ajoId}/${ajo.ajoCore}`);
+      navigate(`/ajo/${ajo.ajoId}`);
     } else toast.info("Connect your wallet to view ajo");
   };
 

@@ -33,6 +33,20 @@
     ]
   },
   {
+    "type": "enum",
+    "name": "ajo_save::interfaces::types::CollateralMode",
+    "variants": [
+      {
+        "name": "L2Escrow",
+        "type": "()"
+      },
+      {
+        "name": "BTCCommitment",
+        "type": "()"
+      }
+    ]
+  },
+  {
     "type": "struct",
     "name": "ajo_save::interfaces::types::AjoConfig",
     "members": [
@@ -55,6 +69,10 @@
       {
         "name": "payment_token",
         "type": "ajo_save::interfaces::types::PaymentToken"
+      },
+      {
+        "name": "collateral_mode",
+        "type": "ajo_save::interfaces::types::CollateralMode"
       },
       {
         "name": "creator",
@@ -426,6 +444,105 @@
       },
       {
         "type": "function",
+        "name": "get_payment_token_address",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_payment_token_decimals",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::integer::u8"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_bridge_adapter",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "is_bridge_enabled",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::bool"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_swap_router",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "is_swap_enabled",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::bool"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_btc_collateral_adapter",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "is_btc_commitment_enabled",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::bool"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_collateral_mode",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "ajo_save::interfaces::types::CollateralMode"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
         "name": "get_ajo_status",
         "inputs": [],
         "outputs": [
@@ -475,6 +592,133 @@
         "inputs": [],
         "outputs": [],
         "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "set_payment_token_address",
+        "inputs": [
+          {
+            "name": "token_address",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
+          {
+            "name": "decimals",
+            "type": "core::integer::u8"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "set_bridge_adapter",
+        "inputs": [
+          {
+            "name": "bridge_adapter",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "enable_bridge",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "disable_bridge",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "set_swap_router",
+        "inputs": [
+          {
+            "name": "swap_router",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "enable_swap",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "disable_swap",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "set_btc_collateral_adapter",
+        "inputs": [
+          {
+            "name": "btc_collateral_adapter",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "enable_btc_commitment",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "disable_btc_commitment",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "set_collateral_mode",
+        "inputs": [
+          {
+            "name": "mode",
+            "type": "ajo_save::interfaces::types::CollateralMode"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "emergency_disable_bridge",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "emergency_disable_swap",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "emergency_disable_btc_collateral",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
       }
     ]
   },
@@ -516,6 +760,16 @@
         "inputs": [],
         "outputs": [],
         "state_mutability": "external"
+      }
+    ]
+  },
+  {
+    "type": "constructor",
+    "name": "constructor",
+    "inputs": [
+      {
+        "name": "factory_address",
+        "type": "core::starknet::contract_address::ContractAddress"
       }
     ]
   },
@@ -841,6 +1095,79 @@
   },
   {
     "type": "event",
+    "name": "ajo_save::core::ajo_core::AjoCore::AjoFinalized",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "ajo_id",
+        "type": "core::integer::u256",
+        "kind": "key"
+      },
+      {
+        "name": "final_cycle",
+        "type": "core::integer::u256",
+        "kind": "data"
+      },
+      {
+        "name": "total_members",
+        "type": "core::integer::u256",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::core::ajo_core::AjoCore::CollateralModeChanged",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "old_mode",
+        "type": "ajo_save::interfaces::types::CollateralMode",
+        "kind": "data"
+      },
+      {
+        "name": "new_mode",
+        "type": "ajo_save::interfaces::types::CollateralMode",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::core::ajo_core::AjoCore::AdapterAddressUpdated",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "adapter_type",
+        "type": "core::felt252",
+        "kind": "data"
+      },
+      {
+        "name": "adapter_address",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::core::ajo_core::AjoCore::FeatureFlagToggled",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "feature",
+        "type": "core::felt252",
+        "kind": "data"
+      },
+      {
+        "name": "enabled",
+        "type": "core::bool",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
     "name": "ajo_save::core::ajo_core::AjoCore::Event",
     "kind": "enum",
     "variants": [
@@ -892,6 +1219,26 @@
       {
         "name": "MemberExited",
         "type": "ajo_save::core::ajo_core::AjoCore::MemberExited",
+        "kind": "nested"
+      },
+      {
+        "name": "AjoFinalized",
+        "type": "ajo_save::core::ajo_core::AjoCore::AjoFinalized",
+        "kind": "nested"
+      },
+      {
+        "name": "CollateralModeChanged",
+        "type": "ajo_save::core::ajo_core::AjoCore::CollateralModeChanged",
+        "kind": "nested"
+      },
+      {
+        "name": "AdapterAddressUpdated",
+        "type": "ajo_save::core::ajo_core::AjoCore::AdapterAddressUpdated",
+        "kind": "nested"
+      },
+      {
+        "name": "FeatureFlagToggled",
+        "type": "ajo_save::core::ajo_core::AjoCore::FeatureFlagToggled",
         "kind": "nested"
       }
     ]

@@ -38,6 +38,29 @@
     "items": [
       {
         "type": "function",
+        "name": "set_authorized_core",
+        "inputs": [
+          {
+            "name": "core",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "get_authorized_core",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
         "name": "calculate_required_collateral",
         "inputs": [
           {
@@ -98,11 +121,67 @@
       },
       {
         "type": "function",
+        "name": "deposit_collateral_for",
+        "inputs": [
+          {
+            "name": "member",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
+          {
+            "name": "amount",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
         "name": "withdraw_collateral",
         "inputs": [
           {
             "name": "amount",
             "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "withdraw_collateral_for",
+        "inputs": [
+          {
+            "name": "member",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
+          {
+            "name": "amount",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "set_payments_contract",
+        "inputs": [
+          {
+            "name": "payments_contract",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "set_members_contract",
+        "inputs": [
+          {
+            "name": "members_contract",
+            "type": "core::starknet::contract_address::ContractAddress"
           }
         ],
         "outputs": [],
@@ -293,6 +372,14 @@
       {
         "name": "payment_token",
         "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "payments_contract",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "members_contract",
+        "type": "core::starknet::contract_address::ContractAddress"
       }
     ]
   },
@@ -343,6 +430,28 @@
       {
         "name": "amount",
         "type": "core::integer::u256",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ajo_save::collateral::ajo_collateral::AjoCollateral::CollateralSlashed",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "member",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      },
+      {
+        "name": "amount",
+        "type": "core::integer::u256",
+        "kind": "data"
+      },
+      {
+        "name": "destination",
+        "type": "core::starknet::contract_address::ContractAddress",
         "kind": "data"
       }
     ]
@@ -400,6 +509,11 @@
       {
         "name": "CollateralSeized",
         "type": "ajo_save::collateral::ajo_collateral::AjoCollateral::CollateralSeized",
+        "kind": "nested"
+      },
+      {
+        "name": "CollateralSlashed",
+        "type": "ajo_save::collateral::ajo_collateral::AjoCollateral::CollateralSlashed",
         "kind": "nested"
       },
       {

@@ -157,23 +157,12 @@ const normalizeAjoInfo = (raw: any, fallbackId = 0): StarknetAjoInfo => {
   const configRaw = raw?.config ?? {};
 
   const idRaw = raw?.id ?? fallbackId;
-  const coreRaw = raw?.core_address ?? raw?.coreAddress ?? raw?.ajo_core ?? 0;
-  const membersRaw =
-    raw?.members_address ?? raw?.membersAddress ?? raw?.ajo_members ?? 0;
-  const collateralRaw =
-    raw?.collateral_address ??
-    raw?.collateralAddress ??
-    raw?.ajo_collateral ??
-    0;
-  const paymentsRaw =
-    raw?.payments_address ?? raw?.paymentsAddress ?? raw?.ajo_payments ?? 0;
-  const governanceRaw =
-    raw?.governance_address ??
-    raw?.governanceAddress ??
-    raw?.ajo_governance ??
-    0;
-  const scheduleRaw =
-    raw?.schedule_address ?? raw?.scheduleAddress ?? raw?.ajo_schedule ?? 0;
+  const coreRaw = raw?.core_address ?? raw?.coreAddress ?? 0;
+  const membersRaw = raw?.members_address ?? raw?.membersAddress ?? 0;
+  const collateralRaw = raw?.collateral_address ?? raw?.collateralAddress ?? 0;
+  const paymentsRaw = raw?.payments_address ?? raw?.paymentsAddress ?? 0;
+  const governanceRaw = raw?.governance_address ?? raw?.governanceAddress ?? 0;
+  const scheduleRaw = raw?.schedule_address ?? raw?.scheduleAddress ?? 0;
   const initializedRaw =
     raw?.is_initialized ?? raw?.isInitialized ?? raw?.is_active ?? false;
   const createdAtRaw = raw?.created_at ?? raw?.createdAt ?? 0;
@@ -187,7 +176,7 @@ const normalizeAjoInfo = (raw: any, fallbackId = 0): StarknetAjoInfo => {
     configRaw?.cycle_duration ?? configRaw?.cycleDuration ?? raw?.cycle_duration ?? 0;
   const tokenRaw =
     configRaw?.payment_token ?? configRaw?.paymentToken ?? raw?.payment_token ?? {};
-  const creatorRaw = configRaw?.creator ?? raw?.owner ?? raw?.creator ?? 0;
+  const creatorRaw = configRaw?.creator ?? raw?.creator ?? 0;
 
   return {
     id: toNumberValue(idRaw),
@@ -263,8 +252,16 @@ const useStarknetAjoFactory = () => {
           throw new Error("Ajo name must be 1-31 characters");
         }
 
-        if (params.totalParticipants < 3) {
-          throw new Error("Total participants must be at least 3");
+        if (!Number.isInteger(params.totalParticipants)) {
+          throw new Error("Total participants must be a whole number");
+        }
+
+        if (params.totalParticipants < 3 || params.totalParticipants > 100) {
+          throw new Error("Total participants must be between 3 and 100");
+        }
+
+        if (!Number.isInteger(params.cycleDuration)) {
+          throw new Error("Cycle duration must be a whole number of days");
         }
 
         const cycleDurationSeconds = params.cycleDuration * 24 * 60 * 60;
@@ -365,6 +362,45 @@ const useStarknetAjoFactory = () => {
     }
   }, []);
 
+  const getTotalAjos = useCallback(async () => {
+    try {
+      const factoryAddress = CONTRACT_ADDRESSES.sepolia.ajoFactory;
+      if (!factoryAddress) throw new Error("Factory contract not deployed yet");
+
+      const provider = getProvider();
+      const factoryContract = new Contract(
+        ajoFactoryAbi as any,
+        factoryAddress,
+        provider,
+      );
+
+      const total = await factoryContract.get_total_ajos();
+      return toNumberValue(total);
+    } catch (error) {
+      console.error("Error fetching total Ajos:", error);
+      throw error;
+    }
+  }, []);
+
+  const getAllAjos = useCallback(async () => {
+    const total = await getTotalAjos();
+    if (!Number.isFinite(total) || total <= 0) return [];
+
+    const ids = Array.from({ length: total }, (_, idx) => idx + 1);
+    const details = await Promise.all(
+      ids.map(async (id) => {
+        try {
+          return await getAjoInfo(String(id));
+        } catch (error) {
+          console.error(`Failed to load Ajo ${id}:`, error);
+          return null;
+        }
+      }),
+    );
+
+    return details.filter((item): item is StarknetAjoInfo => Boolean(item));
+  }, [getAjoInfo, getTotalAjos]);
+
   const deployAjoContracts = useCallback(
     async (ajoId: string) => {
       if (!account || !isConnected) {
@@ -408,6 +444,8 @@ const useStarknetAjoFactory = () => {
     createAjo,
     getAjoInfo,
     getUserAjos,
+    getTotalAjos,
+    getAllAjos,
     deployAjoContracts,
     loading,
   };

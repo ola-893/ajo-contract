@@ -35,8 +35,8 @@ const mapStarknetAjoToCard = (ajo: StarknetAjoInfo): AjoInfo => ({
 });
 
 const Dashboard = () => {
-  const { address, isConnected } = useStarknetWallet();
-  const { getUserAjos, getAjoInfo, loading: factoryLoading } = useStarknetAjoFactory();
+  const { isConnected } = useStarknetWallet();
+  const { getAllAjos, loading: factoryLoading } = useStarknetAjoFactory();
   const navigate = useNavigate();
 
   const [isVisible, setIsVisible] = useState(false);
@@ -47,31 +47,13 @@ const Dashboard = () => {
   // Fetch user's Ajos from Starknet
   const fetchAjos = useCallback(
     async (showToast = false) => {
-      if (!address || !isConnected) {
-        console.log("Wallet not connected");
-        return;
-      }
-
       try {
         setIsRefreshing(true);
-        console.log("🔄 Fetching user Ajos from Starknet...");
-        
-        const ids = await getUserAjos(address);
-        console.log("✅ Fetched Ajo IDs:", ids);
+        console.log("🔄 Fetching all Ajos from Starknet...");
+        const allAjos = await getAllAjos();
+        console.log("✅ Fetched all Ajos:", allAjos.length);
 
-        const details = await Promise.all(
-          (ids || []).map(async (id) => {
-            try {
-              return await getAjoInfo(String(id));
-            } catch (error) {
-              console.error(`Failed to load Ajo ${id}:`, error);
-              return null;
-            }
-          }),
-        );
-
-        const filtered = details.filter((item): item is StarknetAjoInfo => Boolean(item));
-        setUserAjos(filtered);
+        setUserAjos(allAjos);
         setLastUpdate(new Date());
         
         if (showToast) {
@@ -86,7 +68,7 @@ const Dashboard = () => {
         setIsRefreshing(false);
       }
     },
-    [address, isConnected, getUserAjos, getAjoInfo]
+    [getAllAjos]
   );
 
   // Initial load animation
@@ -97,10 +79,8 @@ const Dashboard = () => {
 
   // Initial fetch when wallet connects
   useEffect(() => {
-    if (isConnected && address) {
-      fetchAjos();
-    }
-  }, [isConnected, address, fetchAjos]);
+    fetchAjos();
+  }, [fetchAjos]);
 
   const handleRoute = () => {
     navigate("/ajo/create-ajo");
@@ -166,7 +146,7 @@ const Dashboard = () => {
             <div className="bg-card p-6 rounded-xl shadow-sm border border-border hover:shadow-md transition-all hover:scale-105 hover:border-primary/30">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-muted-foreground text-sm">My Ajos</p>
+                  <p className="text-muted-foreground text-sm">All Ajos</p>
                   <p className="text-2xl font-bold text-foreground">
                     {userAjos.length}
                   </p>
@@ -204,7 +184,7 @@ const Dashboard = () => {
           {isRefreshing || factoryLoading ? (
             <div className="flex items-center justify-center py-12">
               <RefreshCw className="h-8 w-8 animate-spin text-primary" />
-              <span className="ml-3 text-muted-foreground">Loading your Ajos...</span>
+              <span className="ml-3 text-muted-foreground">Loading Ajos...</span>
             </div>
           ) : userAjos.length > 0 ? (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
