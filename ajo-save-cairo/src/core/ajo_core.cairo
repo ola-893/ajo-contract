@@ -330,8 +330,12 @@ pub mod AjoCore {
                 total_participants
             );
             
-            // Deposit collateral (this will transfer tokens from caller)
-            collateral_dispatcher.deposit_collateral_for(caller, required_collateral);
+            // Last position can have zero debt => zero required collateral.
+            // Skip deposit syscall in that case to avoid amount>0 reverts.
+            if required_collateral > 0 {
+                // Deposit collateral (this will transfer tokens from caller)
+                collateral_dispatcher.deposit_collateral_for(caller, required_collateral);
+            }
             
             // Get guarantor for event emission
             let guarantor = members_dispatcher.get_guarantor(caller);

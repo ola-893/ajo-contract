@@ -25,7 +25,7 @@ export const CONTRACT_ADDRESSES = {
   sepolia: {
     ajoFactory:
       import.meta.env.VITE_AJO_FACTORY_ADDRESS ||
-      "0x060f7af93e5e3597bb160d78c057870d8e8aa12d1ba6124b00ec55b42c122716",
+      "0x058f0d1a69b43cbf678299c948fc36c5041170cd982ad7288efacdd3545042e6",
     bridgeAdapter:
       import.meta.env.VITE_BRIDGE_ADAPTER_ADDRESS ||
       "0x07b3140baa939d72d40b89a3647b2e7ac08f719dde54311490cf8bf0a8c44fac",
