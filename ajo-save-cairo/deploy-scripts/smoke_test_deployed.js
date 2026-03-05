@@ -180,11 +180,11 @@ async function main() {
   const beforeTotal = Number(await factory.get_total_ajos());
   const smokeName = shortString(`BTCSmoke_${Date.now()}`);
 
-  txs.create_ajo = await invokeAndWait(
+  txs.create_ajo_and_initialize = await invokeAndWait(
     provider,
     owner,
     factory,
-    "create_ajo",
+    "create_ajo_and_initialize",
     [smokeName, monthlyContribution, BigInt(participantCount), cycleDuration, normalizePaymentToken("BTC")],
     network
   );
@@ -197,25 +197,6 @@ async function main() {
   const ajoId = BigInt(afterTotal);
   console.log(`✅ Created BTC Ajo ID: ${ajoId.toString()}`);
 
-  txs.deploy_members = await invokeAndWait(provider, owner, factory, "deploy_members", [ajoId], network);
-  txs.deploy_collateral_and_payments = await invokeAndWait(
-    provider,
-    owner,
-    factory,
-    "deploy_collateral_and_payments",
-    [ajoId],
-    network
-  );
-  txs.deploy_governance_and_schedule = await invokeAndWait(
-    provider,
-    owner,
-    factory,
-    "deploy_governance_and_schedule",
-    [ajoId],
-    network
-  );
-  txs.deploy_core = await invokeAndWait(provider, owner, factory, "deploy_core", [ajoId], network);
-
   const ajoInfo = await factory.get_ajo_info(ajoId);
   const coreAddress = ajoInfo.core_address;
   const collateralAddress = ajoInfo.collateral_address;
@@ -226,7 +207,7 @@ async function main() {
   assertNonZeroAddress("Ajo payments", paymentsAddress);
 
   if (!ajoInfo.is_initialized) {
-    throw new Error("Ajo not initialized after phased deployment");
+    throw new Error("Ajo not initialized after atomic deployment");
   }
 
   const core = new Contract(coreAbi, coreAddress, owner);

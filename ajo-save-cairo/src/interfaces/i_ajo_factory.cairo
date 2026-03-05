@@ -13,6 +13,16 @@ pub trait IAjoFactory<TContractState> {
         payment_token: PaymentToken,
     ) -> u256;
 
+    // Atomic create + full initialization in one transaction
+    fn create_ajo_and_initialize(
+        ref self: TContractState,
+        name: felt252,
+        monthly_contribution: u256,
+        total_participants: u256,
+        cycle_duration: u64,
+        payment_token: PaymentToken,
+    ) -> u256;
+
     // Phase 2: Deploy core contract
     fn deploy_core(ref self: TContractState, ajo_id: u256) -> ContractAddress;
 

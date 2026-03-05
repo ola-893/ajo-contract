@@ -1,7 +1,7 @@
 {
   "network": "sepolia",
   "rpcUrl": "https://starknet-sepolia.g.alchemy.com/v2/HL-XmuitXQ7NgjyxPCJtU",
-  "timestamp": "2026-03-03T14:08:00Z",
+  "timestamp": "2026-03-05T09:44:39Z",
   "deployer": "0x0281e16a3f71b9c0cede19cee4375c24cbc328c08f8cc4d4757d04ffeb956ce8",
   "owner": "0x0281e16a3f71b9c0cede19cee4375c24cbc328c08f8cc4d4757d04ffeb956ce8",
   "bridgeRelayer": "0x0281e16a3f71b9c0cede19cee4375c24cbc328c08f8cc4d4757d04ffeb956ce8",
@@ -16,10 +16,10 @@
     "BridgeAdapter": "0x04ca93e065c74f7e0317296a804e7b4caaee5156345dfc0eda64cf7b30d9c040",
     "SwapRouter": "0x003e4c7c26e7e9697855561d02d2e3d2022645cf5bc90d5a77d8104c98ad6e60",
     "BTCCollateralAdapter": "0x0538467f924a1490747123bb32531f90136561b3d92836104f54f122376f572f",
-    "AjoFactory": "0x0023985f9ebabbe1468dd37623ce1e8dbf4dd0c19b636099acfd16e7585c6edd"
+    "AjoFactory": "0x07416d7a7b698c898010d881a0fd014514e4a2e26c9eb2db2a5227e331cbaa23"
   },
   "contracts": {
-    "factory": "0x03b4150c50f006ff24d459c61b6d7a3105b529d4cbc1d31230dcb381fe498de0",
+    "factory": "0x060f7af93e5e3597bb160d78c057870d8e8aa12d1ba6124b00ec55b42c122716",
     "bridgeAdapter": "0x07b3140baa939d72d40b89a3647b2e7ac08f719dde54311490cf8bf0a8c44fac",
     "swapRouter": "0x0613d8d56a9f7b9a1abeeb27119bb4bd3b9881c1720d367b7cd87029ffb1a157",
     "btcCollateralAdapter": "0x01ecd36cf56d31533ea46c30e3c28983dd341a667549efadd9fbeff55fb7a2af"
@@ -31,7 +31,8 @@
     "declareAjoSchedule": "0x07f433654620eaa30593d81fea03bd9eb7a9ca3c272fd3610e92fbd4ef8754f9",
     "declareBridgeAdapter": "0x06c7480898bde5e51a13b30521376e98290eeb1074c693f4988724aa4aab6d80",
     "declareBTCCollateralAdapter": "0x06cd739cd4a41a848fe90aa4474e0ea89e103f67e595cde475d42e34a3e2cf4c",
-    "factoryDeploy": "0x0735a96d085f272bae15d2c5f9ac2cb422342683fa172fa60e94ef38f577deda",
+    "declareAjoFactoryCreatorAtomic": "0x03317baa23e14ab92d840309762c2d7ba0b58c162b86434c394dabb1cd059895",
+    "factoryDeploy": "0x04e70ed21d19e7228ef5ca869c0290a29bd7af79687381651254dfa62dcaf742",
     "bridgeAdapterDeploy": "0x00598e29d3e6ce3d69621cc06302dd2e8d43150bc545a8b5bb50440a50a5e5d4",
     "swapRouterDeploy": "0x03ec0ad04ff494e4bfa3b653278720bd166efbdf914f6ebe5581196a50c10320",
     "btcCollateralAdapterDeploy": "0x024288c2fa09f2636e4cd6ca8ce096843e32c8ce50637d123cda765c7245ffaf",
@@ -42,10 +43,13 @@
     "setPaymentsClassHash": "0x03e4611259b4f96664a93c4a56c14d66767be43a33fb906b00a1266bf9adfe28",
     "setGovernanceClassHash": "0x068ddc04b214a6e7066e951b04d02681e85479ee643cab3105e77805c0f39e4c",
     "setScheduleClassHash": "0x0704828ee92776f56e079926e147b70562ddcaa0409fcdd5ac021b046e91d2ab",
-    "setUsdcTokenAddress": "0x02dd155f4ec77b042a6285d794429b710ee23975aefb265f98c673c792953d16"
+    "setUsdcTokenAddress": "0x0129889c59e174674441f4ce1d87a52c1f45f5aba3075c87446a77d290395ab7",
+    "smokeCreateAjoAtomic": "0x07c5009bb729d25070559c2727411a3d84185762b7675b188c370e880b63ce6e",
+    "smokeCreateAjoLegacyDraft": "0x06b0dc1b9a40373f63b5bf3ca0007b0ea14fb19819c96f97865abf877c455725",
+    "smokeDeployMembersLegacy": "0x002bd456d357ec38e069c64a2de83ee5510420f7b1cbeac0a03296364a913c80"
   },
   "explorer": {
-    "factory": "https://sepolia.voyager.online/contract/0x03b4150c50f006ff24d459c61b6d7a3105b529d4cbc1d31230dcb381fe498de0",
+    "factory": "https://sepolia.voyager.online/contract/0x060f7af93e5e3597bb160d78c057870d8e8aa12d1ba6124b00ec55b42c122716",
     "bridgeAdapter": "https://sepolia.voyager.online/contract/0x07b3140baa939d72d40b89a3647b2e7ac08f719dde54311490cf8bf0a8c44fac",
     "swapRouter": "https://sepolia.voyager.online/contract/0x0613d8d56a9f7b9a1abeeb27119bb4bd3b9881c1720d367b7cd87029ffb1a157",
     "btcCollateralAdapter": "https://sepolia.voyager.online/contract/0x01ecd36cf56d31533ea46c30e3c28983dd341a667549efadd9fbeff55fb7a2af"
@@ -57,6 +61,6 @@
   },
   "status": {
     "phase": "complete",
-    "message": "Contracts redeployed from updated sources and ABI files regenerated for frontend integration."
+    "message": "Factory upgraded to creator-signed atomic initialization; new Ajos now use the creator-atomic factory endpoint."
   }
 }

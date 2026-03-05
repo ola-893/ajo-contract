@@ -55,8 +55,7 @@ export async function getFactoryStats(factoryContract) {
 }
 
 /**
- * Create and fully deploy an Ajo using phased deployment.
- * Order: members -> collateral/payments -> governance/schedule -> core.
+ * Create and fully deploy an Ajo using atomic factory initialization.
  */
 export async function createAjo(account, factoryAddress, config) {
   return await retryWithBackoff(
@@ -93,7 +92,7 @@ export async function createAjo(account, factoryAddress, config) {
       console.log(colors.dim(`     Participants: ${totalParticipants.toString()}`));
 
       const beforeTotal = await factory.get_total_ajos();
-      const createCall = factory.populate('create_ajo', [
+      const createCall = factory.populate('create_ajo_and_initialize', [
         name,
         monthlyContribution,
         totalParticipants,
@@ -106,24 +105,10 @@ export async function createAjo(account, factoryAddress, config) {
 
       const ajoId = Number(beforeTotal) + 1;
 
-      const deploymentSteps = [
-        ['deploy_members', [ajoId]],
-        ['deploy_collateral_and_payments', [ajoId]],
-        ['deploy_governance_and_schedule', [ajoId]],
-        ['deploy_core', [ajoId]]
-      ];
-
-      const deploymentTxs = [];
-      for (const [method, args] of deploymentSteps) {
-        console.log(colors.dim(`  ⏳ ${method}...`));
-        const txHash = await executeFactoryStep(account, factory, method, args);
-        deploymentTxs.push({ method, txHash });
-      }
-
       return {
         ajoId,
         transactionHash: createTx.transaction_hash,
-        deploymentTxs
+        deploymentTxs: []
       };
     },
     'Create Ajo'

@@ -5,19 +5,19 @@
 export const CONTRACTS = {
   sepolia: {
     // Factory contract address
-    factory: "0x06235d0793b70879a94c6038614d22cc8ed3805db212dade35e918f81c73b66c",
+    factory: "0x060f7af93e5e3597bb160d78c057870d8e8aa12d1ba6124b00ec55b42c122716",
     
     // USDC token address (Circle USDC on Sepolia)
     usdc: "0x0512feAc6339Ff7889822cb5aA2a86C848e9D392bB0E3E237C008674feeD8343",
     
     // Class hashes for Ajo contracts (used when creating new Ajo groups)
     classHashes: {
-      core: "0x06176c5b1ffe45c49b7a70de1fc81a36a2a0de4c5e8828fca132a5aa5e00ccbe",
-      members: "0x03ddd2cb0e4b49353fe570dcd56dbaa1f411f4c2400e9b5c94b53fb9833d6e2e",
-      collateral: "0x04a3e8f8c5b6d7e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3",
-      payments: "0x05b4f9a0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8",
-      governance: "0x06c5a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9",
-      schedule: "0x07d6b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0"
+      core: "0x01831ddace9afff0a50534fce03c52dff11aedbe8b49debd3b933a89da88d058",
+      members: "0x07f58b65262907ade7ed422eb138ce221b9791f0d991f7a468560fb309ced133",
+      collateral: "0x007de0379791d5affce82c82a84fb639b0487b8f149a6ab26895128d260c79bf",
+      payments: "0x031a0741d826c579bd66ae52605c42e78e86304b1928d1e8beffbc53dab0c0b6",
+      governance: "0x067ce461390cabffdc105b38499d2bb0511d60cd59d46fd15563a0f9e979ba5d",
+      schedule: "0x06dc39cf61ceae671925aac808897fa365495140d4359c5f32b584ef3310be4a"
     }
   },
   

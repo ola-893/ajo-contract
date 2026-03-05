@@ -63,6 +63,7 @@ AJO.SAVE is built on **Starknet (Sepolia for current testing)** with Cairo contr
 **Deployment flow in codebase:**
 
 - `create_ajo(...)`
+- `create_ajo_and_initialize(...)` (default path)
 - `deploy_core(...)`
 - `deploy_members(...)`
 - `deploy_collateral_and_payments(...)`
@@ -73,6 +74,15 @@ AJO.SAVE is built on **Starknet (Sepolia for current testing)** with Cairo contr
 ```cairo
 // src/interfaces/i_ajo_factory.cairo
 fn create_ajo(
+    ref self: TContractState,
+    name: felt252,
+    monthly_contribution: u256,
+    total_participants: u256,
+    cycle_duration: u64,
+    payment_token: PaymentToken,
+) -> u256;
+
+fn create_ajo_and_initialize(
     ref self: TContractState,
     name: felt252,
     monthly_contribution: u256,
@@ -196,7 +206,7 @@ Starknet reduces transaction friction for recurring micro-contribution groups an
 │                        STARKNET (SEPOLIA TESTNET)                       │
 │  ┌──────────────────────────────────────────────────────────────────┐   │
 │  │                           AjoFactory                              │   │
-│  │  create_ajo → deploy_core → deploy_members → deploy_* modules   │   │
+│  │  create_ajo_and_initialize (atomic)                              │   │
 │  └───────────────────────┬──────────────────────────────────────────┘   │
 │                          │                                              │
 │          ┌───────────────┴─────────────────────────────────┐           │
@@ -216,7 +226,7 @@ Starknet reduces transaction friction for recurring micro-contribution groups an
 
 **1️⃣ CREATE AJO GROUP**
 
-`User → Factory.create_ajo() → Deploy module contracts → Emit AjoCreated`
+`User → Factory.create_ajo_and_initialize() → Emit AjoCreated + AjoInitialized`
 
 **2️⃣ JOIN AJO**
 
@@ -266,15 +276,13 @@ let offset = total_participants / 2;
 let guarantor_position = ((position - 1 + offset) % total_participants) + 1;
 ```
 
-### 3. **5-Step Factory Deployment Sequence**
+### 3. **Atomic Factory Initialization**
 
-Current factory deployment flow is phase-based and explicit:
+Default deployment flow is creator-signed and atomic:
 
-1. `create_ajo`
-2. `deploy_core`
-3. `deploy_members`
-4. `deploy_collateral_and_payments`
-5. `deploy_governance_and_schedule`
+1. `create_ajo_and_initialize`
+
+Legacy phased deployment functions (`deploy_members`, `deploy_collateral_and_payments`, `deploy_governance_and_schedule`, `deploy_core`) remain available for recovery/debug, and are creator-gated per Ajo.
 
 ### 4. **Tokenized Contributions**
 
@@ -481,6 +489,7 @@ AjoFactory (Entry Point)
 
 ```cairo
 fn create_ajo(...) -> u256;
+fn create_ajo_and_initialize(...) -> u256;
 fn deploy_core(ref self: TContractState, ajo_id: u256) -> ContractAddress;
 fn deploy_members(ref self: TContractState, ajo_id: u256) -> ContractAddress;
 fn deploy_collateral_and_payments(...) -> (ContractAddress, ContractAddress);

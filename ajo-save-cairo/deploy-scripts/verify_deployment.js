@@ -206,7 +206,7 @@ async function main() {
     provider,
     account,
     factory,
-    "create_ajo",
+    "create_ajo_and_initialize",
     [
       smokeName,
       BigInt(optionalEnv("VERIFY_MONTHLY_CONTRIBUTION", "1000")),
@@ -226,42 +226,6 @@ async function main() {
 
   const ajoId = BigInt(afterTotal);
 
-  const txDeployMembers = await waitForInvoke(
-    provider,
-    account,
-    factory,
-    "deploy_members",
-    [ajoId],
-    network
-  );
-
-  const txDeployCollateralPayments = await waitForInvoke(
-    provider,
-    account,
-    factory,
-    "deploy_collateral_and_payments",
-    [ajoId],
-    network
-  );
-
-  const txDeployGovSchedule = await waitForInvoke(
-    provider,
-    account,
-    factory,
-    "deploy_governance_and_schedule",
-    [ajoId],
-    network
-  );
-
-  const txDeployCore = await waitForInvoke(
-    provider,
-    account,
-    factory,
-    "deploy_core",
-    [ajoId],
-    network
-  );
-
   const ajoInfo = await factory.get_ajo_info(ajoId);
   const moduleAddresses = {
     core: ajoInfo.core_address,
@@ -277,7 +241,7 @@ async function main() {
   }
 
   if (!ajoInfo.is_initialized) {
-    throw new Error("Ajo did not reach initialized state after phase deployments");
+    throw new Error("Ajo did not reach initialized state after atomic deployment");
   }
 
   console.log(`✅ Smoke Ajo created and initialized (ID: ${ajoId.toString()})`);
@@ -302,10 +266,6 @@ async function main() {
       ajoId: ajoId.toString(),
       transactions: {
         createAjo: txCreateAjo,
-        deployMembers: txDeployMembers,
-        deployCollateralAndPayments: txDeployCollateralPayments,
-        deployGovernanceAndSchedule: txDeployGovSchedule,
-        deployCore: txDeployCore,
       },
       moduleAddresses,
       initialized: Boolean(ajoInfo.is_initialized),

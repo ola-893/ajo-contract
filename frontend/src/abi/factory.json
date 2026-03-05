@@ -188,6 +188,38 @@
       },
       {
         "type": "function",
+        "name": "create_ajo_and_initialize",
+        "inputs": [
+          {
+            "name": "name",
+            "type": "core::felt252"
+          },
+          {
+            "name": "monthly_contribution",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "total_participants",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "cycle_duration",
+            "type": "core::integer::u64"
+          },
+          {
+            "name": "payment_token",
+            "type": "ajo_save::interfaces::types::PaymentToken"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
         "name": "deploy_core",
         "inputs": [
           {
@@ -730,6 +762,23 @@
   },
   {
     "type": "event",
+    "name": "ajo_save::factory::ajo_factory::AjoFactory::AjoInitialized",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "ajo_id",
+        "type": "core::integer::u256",
+        "kind": "key"
+      },
+      {
+        "name": "core_address",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
     "name": "ajo_save::factory::ajo_factory::AjoFactory::Event",
     "kind": "enum",
     "variants": [
@@ -776,6 +825,11 @@
       {
         "name": "ScheduleDeployed",
         "type": "ajo_save::factory::ajo_factory::AjoFactory::ScheduleDeployed",
+        "kind": "nested"
+      },
+      {
+        "name": "AjoInitialized",
+        "type": "ajo_save::factory::ajo_factory::AjoFactory::AjoInitialized",
         "kind": "nested"
       }
     ]

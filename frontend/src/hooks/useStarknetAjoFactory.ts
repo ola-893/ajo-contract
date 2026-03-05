@@ -6,6 +6,7 @@ import {
   RpcProvider,
   CairoCustomEnum,
   shortString,
+  hash,
 } from "starknet";
 import { useStarknetWallet } from "@/contexts/StarknetWalletContext";
 import { ajoFactoryAbi } from "@/abi/placeholders";
@@ -66,6 +67,9 @@ const normalizeAddressForCompare = (value: string): string => {
     return value.toLowerCase();
   }
 };
+const AJO_CREATED_SELECTOR = normalizeAddressForCompare(
+  hash.getSelectorFromName("AjoCreated"),
+);
 
 const buildPaymentTokenEnum = (token: "USDC" | "BTC") =>
   token === "BTC"
@@ -182,6 +186,38 @@ const extractTupleValues = (value: any): any[] => {
 
   if (numericKeys.length === 0) return [];
   return numericKeys.map((index) => value[index]);
+};
+
+const parseAjoIdFromReceiptEvents = (
+  receipt: any,
+  factoryAddress: string,
+): number | null => {
+  const expectedFactory = normalizeAddressForCompare(factoryAddress);
+  const events = Array.isArray(receipt?.events)
+    ? receipt.events
+    : Array.isArray(receipt?.value?.events)
+      ? receipt.value.events
+      : [];
+
+  for (const event of events) {
+    const from = String(event?.from_address ?? event?.fromAddress ?? "");
+    if (!from) continue;
+    if (normalizeAddressForCompare(from) !== expectedFactory) continue;
+
+    const keys = Array.isArray(event?.keys) ? event.keys : [];
+    if (keys.length === 0) continue;
+
+    const selector = normalizeAddressForCompare(toHexAddress(keys[0]));
+    if (selector !== AJO_CREATED_SELECTOR) continue;
+
+    const data = Array.isArray(event?.data) ? event.data : [];
+    if (data.length >= 2) {
+      const parsed = toNumberValue({ low: data[0], high: data[1] });
+      if (Number.isFinite(parsed) && parsed > 0) return parsed;
+    }
+  }
+
+  return null;
 };
 
 const tupleU256 = (tuple: any[], lowIndex: number, highIndex: number) => ({
@@ -468,7 +504,7 @@ const useStarknetAjoFactory = () => {
 
         const totalBefore = toNumberValue(await factoryContract.get_total_ajos());
 
-        const tx = await factoryContract.create_ajo(
+        const tx = await factoryContract.create_ajo_and_initialize(
           shortName,
           contributionAmount,
           totalParticipants,
@@ -476,51 +512,23 @@ const useStarknetAjoFactory = () => {
           paymentToken,
         );
 
-        await provider.waitForTransaction(tx.transaction_hash);
-
+        const receipt = await provider.waitForTransaction(tx.transaction_hash);
+        const ajoIdFromEvent = parseAjoIdFromReceiptEvents(
+          receipt,
+          factoryAddress,
+        );
         const totalAfter = toNumberValue(await factoryContract.get_total_ajos());
-        const ajoId = totalAfter > totalBefore ? totalAfter : totalBefore + 1;
-        const ajoIdU256 = cairo.uint256(ajoId);
-
-        let deploymentTxs: Array<{ method: string; txHash: string }> = [];
-        let deploymentWarning: string | undefined;
-
-        try {
-          const ownerAddressRaw = await factoryContract.owner();
-          const ownerAddress = normalizeAddressForCompare(
-            toHexAddress(ownerAddressRaw),
-          );
-          const callerAddress = normalizeAddressForCompare(address);
-          const callerIsFactoryOwner = ownerAddress === callerAddress;
-
-          if (callerIsFactoryOwner) {
-            deploymentTxs = await runPhaseDeployments(
-              factoryContract,
-              provider,
-              ajoIdU256,
-            );
-          } else {
-            deploymentWarning =
-              "Ajo created, but module deployment is owner-restricted on this factory. Ask factory owner to deploy phases for this Ajo.";
-          }
-        } catch (deploymentError: any) {
-          const message = String(deploymentError?.message || deploymentError || "");
-          if (
-            message.toLowerCase().includes("caller is not the owner") ||
-            message.toLowerCase().includes("not the owner")
-          ) {
-            deploymentWarning =
-              "Ajo created, but module deployment is owner-restricted on this factory. Ask factory owner to deploy phases for this Ajo.";
-          } else {
-            throw deploymentError;
-          }
-        }
+        const ajoId =
+          ajoIdFromEvent && ajoIdFromEvent > 0
+            ? ajoIdFromEvent
+            : totalAfter > totalBefore
+              ? totalAfter
+              : totalBefore + 1;
 
         return {
           transactionHash: tx.transaction_hash,
           ajoId,
-          deploymentTxs,
-          deploymentWarning,
+          deploymentTxs: [],
           success: true,
         };
       } catch (error: any) {
@@ -530,7 +538,7 @@ const useStarknetAjoFactory = () => {
         setLoading(false);
       }
     },
-    [account, isConnected, address, runPhaseDeployments],
+    [account, isConnected, address],
   );
 
   const getAjoInfo = useCallback(async (ajoId: string) => {

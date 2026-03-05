@@ -238,7 +238,7 @@ async function main() {
       provider,
       owner,
       factory,
-      "create_ajo",
+      "create_ajo_and_initialize",
       [
         flowName,
         monthlyContribution,
@@ -257,19 +257,6 @@ async function main() {
   const ajoId = BigInt(afterTotal);
   report.checks.ajoId = ajoId.toString();
   report.checks.afterTotalAjos = afterTotal;
-
-  report.txs.deployMembers = (
-    await invokeAndWait(provider, owner, factory, "deploy_members", [ajoId], network)
-  ).txHash;
-  report.txs.deployCollateralPayments = (
-    await invokeAndWait(provider, owner, factory, "deploy_collateral_and_payments", [ajoId], network)
-  ).txHash;
-  report.txs.deployGovernanceSchedule = (
-    await invokeAndWait(provider, owner, factory, "deploy_governance_and_schedule", [ajoId], network)
-  ).txHash;
-  report.txs.deployCore = (
-    await invokeAndWait(provider, owner, factory, "deploy_core", [ajoId], network)
-  ).txHash;
 
   const ajoInfo = await factory.get_ajo_info(ajoId);
   const coreAddress = ajoInfo.core_address;

@@ -16,12 +16,12 @@ This directory contains deployment and verification scripts for the AJO Cairo co
   - Loads `../deployment_info.json` + `../declared_class_hashes.json`
   - Verifies class hashes exist on-chain
   - Verifies deployed contracts are accessible
-  - Runs a smoke flow on Factory (`create_ajo` + phased deploy)
+  - Runs a smoke flow on Factory (`create_ajo_and_initialize`)
   - Writes `../verification_report.json`
 
 - `npm run smoke:deployed`
   - Runs BTC-mode smoke test against deployed contracts from `../deployment_info.json`
-  - Creates BTC Ajo and executes phased deployment
+  - Creates BTC Ajo with atomic factory initialization
   - Uses test member accounts (`TEST_ACCOUNT_i_*` or `SMOKE_MEMBER_i_*`) for:
     - token approvals (collateral/payments)
     - `join_ajo(1)`
@@ -30,7 +30,7 @@ This directory contains deployment and verification scripts for the AJO Cairo co
 
 - `npm run btc:full-flow`
   - Runs full BTC-track demo flow against deployed contracts from `../deployment_info.json`
-  - Creates a fresh BTC Ajo and deploys all modules
+  - Creates a fresh BTC Ajo with atomic factory initialization
   - Wires adapters and enables:
     - bridge
     - atomic swap
