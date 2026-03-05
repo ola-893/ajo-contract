@@ -140,7 +140,7 @@ ajo-save-cairo/
 
 ```
 AjoFactory (Entry Point)
-    ↓ deploys
+    ↓ create_ajo_and_initialize (creator-signed atomic flow)
     ├── AjoCore (Orchestrator)
     │   ├── coordinates → AjoMembers
     │   ├── coordinates → AjoCollateral
@@ -148,6 +148,8 @@ AjoFactory (Entry Point)
     │   ├── coordinates → AjoGovernance
     │   └── coordinates → AjoSchedule
 ```
+
+Legacy phased functions (`deploy_members`, `deploy_collateral_and_payments`, `deploy_governance_and_schedule`, `deploy_core`) remain available for recovery/debug and are creator-gated per Ajo.
 
 ### From Hedera to StarkNet + Bitcoin
 
@@ -309,7 +311,7 @@ tests/
 
 3. **Integration Tests**
    - Full season completion (10 cycles)
-   - Factory deployment workflow
+   - Factory atomic initialization workflow
    - Default handling workflow
 
 #### 📋 Pending Tests

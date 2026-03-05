@@ -188,9 +188,6 @@ const CreateAjo = () => {
       toast.success(
         ` Ajo #${result.ajoId} created successfully! Tx: ${result.transactionHash.slice(0, 10)}...`,
       );
-      if (result.deploymentWarning) {
-        toast.warning(result.deploymentWarning);
-      }
 
       setShowSuccess(true);
 
