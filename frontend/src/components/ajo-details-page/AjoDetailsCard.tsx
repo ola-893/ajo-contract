@@ -155,7 +155,7 @@ const AjoDetailsCard = ({
           ).catch(() => 0n);
 
           if (!cancelled) {
-            setRequiredCollateral(required > 0n ? required : null);
+            setRequiredCollateral(required);
           }
         } else if (!cancelled) {
           setRequiredCollateral(null);
@@ -219,11 +219,11 @@ const AjoDetailsCard = ({
     setIsJoining(true);
     try {
       const approvalAmount =
-        requiredCollateral && requiredCollateral > 0n
+        requiredCollateral !== null
           ? requiredCollateral
           : ajo.config.monthlyContribution * BigInt(ajo.config.totalParticipants);
 
-      if (requiresTokenApproval) {
+      if (requiresTokenApproval && approvalAmount > 0n) {
         const currentAllowance = await getAllowance(address, ajo.collateralAddress);
         if (currentAllowance < approvalAmount) {
           toast.info("Approving collateral transfer...");
@@ -262,13 +262,13 @@ const AjoDetailsCard = ({
   const collateralDisplay = useMemo(() => {
     if (!ajo) return "5.4 USDC";
     const amount =
-      requiredCollateral && requiredCollateral > 0n
+      requiredCollateral !== null
         ? requiredCollateral
         : estimateRequiredCollateral(
             ajo.config.monthlyContribution,
             ajo.config.totalParticipants,
           );
-    if (amount <= 0n) return "0";
+    if (amount <= 0n) return `0 ${ajo?.config.paymentToken || "USDC"}`;
     const decimals = ajo?.config.paymentToken === "BTC" ? 8 : 6;
     return `${formatTokenAmount(amount, decimals)} ${
       ajo?.config.paymentToken || "USDC"
