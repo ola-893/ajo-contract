@@ -70,7 +70,6 @@ const AjoAdvancedModules = ({ ajo }: { ajo: any }) => {
     disableSwap,
     enableBtcCommitment,
     disableBtcCommitment,
-    startAjo,
     processPayment,
     processCycle,
     handleDefault,
@@ -562,10 +561,10 @@ const AjoAdvancedModules = ({ ajo }: { ajo: any }) => {
             </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
               <button
-                onClick={() => runAction(startAjo, "Ajo started")}
+                disabled
                 className="px-3 py-2 rounded-md border border-border text-sm hover:bg-primary/10"
               >
-                Start Ajo
+                Start Ajo (Auto)
               </button>
               <button
                 onClick={() => runAction(processPayment, "Core payment processed")}

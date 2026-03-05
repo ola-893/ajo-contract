@@ -274,7 +274,14 @@ async function main() {
     });
   }
 
-  txs.start_ajo = await invokeAndWait(provider, owner, core, "start_ajo", [], network);
+  const isActiveAfterJoin = await core.is_active();
+  if (!isActiveAfterJoin) {
+    throw new Error("Ajo did not auto-start after reaching full membership");
+  }
+  const cycleAfterAutoStart = toU256BigInt(await core.get_current_cycle());
+  if (cycleAfterAutoStart !== 1n) {
+    throw new Error(`Unexpected cycle after auto-start: ${cycleAfterAutoStart.toString()}`);
+  }
 
   console.log("\n💸 Processing first cycle payments...");
   const paymentTxs = [];

@@ -25,7 +25,7 @@ This directory contains deployment and verification scripts for the AJO Cairo co
   - Uses test member accounts (`TEST_ACCOUNT_i_*` or `SMOKE_MEMBER_i_*`) for:
     - token approvals (collateral/payments)
     - `join_ajo(1)`
-    - `start_ajo` + cycle payment round
+    - auto-start on full membership + cycle payment round
   - Verifies cycle advancement and writes `../smoke_test_report.json`
 
 - `npm run btc:full-flow`

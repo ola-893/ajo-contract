@@ -348,45 +348,32 @@ pub mod AjoCore {
                 collateral_amount: required_collateral,
                 guarantor,
             });
+
+            // Auto-start the Ajo when membership reaches configured capacity.
+            // This removes manual start endpoint dependency from user flows.
+            let updated_member_count = members_dispatcher.get_total_members();
+            if !self.is_active.read() && updated_member_count == total_participants {
+                let payments_dispatcher = IAjoPaymentsDispatcher {
+                    contract_address: self.payments_contract.read()
+                };
+                payments_dispatcher.start_cycle(1);
+
+                self.is_active.write(true);
+                self.current_cycle.write(1);
+
+                self.emit(AjoStarted {
+                    ajo_id: self.ajo_id.read(),
+                    cycle: 1,
+                    member_count: updated_member_count,
+                });
+            }
             
             // End reentrancy protection
             self.reentrancy_guard.end();
         }
 
         fn start_ajo(ref self: ContractState) {
-            // Only owner can start the Ajo
-            self.ownable.assert_only_owner();
-            
-            // Verify Ajo is not already active
-            assert(!self.is_active.read(), 'Ajo already active');
-            
-            // Get member count from members contract
-            let members_dispatcher = IAjoMembersDispatcher {
-                contract_address: self.members_contract.read()
-            };
-            let member_count = members_dispatcher.get_total_members();
-            
-            // Verify minimum members joined (at least 2 members required)
-            assert(member_count >= 2, 'Insufficient members');
-            
-            // Set is_active to true
-            self.is_active.write(true);
-            
-            // Initialize first cycle (cycle 1) in payments contract
-            let payments_dispatcher = IAjoPaymentsDispatcher {
-                contract_address: self.payments_contract.read()
-            };
-            payments_dispatcher.start_cycle(1);
-            
-            // Update current cycle
-            self.current_cycle.write(1);
-            
-            // Emit AjoStarted event
-            self.emit(AjoStarted {
-                ajo_id: self.ajo_id.read(),
-                cycle: 1,
-                member_count,
-            });
+            assert(1 == 0, 'Auto start only');
         }
 
         fn process_payment(ref self: ContractState) {
