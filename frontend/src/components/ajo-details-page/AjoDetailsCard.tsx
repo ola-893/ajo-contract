@@ -365,7 +365,11 @@ const AjoDetailsCard = ({
                 </div>
               )}
 
-              <div className="px-3 py-1 rounded-md text-xs font-semibold flex items-center space-x-2 w-fit bg-[#211416] text-[#EA4343]">
+              <div className={`px-3 py-1 rounded-md text-xs font-semibold flex items-center space-x-2 w-fit ${
+                isActiveMember 
+                  ? 'bg-green-900/20 text-green-400' 
+                  : 'bg-[#211416] text-[#EA4343]'
+              }`}>
                 {isActiveMember ? (
                   <>
                     <CheckCircle className="w-4 h-4" />
@@ -379,9 +383,13 @@ const AjoDetailsCard = ({
                 )}
               </div>
 
-              <div className="px-3 py-1 rounded-md text-xs font-semibold flex items-center space-x-2 w-fit bg-[#211416] text-[#EA4343]">
+              <div className={`px-3 py-1 rounded-md text-xs font-semibold flex items-center space-x-2 w-fit ${
+                userHasPaid 
+                  ? 'bg-green-900/20 text-green-400' 
+                  : 'bg-[#211416] text-[#EA4343]'
+              }`}>
                 <CreditCard className="w-4 h-4" />
-                <span>Monthly payment pending</span>
+                <span>{userHasPaid ? 'Payment Complete' : 'Monthly payment pending'}</span>
               </div>
             </div>
 
