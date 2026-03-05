@@ -38,7 +38,8 @@ const AjoDetailsCard = ({
   onRefresh,
 }: AjoDetailsCardProps) => {
   const { address, isConnected } = useStarknetWallet();
-  const { joinAjo } = useStarknetAjoCore(ajo?.coreAddress || "");
+  const { joinAjo, getAdvancedFeatures, getPaymentTokenConfig } =
+    useStarknetAjoCore(ajo?.coreAddress || "");
   const { getTotalMembers, isMember } = useStarknetAjoMembers(
     ajo?.membersAddress || "",
   );
@@ -46,11 +47,15 @@ const AjoDetailsCard = ({
     ajo?.collateralAddress || "",
   );
   const paymentToken = ajo?.config.paymentToken === "BTC" ? "BTC" : "USDC";
-  const paymentTokenAddress =
+  const defaultPaymentTokenAddress =
     paymentToken === "BTC"
       ? (TOKEN_ADDRESSES.sepolia.BTC || "").toLowerCase()
       : TOKEN_ADDRESSES.sepolia.USDC.toLowerCase();
   const paymentTokenIndex = paymentToken === "BTC" ? 1 : 0;
+  const [requiresTokenApproval, setRequiresTokenApproval] = useState(true);
+  const [paymentTokenAddress, setPaymentTokenAddress] = useState(
+    defaultPaymentTokenAddress,
+  );
   const { getAllowance, approve } = useStarknetErc20(paymentTokenAddress);
 
   const [isAjoFull, setIsAjoFull] = useState(false);
@@ -62,6 +67,56 @@ const AjoDetailsCard = ({
   const userHasPaid = false;
   const isZeroAddress = (value?: string | null) =>
     !value || /^0x0+$/i.test(value);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadJoinFlowConfig = async () => {
+      if (!ajo || isZeroAddress(ajo.coreAddress)) {
+        if (!cancelled) {
+          setRequiresTokenApproval(true);
+          setPaymentTokenAddress(defaultPaymentTokenAddress);
+        }
+        return;
+      }
+
+      try {
+        const [features, tokenConfig] = await Promise.all([
+          getAdvancedFeatures().catch(() => null),
+          getPaymentTokenConfig().catch(() => null),
+        ]);
+
+        const btcCommitmentMode =
+          features?.collateralMode === "BTCCommitment" &&
+          Boolean(features?.btcCommitmentEnabled);
+        const onchainTokenAddress =
+          tokenConfig?.tokenAddress && !isZeroAddress(tokenConfig.tokenAddress)
+            ? String(tokenConfig.tokenAddress).toLowerCase()
+            : "";
+
+        if (!cancelled) {
+          setRequiresTokenApproval(!btcCommitmentMode);
+          setPaymentTokenAddress(onchainTokenAddress || defaultPaymentTokenAddress);
+        }
+      } catch {
+        if (!cancelled) {
+          setRequiresTokenApproval(true);
+          setPaymentTokenAddress(defaultPaymentTokenAddress);
+        }
+      }
+    };
+
+    loadJoinFlowConfig();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    ajo,
+    getAdvancedFeatures,
+    getPaymentTokenConfig,
+    defaultPaymentTokenAddress,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -147,7 +202,7 @@ const AjoDetailsCard = ({
       return;
     }
 
-    if (!paymentTokenAddress) {
+    if (requiresTokenApproval && !paymentTokenAddress) {
       toast.error("Payment token not configured for this Ajo");
       return;
     }
@@ -168,10 +223,14 @@ const AjoDetailsCard = ({
           ? requiredCollateral
           : ajo.config.monthlyContribution * BigInt(ajo.config.totalParticipants);
 
-      const currentAllowance = await getAllowance(address, ajo.collateralAddress);
-      if (currentAllowance < approvalAmount) {
-        toast.info("Approving collateral transfer...");
-        await approve(ajo.collateralAddress, approvalAmount);
+      if (requiresTokenApproval) {
+        const currentAllowance = await getAllowance(address, ajo.collateralAddress);
+        if (currentAllowance < approvalAmount) {
+          toast.info("Approving collateral transfer...");
+          await approve(ajo.collateralAddress, approvalAmount);
+        }
+      } else {
+        toast.info("BTC commitment mode active. Skipping ERC20 approval.");
       }
 
       toast.info("Joining Ajo...");

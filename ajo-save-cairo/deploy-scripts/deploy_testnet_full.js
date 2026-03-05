@@ -1,4 +1,4 @@
-import { RpcProvider, Account, Contract, CallData, constants, hash, json } from "starknet";
+import { RpcProvider, Account, Contract, CallData, hash, json } from "starknet";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -147,7 +147,6 @@ async function ensureDeclared(
         contract: contractClass,
         casm: compiledClass,
       }, {
-        version: constants.TRANSACTION_VERSION.V1,
         maxFee: DEFAULT_MAX_FEE,
       });
     } catch (error) {
@@ -179,7 +178,6 @@ async function deployContract(provider, account, className, classHash, construct
       classHash,
       constructorCalldata,
     }, {
-      version: constants.TRANSACTION_VERSION.V1,
       maxFee: DEFAULT_MAX_FEE,
     });
   } catch (error) {
@@ -213,7 +211,6 @@ async function executeFactoryCall(provider, account, factory, method, args, netw
   try {
     const call = factory.populate(method, args);
     tx = await account.execute(call, {
-      version: constants.TRANSACTION_VERSION.V1,
       maxFee: DEFAULT_MAX_FEE,
     });
   } catch (error) {

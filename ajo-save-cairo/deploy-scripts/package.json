@@ -9,6 +9,7 @@
     "deploy:sepolia": "node deploy_testnet_full.js",
     "verify:deployment": "node verify_deployment.js",
     "smoke:deployed": "node smoke_test_deployed.js",
+    "btc:full-flow": "node btc_track_full_flow.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

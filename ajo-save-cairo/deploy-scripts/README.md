@@ -28,6 +28,19 @@ This directory contains deployment and verification scripts for the AJO Cairo co
     - `start_ajo` + cycle payment round
   - Verifies cycle advancement and writes `../smoke_test_report.json`
 
+- `npm run btc:full-flow`
+  - Runs full BTC-track demo flow against deployed contracts from `../deployment_info.json`
+  - Creates a fresh BTC Ajo and deploys all modules
+  - Wires adapters and enables:
+    - bridge
+    - atomic swap
+    - BTC commitment collateral mode
+  - Executes optional demos when balance permits:
+    - bridge withdrawal request + finalize
+    - swap execution
+    - join flow with BTC commitment creation
+  - Writes `../btc_track_report.json`
+
 - `npm run declare-deploy`
   - Legacy single-contract script for `AjoFactory` only
 
@@ -62,6 +75,16 @@ Deployed smoke-test options:
 - Member keys: `TEST_ACCOUNT_1_ADDRESS`/`TEST_ACCOUNT_1_PRIVATE_KEY` ...
   or `SMOKE_MEMBER_1_ADDRESS`/`SMOKE_MEMBER_1_PRIVATE_KEY` ...
 
+BTC full-flow options:
+
+- `FLOW_MONTHLY_CONTRIBUTION` (default: `1000`)
+- `FLOW_TOTAL_PARTICIPANTS` (default: `3`, must be `>= 3`)
+- `FLOW_CYCLE_DURATION` (default: `86400`, must be `>= 86400`)
+- `FLOW_BRIDGE_AMOUNT` (default: `1`)
+- `FLOW_SWAP_AMOUNT` (default: `1`)
+- `FLOW_DEMO_BTC_ADDRESS` (default demo felt payload)
+- `FLOW_DEMO_BTC_TX_HASH` (default demo felt payload)
+
 ## Typical Flow
 
 ```bash
@@ -72,4 +95,5 @@ npm install
 npm run deploy:sepolia
 npm run verify:deployment
 npm run smoke:deployed
+npm run btc:full-flow
 ```

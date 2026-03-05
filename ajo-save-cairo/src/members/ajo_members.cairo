@@ -160,8 +160,7 @@ pub mod AjoMembers {
             self.position_to_member.entry(position).write(member);
             
             // Add to member list
-            let len = self.member_list.len();
-            self.member_list.at(len).write(member);
+            self.member_list.append().write(member);
             
             // Increment member count
             self.member_count.write(current_count + 1);

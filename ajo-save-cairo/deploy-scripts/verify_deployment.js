@@ -1,4 +1,4 @@
-import { RpcProvider, Account, Contract, CairoCustomEnum, constants } from "starknet";
+import { RpcProvider, Account, Contract, CairoCustomEnum } from "starknet";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -97,7 +97,6 @@ async function waitForInvoke(provider, account, contract, method, args, network)
   try {
     const call = contract.populate(method, args);
     tx = await account.execute(call, {
-      version: constants.TRANSACTION_VERSION.V1,
       maxFee: DEFAULT_MAX_FEE,
     });
   } catch (error) {

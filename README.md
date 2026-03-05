@@ -1,6 +1,6 @@
 # 🏦 AJO.SAVE - Decentralized ROSCA Protocol on Starknet
 
-# Track - Onchain Finance & Real-World Assets (RWA)
+# Track - ₿ Bitcoin on Starknet
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Starknet](https://img.shields.io/badge/Starknet-Sepolia-purple.svg)](https://starknet.io)
@@ -36,11 +36,13 @@
 
 **Frontend Demo:** [ajo-save.vercel.app](https://ajo-save.vercel.app)
 
+**Hackathon BTC Brief:** [HACKATHON_SUBMISSION_BTC_TRACK.md](./HACKATHON_SUBMISSION_BTC_TRACK.md)
+
 ---
 
 ## 🎯 Project Overview
 
-**Track:** Onchain Finance & Real-World Assets (RWA)
+**Track:** ₿ Bitcoin - BTC-native DeFi on Starknet
 
 **Problem:** Traditional African savings circles (ROSCAs) rely on social trust, manual bookkeeping, and weak default enforcement. Existing blockchain versions are often too expensive or too complex for low-ticket recurring contributions.
 

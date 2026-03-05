@@ -71,45 +71,30 @@ snforge test test_collateral_formula
 
 ## 📊 Project Status
 
-**Overall Progress**: 25% Complete
+**Current Status**: BTC-track prototype implemented and deployable on Starknet Sepolia.
 
-### ✅ Completed (Phase 1: Foundation)
+### ✅ Implemented
 
-#### Type System & Interfaces (100%)
-- ✅ Core data structures (Member, AjoConfig, AjoInfo)
-- ✅ 7 comprehensive interfaces (Factory, Core, Members, Collateral, Payments, Governance, Schedule)
-- ✅ Protocol constants (60% collateral formula)
+- ✅ Modular ROSCA core (`Factory`, `Core`, `Members`, `Collateral`, `Payments`, `Governance`, `Schedule`)
+- ✅ Access control, pause, and reentrancy protections across critical modules
+- ✅ BTC/cross-chain adapters:
+  - `BridgeAdapter` (deposit/withdraw lifecycle + replay protection)
+  - `SwapRouter` (optional payout conversion path)
+  - `BTCCollateralAdapter` (OP_CAT-compatible commitment state machine)
+- ✅ Collateral mode abstraction:
+  - `L2Escrow`
+  - `BTCCommitment`
+- ✅ Deployment/verification scripts plus full BTC demo flow:
+  - `deploy:sepolia`
+  - `verify:deployment`
+  - `smoke:deployed`
+  - `btc:full-flow`
 
-#### Components (100%)
-- ✅ OwnableComponent - Access control with ownership transfer
-- ✅ PausableComponent - Emergency pause mechanism
-- ✅ ReentrancyGuardComponent - Protection against reentrancy attacks
+### ⚠️ Known Gaps
 
-#### Factory Contract (100%)
-- ✅ AjoFactory - 5-phase initialization system
-- ✅ Class hash-based deployment (Cairo's proxy pattern)
-- ✅ Ajo registry and user tracking
-- ✅ Event emissions and validation
-
-### 🔄 In Progress (Phase 2: Core Contracts)
-
-#### Priority 1: Critical Business Logic
-- [ ] **AjoCollateral** (HIGH PRIORITY) - Implements 60% collateral formula
-- [ ] **AjoMembers** (HIGH PRIORITY) - Member queue and guarantor network
-- [ ] **AjoPayments** (HIGH PRIORITY) - Payment processing and cycle management
-- [ ] **AjoCore** (HIGH PRIORITY) - Main orchestration logic
-
-#### Priority 2: Governance & Automation
-- [ ] **AjoGovernance** (MEDIUM) - On-chain voting system
-- [ ] **AjoSchedule** (LOW) - Time-based automation
-
-### 📋 Upcoming (Phase 3-6)
-
-- [ ] Bitcoin Integration (OP_CAT covenants, bridge interface)
-- [ ] Comprehensive Testing (unit, integration, property-based)
-- [ ] StarkNet Testnet Deployment
-- [ ] Frontend Development (StarkNet.js + Bitcoin wallets)
-- [ ] Mainnet Launch
+- ⚠️ Test suite modernization is still required before production hardening (`snforge test` currently has legacy breakage).
+- ⚠️ OP_CAT path is modeled as an adapter abstraction for testnet, not a production Bitcoin covenant execution engine.
+- ⚠️ Mainnet risk controls, monitoring, and economic parameter audits are pending.
 
 ---
 

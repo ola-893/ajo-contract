@@ -8,7 +8,7 @@
   "opCatVerifier": "0x0281e16a3f71b9c0cede19cee4375c24cbc328c08f8cc4d4757d04ffeb956ce8",
   "classHashes": {
     "AjoCore": "0x01831ddace9afff0a50534fce03c52dff11aedbe8b49debd3b933a89da88d058",
-    "AjoMembers": "0x044f93453b204b575944722037b9d51ebe5062ebae88e3ca43d6979ac9a8a118",
+    "AjoMembers": "0x07f58b65262907ade7ed422eb138ce221b9791f0d991f7a468560fb309ced133",
     "AjoCollateral": "0x007de0379791d5affce82c82a84fb639b0487b8f149a6ab26895128d260c79bf",
     "AjoPayments": "0x031a0741d826c579bd66ae52605c42e78e86304b1928d1e8beffbc53dab0c0b6",
     "AjoGovernance": "0x067ce461390cabffdc105b38499d2bb0511d60cd59d46fd15563a0f9e979ba5d",
@@ -36,7 +36,8 @@
     "swapRouterDeploy": "0x03ec0ad04ff494e4bfa3b653278720bd166efbdf914f6ebe5581196a50c10320",
     "btcCollateralAdapterDeploy": "0x024288c2fa09f2636e4cd6ca8ce096843e32c8ce50637d123cda765c7245ffaf",
     "setCoreClassHash": "0x062b15d5c792735e9dfa61357eccdc171208c52cdfd81c1057fe228768b99718",
-    "setMembersClassHash": "0x05ee4ba30f338ebf2e21eb32241ad8e11316a3f6c88b08292a7ecc6f8dd01196",
+    "setMembersClassHash": "0x0042387013e8233657119a381f6abbde2ea99d38e3d4ee7af5c7ee1b31e193d4",
+    "declareAjoMembersHotfix": "0x0113e13fbf6161994df493bde576678d554c0208982243658a4d3ba9d43e78f6",
     "setCollateralClassHash": "0x004a104cd92fb59fdda323f941363b07bde18ede0578e66faf77c5c6502ddd98",
     "setPaymentsClassHash": "0x03e4611259b4f96664a93c4a56c14d66767be43a33fb906b00a1266bf9adfe28",
     "setGovernanceClassHash": "0x068ddc04b214a6e7066e951b04d02681e85479ee643cab3105e77805c0f39e4c",

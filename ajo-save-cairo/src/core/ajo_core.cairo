@@ -836,7 +836,7 @@ pub mod AjoCore {
         }
 
         fn set_bridge_adapter(ref self: ContractState, bridge_adapter: ContractAddress) {
-            self.ownable.assert_only_owner();
+            InternalImpl::assert_owner_or_initializer(@self);
             assert(!bridge_adapter.is_zero(), 'Bridge adapter cannot be zero');
             self.bridge_adapter.write(bridge_adapter);
             self.emit(AdapterAddressUpdated {
@@ -846,20 +846,20 @@ pub mod AjoCore {
         }
 
         fn enable_bridge(ref self: ContractState) {
-            self.ownable.assert_only_owner();
+            InternalImpl::assert_owner_or_initializer(@self);
             assert(!self.bridge_adapter.read().is_zero(), 'Bridge adapter not configured');
             self.bridge_enabled.write(true);
             self.emit(FeatureFlagToggled { feature: 'bridge', enabled: true });
         }
 
         fn disable_bridge(ref self: ContractState) {
-            self.ownable.assert_only_owner();
+            InternalImpl::assert_owner_or_initializer(@self);
             self.bridge_enabled.write(false);
             self.emit(FeatureFlagToggled { feature: 'bridge', enabled: false });
         }
 
         fn set_swap_router(ref self: ContractState, swap_router: ContractAddress) {
-            self.ownable.assert_only_owner();
+            InternalImpl::assert_owner_or_initializer(@self);
             assert(!swap_router.is_zero(), 'Swap router cannot be zero');
             self.swap_router.write(swap_router);
             self.emit(AdapterAddressUpdated {
@@ -874,7 +874,7 @@ pub mod AjoCore {
         }
 
         fn enable_swap(ref self: ContractState) {
-            self.ownable.assert_only_owner();
+            InternalImpl::assert_owner_or_initializer(@self);
             assert(!self.swap_router.read().is_zero(), 'Swap router not configured');
             self.swap_enabled.write(true);
             self.emit(FeatureFlagToggled { feature: 'swap', enabled: true });
@@ -886,7 +886,7 @@ pub mod AjoCore {
         }
 
         fn disable_swap(ref self: ContractState) {
-            self.ownable.assert_only_owner();
+            InternalImpl::assert_owner_or_initializer(@self);
             self.swap_enabled.write(false);
             self.emit(FeatureFlagToggled { feature: 'swap', enabled: false });
 
@@ -899,7 +899,7 @@ pub mod AjoCore {
         fn set_btc_collateral_adapter(
             ref self: ContractState, btc_collateral_adapter: ContractAddress
         ) {
-            self.ownable.assert_only_owner();
+            InternalImpl::assert_owner_or_initializer(@self);
             assert(!btc_collateral_adapter.is_zero(), 'BTC collat adapter zero');
             self.btc_collateral_adapter.write(btc_collateral_adapter);
             self.emit(AdapterAddressUpdated {
@@ -909,7 +909,7 @@ pub mod AjoCore {
         }
 
         fn enable_btc_commitment(ref self: ContractState) {
-            InternalImpl::assert_governance_approved(@self);
+            InternalImpl::assert_owner_governance_or_initializer(@self);
             assert(
                 !self.btc_collateral_adapter.read().is_zero(),
                 'BTC collat adapter missing'
@@ -919,13 +919,13 @@ pub mod AjoCore {
         }
 
         fn disable_btc_commitment(ref self: ContractState) {
-            InternalImpl::assert_governance_approved(@self);
+            InternalImpl::assert_owner_governance_or_initializer(@self);
             self.btc_commitment_enabled.write(false);
             self.emit(FeatureFlagToggled { feature: 'btc_commitment', enabled: false });
         }
 
         fn set_collateral_mode(ref self: ContractState, mode: CollateralMode) {
-            InternalImpl::assert_governance_approved(@self);
+            InternalImpl::assert_owner_governance_or_initializer(@self);
             let old_mode = self.collateral_mode.read();
             self.collateral_mode.write(mode);
             self.emit(CollateralModeChanged { old_mode, new_mode: mode });
@@ -980,6 +980,24 @@ pub mod AjoCore {
             let owner = self.ownable.owner();
             let governance = self.governance_contract.read();
             assert(caller == owner || caller == governance, 'Only owner or governance');
+        }
+
+        fn assert_owner_or_initializer(self: @ContractState) {
+            let caller = starknet::get_caller_address();
+            let owner = self.ownable.owner();
+            let initializer = self.authorized_initializer.read();
+            assert(caller == owner || caller == initializer, 'Only owner or initializer');
+        }
+
+        fn assert_owner_governance_or_initializer(self: @ContractState) {
+            let caller = starknet::get_caller_address();
+            let owner = self.ownable.owner();
+            let governance = self.governance_contract.read();
+            let initializer = self.authorized_initializer.read();
+            assert(
+                caller == owner || caller == governance || caller == initializer,
+                'Only owner/gov/init'
+            );
         }
 
         fn assert_owner_governance_or_schedule(self: @ContractState) {
