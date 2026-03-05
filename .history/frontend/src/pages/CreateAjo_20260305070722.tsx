@@ -23,7 +23,7 @@ const CreateAjo = () => {
   const navigate = useNavigate();
   const [isVisible, setIsVisible] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const { createAjo, loading, currentPhase } = useStarknetAjoFactory();
+  const { createAjo, loading } = useStarknetAjoFactory();
   const { address, isConnected } = useStarknetWallet();
 
   // Form state - Updated for Starknet
@@ -285,25 +285,17 @@ const CreateAjo = () => {
                   <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
-                        {currentPhase === 0 ? "Creating Ajo on Starknet" : `Phase ${currentPhase}/5`}
+                        Creating Ajo on Starknet
                       </span>
                       <span className="text-sm font-bold text-blue-900 dark:text-blue-100">
-                        {currentPhase === 0 ? "Processing..." : `${Math.round((currentPhase / 5) * 100)}%`}
+                        Processing...
                       </span>
                     </div>
                     <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2">
-                      <div 
-                        className="bg-blue-600 dark:bg-blue-400 h-2 rounded-full transition-all duration-500"
-                        style={{ width: currentPhase === 0 ? "100%" : `${(currentPhase / 5) * 100}%` }}
-                      ></div>
+                      <div className="bg-blue-600 dark:bg-blue-400 h-2 rounded-full transition-all duration-500 animate-pulse w-full"></div>
                     </div>
                     <p className="text-xs text-blue-800 dark:text-blue-200 mt-2">
-                      {currentPhase === 0 && "Please approve the transaction in your wallet"}
-                      {currentPhase === 1 && "Deploying Members module..."}
-                      {currentPhase === 2 && "Deploying Collateral & Payments..."}
-                      {currentPhase === 3 && "Deploying Governance & Schedule..."}
-                      {currentPhase === 4 && "Deploying Core module..."}
-                      {currentPhase === 5 && "Finalizing..."}
+                      Please approve the transaction in your wallet
                     </p>
                   </div>
                 )}

@@ -173,15 +173,15 @@ const UserProfileCard = ({
                 )}
               </div>
 
-              {/* ETH Card */}
+              {/* BTC Card */}
               <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-4 hover:bg-white/15 transition-all duration-300">
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
+                  <div className="w-10 h-10 bg-gradient-to-br from-orange-400 to-orange-600 rounded-xl flex items-center justify-center shadow-lg">
                     <Wallet className="w-6 h-6 text-white" />
                   </div>
                   <div>
-                    <p className="text-white/60 text-xs font-medium">ETH</p>
-                    <p className="text-white/40 text-[10px]">Ethereum</p>
+                    <p className="text-white/60 text-xs font-medium">BTC</p>
+                    <p className="text-white/40 text-[10px]">Bitcoin</p>
                   </div>
                 </div>
                 <div className="flex items-baseline gap-2">
@@ -193,7 +193,7 @@ const UserProfileCard = ({
                         {eth || "0.00"}
                       </span>
                       <span className="text-white/60 text-sm font-medium">
-                        ETH
+                        BTC
                       </span>
                     </>
                   )}

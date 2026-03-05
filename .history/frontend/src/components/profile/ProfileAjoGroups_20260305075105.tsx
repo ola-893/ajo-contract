@@ -4,9 +4,7 @@ import { Coins, Plus, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../ui/button";
 import { useStarknetWallet } from "@/contexts/StarknetWalletContext";
-import useStarknetAjoFactory, {
-  type StarknetAjoInfo,
-} from "@/hooks/useStarknetAjoFactory";
+import useStarknetAjoFactory, { StarknetAjoInfo } from "@/hooks/useStarknetAjoFactory";
 
 const ProfileAjoGroups = () => {
   const navigate = useNavigate();
@@ -28,7 +26,7 @@ const ProfileAjoGroups = () => {
         const ajoIds = await getUserAjos(address);
         console.log("getUserAjos returned:", ajoIds);
         const ajoDetails = await Promise.all(
-          ajoIds.map((id) => getAjoInfo(String(id))),
+          ajoIds.map((id) => getAjoInfo(String(id)))
         );
         console.log("Ajo details:", ajoDetails);
         setUserAjos(ajoDetails);
@@ -93,10 +91,7 @@ const ProfileAjoGroups = () => {
                   <div>
                     <span className="text-gray-500">Contribution:</span>
                     <div className="font-semibold text-white">
-                      {(Number(ajo.config.monthlyContribution) / 1e6).toFixed(
-                        2,
-                      )}{" "}
-                      {ajo.config.paymentToken}
+                      {(Number(ajo.config.monthlyContribution) / 1e6).toFixed(2)} {ajo.config.paymentToken}
                     </div>
                   </div>
                   <div>

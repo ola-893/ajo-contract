@@ -42,7 +42,7 @@ interface TokenBalance {
   decimals: number;
 }
 
-export const useTokenBalance = (tokenSymbol: "STRK" | "USDC" | "ETH") => {
+export const useTokenBalance = (tokenSymbol: "STRK" | "USDC" | "ETH" | "BTC") => {
   const { account, address } = useStarknetWallet();
 
   const [balance, setBalance] = useState<TokenBalance>({

@@ -37,7 +37,7 @@ const Hero = () => {
         >
           <div className="inline-flex text-sm items-center space-x-2 bg-primary/20 text-primary px-4 py-2 rounded-full font-medium border border-primary/30 mb-4">
             <Zap className="w-4 h-4" />
-            <span>Powered by Starknet</span>
+            <span>Powered by Hedera</span>
           </div>
 
           <h1 className="text-lg lg:text-xl text-gray-400 font-normal leading-tight">

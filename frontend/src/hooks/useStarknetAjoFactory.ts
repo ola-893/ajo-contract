@@ -362,6 +362,7 @@ const normalizeAjoInfo = (raw: any, fallbackId = 0): StarknetAjoInfo => {
 const useStarknetAjoFactory = () => {
   const { account, isConnected, address } = useStarknetWallet();
   const [loading, setLoading] = useState(false);
+  const [currentPhase, setCurrentPhase] = useState(0);
 
   const getProvider = () => new RpcProvider({ nodeUrl: RPC_URL });
 
@@ -396,7 +397,9 @@ const useStarknetAjoFactory = () => {
     async (factoryContract: Contract, provider: RpcProvider, ajoIdU256: any) => {
       const deploymentTxs: Array<{ method: string; txHash: string }> = [];
 
-      for (const method of PHASE_METHODS) {
+      for (let i = 0; i < PHASE_METHODS.length; i++) {
+        const method = PHASE_METHODS[i];
+        setCurrentPhase(i + 1);
         console.log(`Running ${method}...`);
         const tx = await (factoryContract as any)[method](ajoIdU256);
         await provider.waitForTransaction(tx.transaction_hash);
@@ -421,6 +424,7 @@ const useStarknetAjoFactory = () => {
       }
 
       setLoading(true);
+      setCurrentPhase(0);
       try {
         const factoryAddress = CONTRACT_ADDRESSES.sepolia.ajoFactory;
         if (!factoryAddress) {
@@ -528,6 +532,7 @@ const useStarknetAjoFactory = () => {
         throw error;
       } finally {
         setLoading(false);
+        setCurrentPhase(0);
       }
     },
     [account, isConnected, address, runPhaseDeployments],
@@ -823,6 +828,7 @@ const useStarknetAjoFactory = () => {
     pause,
     unpause,
     loading,
+    currentPhase,
   };
 };
 

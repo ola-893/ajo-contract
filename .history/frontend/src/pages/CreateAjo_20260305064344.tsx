@@ -23,7 +23,7 @@ const CreateAjo = () => {
   const navigate = useNavigate();
   const [isVisible, setIsVisible] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const { createAjo, loading, currentPhase } = useStarknetAjoFactory();
+  const { createAjo, loading } = useStarknetAjoFactory();
   const { address, isConnected } = useStarknetWallet();
 
   // Form state - Updated for Starknet
@@ -32,7 +32,7 @@ const CreateAjo = () => {
     cycleDuration: "30", // days (1-62 allowed)
     monthlyContribution: "",
     totalParticipants: "3", // minimum 3 participants required
-    paymentToken: "USDC" as "USDC" | "BTC",
+    paymentToken: "USDC" as 'USDC' | 'BTC',
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
@@ -61,7 +61,7 @@ const CreateAjo = () => {
   const handleInputChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-    >,
+    >
   ) => {
     const { name, value, type } = e.target;
 
@@ -113,37 +113,22 @@ const CreateAjo = () => {
     }
 
     const cycleDays = Number(formData.cycleDuration);
-    if (
-      !Number.isFinite(cycleDays) ||
-      !Number.isInteger(cycleDays) ||
-      cycleDays < 1
-    ) {
+    if (!Number.isFinite(cycleDays) || !Number.isInteger(cycleDays) || cycleDays < 1) {
       errors.cycleDuration = "Cycle duration must be at least 1 day";
     } else if (cycleDays > 62) {
-      errors.cycleDuration =
-        "Cycle duration cannot exceed 62 days (Cairo contract limit)";
+      errors.cycleDuration = "Cycle duration cannot exceed 62 days (Cairo contract limit)";
     }
 
     const contribution = parseFloat(formData.monthlyContribution);
-    if (
-      !formData.monthlyContribution ||
-      isNaN(contribution) ||
-      contribution <= 0
-    ) {
-      errors.monthlyContribution =
-        "Monthly contribution must be greater than 0";
+    if (!formData.monthlyContribution || isNaN(contribution) || contribution <= 0) {
+      errors.monthlyContribution = "Monthly contribution must be greater than 0";
     } else if (contribution > 1000000) {
       errors.monthlyContribution = "Contribution amount is too large";
     }
 
     const participants = Number(formData.totalParticipants);
-    if (
-      !Number.isFinite(participants) ||
-      !Number.isInteger(participants) ||
-      participants < 3
-    ) {
-      errors.totalParticipants =
-        "Must have at least 3 participants (Cairo contract requirement)";
+    if (!Number.isFinite(participants) || !Number.isInteger(participants) || participants < 3) {
+      errors.totalParticipants = "Must have at least 3 participants (Cairo contract requirement)";
     } else if (participants > 100) {
       errors.totalParticipants = "Cannot exceed 100 participants";
     }
@@ -154,7 +139,7 @@ const CreateAjo = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
+    
     if (!isConnected || !address) {
       toast.error("Please connect your wallet first");
       return;
@@ -183,10 +168,10 @@ const CreateAjo = () => {
         paymentToken: formData.paymentToken,
       });
 
-      console.log("Ajo created successfully!", result);
+      console.log("✅ Ajo created successfully!", result);
 
       toast.success(
-        ` Ajo #${result.ajoId} created successfully! Tx: ${result.transactionHash.slice(0, 10)}...`,
+        `🎉 Ajo #${result.ajoId} created successfully! Tx: ${result.transactionHash.slice(0, 10)}...`
       );
       if (result.deploymentWarning) {
         toast.warning(result.deploymentWarning);
@@ -285,25 +270,17 @@ const CreateAjo = () => {
                   <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
-                        {currentPhase === 0 ? "Creating Ajo on Starknet" : `Phase ${currentPhase}/5`}
+                        Creating Ajo on Starknet
                       </span>
                       <span className="text-sm font-bold text-blue-900 dark:text-blue-100">
-                        {currentPhase === 0 ? "Processing..." : `${Math.round((currentPhase / 5) * 100)}%`}
+                        Processing...
                       </span>
                     </div>
                     <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2">
-                      <div 
-                        className="bg-blue-600 dark:bg-blue-400 h-2 rounded-full transition-all duration-500"
-                        style={{ width: currentPhase === 0 ? "100%" : `${(currentPhase / 5) * 100}%` }}
-                      ></div>
+                      <div className="bg-blue-600 dark:bg-blue-400 h-2 rounded-full transition-all duration-500 animate-pulse w-full"></div>
                     </div>
                     <p className="text-xs text-blue-800 dark:text-blue-200 mt-2">
-                      {currentPhase === 0 && "Please approve the transaction in your wallet"}
-                      {currentPhase === 1 && "Deploying Members module..."}
-                      {currentPhase === 2 && "Deploying Collateral & Payments..."}
-                      {currentPhase === 3 && "Deploying Governance & Schedule..."}
-                      {currentPhase === 4 && "Deploying Core module..."}
-                      {currentPhase === 5 && "Finalizing..."}
+                      Please approve the transaction in your wallet
                     </p>
                   </div>
                 )}
@@ -492,6 +469,7 @@ const CreateAjo = () => {
                       </p>
                     </div>
                   </div>
+
 
                   {/* Submit Button */}
                   <div className="pt-6 border-t border-border">
