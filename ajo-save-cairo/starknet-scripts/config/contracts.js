@@ -12,7 +12,7 @@ export const CONTRACTS = {
     
     // Class hashes for Ajo contracts (used when creating new Ajo groups)
     classHashes: {
-      core: "0x0084426ddd854978f9e9171e41e3fef42e7a30bc599884d1b6cc47b65ff74395",
+      core: "0x0461b555a08497df8c6d8408278c1a03d55062d3d288e405bb0e4fa3eb644fcf",
       members: "0x07f58b65262907ade7ed422eb138ce221b9791f0d991f7a468560fb309ced133",
       collateral: "0x007de0379791d5affce82c82a84fb639b0487b8f149a6ab26895128d260c79bf",
       payments: "0x031a0741d826c579bd66ae52605c42e78e86304b1928d1e8beffbc53dab0c0b6",

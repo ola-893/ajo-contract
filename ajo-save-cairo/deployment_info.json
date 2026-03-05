@@ -1,13 +1,13 @@
 {
   "network": "sepolia",
   "rpcUrl": "https://starknet-sepolia.g.alchemy.com/v2/HL-XmuitXQ7NgjyxPCJtU",
-  "timestamp": "2026-03-05T12:04:45Z",
+  "timestamp": "2026-03-05T15:17:42Z",
   "deployer": "0x0281e16a3f71b9c0cede19cee4375c24cbc328c08f8cc4d4757d04ffeb956ce8",
   "owner": "0x0281e16a3f71b9c0cede19cee4375c24cbc328c08f8cc4d4757d04ffeb956ce8",
   "bridgeRelayer": "0x0281e16a3f71b9c0cede19cee4375c24cbc328c08f8cc4d4757d04ffeb956ce8",
   "opCatVerifier": "0x0281e16a3f71b9c0cede19cee4375c24cbc328c08f8cc4d4757d04ffeb956ce8",
   "classHashes": {
-    "AjoCore": "0x0084426ddd854978f9e9171e41e3fef42e7a30bc599884d1b6cc47b65ff74395",
+    "AjoCore": "0x0461b555a08497df8c6d8408278c1a03d55062d3d288e405bb0e4fa3eb644fcf",
     "AjoMembers": "0x07f58b65262907ade7ed422eb138ce221b9791f0d991f7a468560fb309ced133",
     "AjoCollateral": "0x007de0379791d5affce82c82a84fb639b0487b8f149a6ab26895128d260c79bf",
     "AjoPayments": "0x031a0741d826c579bd66ae52605c42e78e86304b1928d1e8beffbc53dab0c0b6",
@@ -25,7 +25,7 @@
     "btcCollateralAdapter": "0x01ecd36cf56d31533ea46c30e3c28983dd341a667549efadd9fbeff55fb7a2af"
   },
   "transactions": {
-    "declareAjoCore": "0x04cdc73ec0fe2b0d8452315228e76b306c5f52b42e769fd3c86f7224384af351",
+    "declareAjoCore": "0x019b9cbdb3b8179880b61906f792cdb1e091fd0b6da6135737ac1f510e7242ad",
     "declareAjoCollateral": "0x016c80e8ded8f4828ec87067b0a8d1e3156279e92ab1b1f9940dadfc3345c7f0",
     "declareAjoGovernance": "0x039fd2ba33a9b8adf5552fe0c639f088966842d338717b13e22586c9bf44bfa7",
     "declareAjoSchedule": "0x07f433654620eaa30593d81fea03bd9eb7a9ca3c272fd3610e92fbd4ef8754f9",
@@ -36,7 +36,7 @@
     "bridgeAdapterDeploy": "0x00598e29d3e6ce3d69621cc06302dd2e8d43150bc545a8b5bb50440a50a5e5d4",
     "swapRouterDeploy": "0x03ec0ad04ff494e4bfa3b653278720bd166efbdf914f6ebe5581196a50c10320",
     "btcCollateralAdapterDeploy": "0x024288c2fa09f2636e4cd6ca8ce096843e32c8ce50637d123cda765c7245ffaf",
-    "setCoreClassHash": "0x062b15d5c792735e9dfa61357eccdc171208c52cdfd81c1057fe228768b99718",
+    "setCoreClassHash": "0x008fefad38ad6b2fd239716b2b7d9e1cf18fd804b4509ce706747c0572106799",
     "setMembersClassHash": "0x0042387013e8233657119a381f6abbde2ea99d38e3d4ee7af5c7ee1b31e193d4",
     "declareAjoMembersHotfix": "0x0113e13fbf6161994df493bde576678d554c0208982243658a4d3ba9d43e78f6",
     "setCollateralClassHash": "0x004a104cd92fb59fdda323f941363b07bde18ede0578e66faf77c5c6502ddd98",
@@ -44,7 +44,7 @@
     "setGovernanceClassHash": "0x068ddc04b214a6e7066e951b04d02681e85479ee643cab3105e77805c0f39e4c",
     "setScheduleClassHash": "0x0704828ee92776f56e079926e147b70562ddcaa0409fcdd5ac021b046e91d2ab",
     "setUsdcTokenAddress": "0x0786e5362ceb0c20209cd09e3dfdc4c47670981b264857503536fa5fe7037a51",
-    "smokeCreateAjoAtomic": "0x021eb1eb72cafda6a1beef5ae92c7ef5b5c66f7332c30a3137993ea811b54488",
+    "smokeCreateAjoAtomic": "0x0003f8cff5903909cb65a1df68de6e60890a9179ab1d2e149e52651374692803",
     "smokeCreateAjoLegacyDraft": "0x06b0dc1b9a40373f63b5bf3ca0007b0ea14fb19819c96f97865abf877c455725",
     "smokeDeployMembersLegacy": "0x002bd456d357ec38e069c64a2de83ee5510420f7b1cbeac0a03296364a913c80"
   },
@@ -61,6 +61,6 @@
   },
   "status": {
     "phase": "complete",
-    "message": "Factory redeployed to updated core class hash with zero-collateral last-member join fix."
+    "message": "Factory configured to auto-start Ajos on full membership with updated core class hash."
   }
 }

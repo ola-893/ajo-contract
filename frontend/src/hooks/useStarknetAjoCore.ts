@@ -485,39 +485,12 @@ const useStarknetAjoCore = (ajoCoreAddress: string) => {
   );
 
   /**
-   * Start Ajo (begins the first cycle)
+   * Manual start is disabled.
+   * Ajo now starts automatically when membership is full.
    */
   const startAjo = useCallback(async () => {
-    if (!account || !isConnected || !ajoCoreAddress) {
-      throw new Error("Wallet not connected or contract address not available");
-    }
-
-    setLoading(true);
-    try {
-      const provider = getProvider();
-      const ajoCoreContract = new Contract(
-        ajoCoreAbi as any,
-        ajoCoreAddress,
-        provider
-      );
-
-      ajoCoreContract.connect(account as any);
-
-      const result = await ajoCoreContract.start_ajo();
-      await provider.waitForTransaction(result.transaction_hash);
-
-      console.log("Ajo started successfully:", result);
-      return {
-        transactionHash: result.transaction_hash,
-        success: true,
-      };
-    } catch (error) {
-      console.error("Error starting Ajo:", error);
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  }, [account, isConnected, ajoCoreAddress]);
+    throw new Error("Ajo starts automatically when full; manual start is disabled");
+  }, []);
 
   /**
    * Process payment for current cycle
