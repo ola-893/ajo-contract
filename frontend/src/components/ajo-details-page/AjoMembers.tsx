@@ -252,7 +252,11 @@ const AjoMembers = ({
                         tokenDecimals,
                       )}
                     </span>
-                    <span className="text-xs px-2 py-1 rounded border border-border text-muted-foreground">
+                    <span className={`text-xs px-2 py-1 rounded border ${
+                      member.hasReceivedPayout 
+                        ? "bg-green-500/15 text-green-400 border-green-500/30" 
+                        : "bg-yellow-500/15 text-yellow-400 border-yellow-500/30"
+                    }`}>
                       Payout:{" "}
                       {member.hasReceivedPayout ? "Received" : "Pending"}
                     </span>
