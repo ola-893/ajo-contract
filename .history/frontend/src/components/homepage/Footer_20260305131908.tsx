@@ -132,7 +132,7 @@ const Footer = () => {
 
         <div className="border-t border-border mt-12 pt-8 text-center">
           <p className="text-sm sm:text-xl  text-muted-foreground">
-            © 2026 Ajo.Save. All rights reserved.
+            © 2026 Ajo.Save. All rights reserved. Built with ❤️ for AFrica.
           </p>
         </div>
       </div>

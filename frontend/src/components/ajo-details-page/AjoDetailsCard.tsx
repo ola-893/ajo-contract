@@ -17,6 +17,7 @@ import useStarknetAjoCore from "@/hooks/useStarknetAjoCore";
 import useStarknetAjoMembers from "@/hooks/useStarknetAjoMembers";
 import useStarknetAjoCollateral from "@/hooks/useStarknetAjoCollateral";
 import useStarknetErc20 from "@/hooks/useStarknetErc20";
+import useStarknetAjoPayments from "@/hooks/useStarknetAjoPayments";
 import { TOKEN_ADDRESSES } from "@/config/constants";
 
 interface AjoDetailsCardProps {
@@ -25,6 +26,7 @@ interface AjoDetailsCardProps {
   member?: any;
   memberLoading?: boolean;
   monthlyPayment?: number | null;
+  currentCycle?: number;
   isVisible: boolean;
   lastUpdated: Date;
   onRefresh?: () => Promise<void> | void;
@@ -35,6 +37,7 @@ const AjoDetailsCard = ({
   isAjoActive = false,
   memberLoading = false,
   monthlyPayment = null,
+  currentCycle = 0,
   isVisible,
   lastUpdated,
   onRefresh,
@@ -47,6 +50,9 @@ const AjoDetailsCard = ({
   );
   const { calculateRequiredCollateral } = useStarknetAjoCollateral(
     ajo?.collateralAddress || "",
+  );
+  const { hasPaidForCycle } = useStarknetAjoPayments(
+    ajo?.paymentsAddress || "",
   );
   const paymentToken = ajo?.config.paymentToken === "BTC" ? "BTC" : "USDC";
   const defaultPaymentTokenAddress =
@@ -66,7 +72,7 @@ const AjoDetailsCard = ({
   const [requiredCollateral, setRequiredCollateral] = useState<bigint | null>(
     null,
   );
-  const userHasPaid = false;
+  const [userHasPaid, setUserHasPaid] = useState(false);
   const isZeroAddress = (value?: string | null) =>
     !value || /^0x0+$/i.test(value);
 
@@ -182,6 +188,37 @@ const AjoDetailsCard = ({
     isMember,
     calculateRequiredCollateral,
   ]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPaymentStatus = async () => {
+      if (!address || !currentCycle || currentCycle === 0 || !isActiveMember) {
+        if (!cancelled) {
+          setUserHasPaid(false);
+        }
+        return;
+      }
+
+      try {
+        const hasPaid = await hasPaidForCycle(address, currentCycle);
+        if (!cancelled) {
+          setUserHasPaid(hasPaid);
+        }
+      } catch (error) {
+        console.error("Failed to check payment status:", error);
+        if (!cancelled) {
+          setUserHasPaid(false);
+        }
+      }
+    };
+
+    loadPaymentStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [address, currentCycle, isActiveMember, hasPaidForCycle]);
 
   const handleJoinAjo = async () => {
     if (!isConnected || !address) {

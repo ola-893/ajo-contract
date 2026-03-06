@@ -242,6 +242,7 @@ const AjoDetails = () => {
           member={null}
           memberLoading={false}
           monthlyPayment={monthlyPayment}
+          currentCycle={currentCycle}
           isVisible={isVisible}
           lastUpdated={lastUpdated}
           onRefresh={fetchAjoDetails}
