@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useMemo, useState } from "react";
 import {
   CheckCircle,
@@ -105,9 +104,7 @@ const AjoDetailsCard = ({
 
         if (!cancelled) {
           setRequiresTokenApproval(!btcCommitmentMode);
-          setPaymentTokenAddress(
-            onchainTokenAddress || defaultPaymentTokenAddress,
-          );
+          setPaymentTokenAddress(onchainTokenAddress || defaultPaymentTokenAddress);
         }
       } catch {
         if (!cancelled) {
@@ -184,7 +181,13 @@ const AjoDetailsCard = ({
     return () => {
       cancelled = true;
     };
-  }, [ajo, address, getTotalMembers, isMember, calculateRequiredCollateral]);
+  }, [
+    ajo,
+    address,
+    getTotalMembers,
+    isMember,
+    calculateRequiredCollateral,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -257,14 +260,10 @@ const AjoDetailsCard = ({
       const approvalAmount =
         requiredCollateral !== null
           ? requiredCollateral
-          : ajo.config.monthlyContribution *
-            BigInt(ajo.config.totalParticipants);
+          : ajo.config.monthlyContribution * BigInt(ajo.config.totalParticipants);
 
       if (requiresTokenApproval && approvalAmount > 0n) {
-        const currentAllowance = await getAllowance(
-          address,
-          ajo.collateralAddress,
-        );
+        const currentAllowance = await getAllowance(address, ajo.collateralAddress);
         if (currentAllowance < approvalAmount) {
           toast.info("Approving collateral transfer...");
           await approve(ajo.collateralAddress, approvalAmount);
@@ -358,7 +357,10 @@ const AjoDetailsCard = ({
                 <button
                   onClick={handleJoinAjo}
                   disabled={
-                    memberLoading || isAjoFull || isJoining || !isConnected
+                    memberLoading ||
+                    isAjoFull ||
+                    isJoining ||
+                    !isConnected
                   }
                   className="w-full bg-primary hover:bg-primary/90 disabled:bg-primary/50 text-primary-foreground px-4 py-2 rounded-lg font-semibold text-sm transition-all hover:scale-105 hover:shadow-lg flex items-center justify-center space-x-2 cursor-pointer"
                 >
@@ -405,13 +407,11 @@ const AjoDetailsCard = ({
                 </div>
               )}
 
-              <div
-                className={`px-3 py-1 rounded-md text-xs font-semibold flex items-center space-x-2 w-fit ${
-                  isActiveMember
-                    ? "bg-green-900/20 text-green-400"
-                    : "bg-[#211416] text-[#EA4343]"
-                }`}
-              >
+              <div className={`px-3 py-1 rounded-md text-xs font-semibold flex items-center space-x-2 w-fit ${
+                isActiveMember 
+                  ? 'bg-green-900/20 text-green-400' 
+                  : 'bg-[#211416] text-[#EA4343]'
+              }`}>
                 {isActiveMember ? (
                   <>
                     <CheckCircle className="w-4 h-4" />
@@ -425,17 +425,13 @@ const AjoDetailsCard = ({
                 )}
               </div>
 
-              <div
-                className={`px-3 py-1 rounded-md text-xs font-semibold flex items-center space-x-2 w-fit ${
-                  userHasPaid
-                    ? "bg-green-900/20 text-green-400"
-                    : "bg-[#211416] text-[#EA4343]"
-                }`}
-              >
+              <div className={`px-3 py-1 rounded-md text-xs font-semibold flex items-center space-x-2 w-fit ${
+                userHasPaid 
+                  ? 'bg-green-900/20 text-green-400' 
+                  : 'bg-[#211416] text-[#EA4343]'
+              }`}>
                 <CreditCard className="w-4 h-4" />
-                <span>
-                  {userHasPaid ? "Payment Complete" : "Monthly payment pending"}
-                </span>
+                <span>{userHasPaid ? 'Payment Complete' : 'Monthly payment pending'}</span>
               </div>
             </div>
 
@@ -464,7 +460,12 @@ const AjoDetailsCard = ({
           <div className="flex sm:hidden flex-col gap-3">
             <button
               onClick={handleJoinAjo}
-              disabled={memberLoading || isAjoFull || isJoining || !isConnected}
+              disabled={
+                memberLoading ||
+                isAjoFull ||
+                isJoining ||
+                !isConnected
+              }
               className="w-full bg-primary hover:bg-primary/90 disabled:bg-primary/50 text-primary-foreground px-4 py-2 rounded-lg font-semibold text-sm transition-all hover:scale-105 hover:shadow-lg flex items-center justify-center space-x-2 cursor-pointer"
             >
               <CreditCard className="w-5 h-5" />

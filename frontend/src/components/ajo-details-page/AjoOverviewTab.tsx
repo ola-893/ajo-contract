@@ -5,17 +5,20 @@ import {
   Target,
 } from "lucide-react";
 import type { StarknetAjoInfo } from "@/hooks/useStarknetAjoFactory";
+import CycleCountdown from "./CycleCountdown";
 
 const AjoOverviewTab = ({
   ajo,
   memberCount = 0,
   currentCycle = 1,
+  cycleStartTime,
   advancedFeatures,
   collateralSummary,
 }: {
   ajo: StarknetAjoInfo | null | undefined;
   memberCount?: number;
   currentCycle?: number;
+  cycleStartTime?: number;
   advancedFeatures?: {
     bridgeEnabled?: boolean;
     swapEnabled?: boolean;
@@ -45,6 +48,14 @@ const AjoOverviewTab = ({
           </h3>
 
           <div className="space-y-4">
+            {cycleStartTime && ajo?.config.cycleDuration && (
+              <CycleCountdown
+                cycleStartTime={cycleStartTime}
+                cycleDuration={ajo.config.cycleDuration}
+                currentCycle={currentCycle}
+              />
+            )}
+
             <div className="flex justify-between items-center">
               <span className=" text-sm text-muted-foreground">
                 Cycle {currentCycle} of {totalParticipants}
