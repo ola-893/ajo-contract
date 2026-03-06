@@ -115,6 +115,6 @@ pub mod Constants {
     pub const PERCENTAGE_DENOMINATOR: u256 = 100;
     pub const MIN_PARTICIPANTS: u256 = 3;
     pub const MAX_PARTICIPANTS: u256 = 100;
-    pub const MIN_CYCLE_DURATION: u64 = 86400; // 1 day in seconds
+    pub const MIN_CYCLE_DURATION: u64 = 60; // 1 minute in seconds (QA-friendly)
     pub const MAX_CYCLE_DURATION: u64 = 5356800; // 62 days in seconds
 }

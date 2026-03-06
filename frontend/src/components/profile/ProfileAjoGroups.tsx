@@ -108,7 +108,7 @@ const ProfileAjoGroups = () => {
                   <div>
                     <span className="text-gray-500">Cycle:</span>
                     <div className="font-semibold text-white">
-                      {ajo.config.cycleDuration / 86400} days
+                      {formatCycleDuration(ajo.config.cycleDuration)}
                     </div>
                   </div>
                   <div>
@@ -126,3 +126,17 @@ const ProfileAjoGroups = () => {
 };
 
 export default ProfileAjoGroups;
+
+const formatCycleDuration = (seconds: number) => {
+  const safeSeconds = Math.max(0, Number(seconds || 0));
+  const days = Math.floor(safeSeconds / 86400);
+  const hours = Math.floor((safeSeconds % 86400) / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+
+  const parts: string[] = [];
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0) parts.push(`${minutes}m`);
+  if (parts.length === 0) return `${safeSeconds}s`;
+  return parts.join(" ");
+};

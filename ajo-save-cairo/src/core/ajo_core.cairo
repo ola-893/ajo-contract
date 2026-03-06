@@ -62,6 +62,7 @@ pub mod AjoCore {
         // State variables
         is_active: bool,
         current_cycle: u256,
+        last_payout_cycle: u256,
         initialized: bool,
         authorized_initializer: ContractAddress,
         
@@ -209,6 +210,7 @@ pub mod AjoCore {
         self.authorized_initializer.write(factory_address);
         self.is_active.write(false);
         self.current_cycle.write(0);
+        self.last_payout_cycle.write(0);
     }
 
     #[abi(embed_v0)]
@@ -267,6 +269,7 @@ pub mod AjoCore {
             // Initialize state variables
             self.is_active.write(false);
             self.current_cycle.write(0);
+            self.last_payout_cycle.write(0);
             self.initialized.write(true);
 
             // Set owner
@@ -435,8 +438,9 @@ pub mod AjoCore {
                 all_paid,
             });
             
-            // If all members have paid, trigger distribute_payout
-            if all_paid {
+            // If all members have paid and payout has not been distributed yet,
+            // distribute payout but keep cycle number unchanged until duration elapses.
+            if all_paid && self.last_payout_cycle.read() != current_cycle {
                 self._distribute_payout();
             }
             
@@ -463,7 +467,18 @@ pub mod AjoCore {
             let total_paid = payments_dispatcher.get_cycle_contributions(cycle_number);
             assert(total_paid == expected_total, 'Cycle not fully funded');
 
-            self._distribute_payout();
+            let cycle_start_time = payments_dispatcher.get_cycle_start_time();
+            let cycle_duration = self.cycle_duration.read();
+            let now = starknet::get_block_timestamp();
+            assert(now >= cycle_start_time + cycle_duration, 'Cycle duration not elapsed');
+
+            // Ensure payout exists before advancing. Usually already distributed by process_payment.
+            if self.last_payout_cycle.read() != current_cycle {
+                self._distribute_payout();
+            }
+
+            payments_dispatcher.advance_cycle();
+            self.current_cycle.write(current_cycle + 1);
         }
 
         fn handle_default(ref self: ContractState, defaulter: ContractAddress) {
@@ -1050,7 +1065,6 @@ pub mod AjoCore {
         /// * Calculates payout amount (monthly_contribution × total_participants)
         /// * Calls AjoPayments.distribute_payout()
         /// * Marks recipient as received in AjoMembers
-        /// * Calls AjoPayments.advance_cycle()
         /// * Emits PayoutDistributed event
         fn _distribute_payout(ref self: ContractState) {
             // Get payments dispatcher
@@ -1075,12 +1089,9 @@ pub mod AjoCore {
                 contract_address: self.members_contract.read()
             };
             members_dispatcher.mark_payout_received(recipient);
-            
-            // Call AjoPayments.advance_cycle()
-            payments_dispatcher.advance_cycle();
-            
-            // Update current_cycle in AjoCore to stay in sync
-            self.current_cycle.write(current_cycle + 1);
+
+            // Mark this cycle as already paid out to prevent duplicate distributions.
+            self.last_payout_cycle.write(current_cycle);
             
             // Emit PayoutDistributed event
             self.emit(PayoutDistributed {

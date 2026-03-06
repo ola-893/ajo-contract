@@ -9,6 +9,7 @@ import {
 import { toast } from 'sonner';
 import useStarknetAjoPayments from '@/hooks/useStarknetAjoPayments';
 import useStarknetAjoCore from '@/hooks/useStarknetAjoCore';
+import useStarknetAjoMembers from '@/hooks/useStarknetAjoMembers';
 import useStarknetErc20 from '@/hooks/useStarknetErc20';
 import { TOKEN_ADDRESSES } from '@/config/constants';
 import { useStarknetWallet } from '@/contexts/StarknetWalletContext';
@@ -27,6 +28,15 @@ const formatTokenAmount = (value: bigint, decimals: number) => {
   return `${whole.toString()}.${fractionStr}`;
 };
 
+const normalizeAddress = (value?: string | null): string => {
+  if (!value) return '';
+  try {
+    return `0x${BigInt(value).toString(16)}`.toLowerCase();
+  } catch {
+    return value.toLowerCase();
+  }
+};
+
 const AjoPaymentHistory = ({
   ajo,
 }: {
@@ -35,9 +45,14 @@ const AjoPaymentHistory = ({
   const { address, isConnected } = useStarknetWallet();
   const paymentsAddress = ajo?.paymentsAddress || '';
   const coreAddress = ajo?.coreAddress || '';
+  const membersAddress = ajo?.membersAddress || '';
   const tokenSymbol = ajo?.config?.paymentToken || 'USDC';
   const tokenDecimals = tokenSymbol === 'BTC' ? 8 : 6;
   const monthlyContributionRaw = BigInt(ajo?.config?.monthlyContribution ?? 0);
+  const totalParticipants = BigInt(
+    Math.max(1, Number(ajo?.config?.totalParticipants ?? 1)),
+  );
+  const expectedCycleAmount = monthlyContributionRaw * totalParticipants;
   const defaultPaymentTokenAddress =
     tokenSymbol === 'BTC'
       ? (TOKEN_ADDRESSES.sepolia.BTC || '').toLowerCase()
@@ -53,6 +68,7 @@ const AjoPaymentHistory = ({
   const { getAllowance, approve, loading: approvalLoading } = useStarknetErc20(
     paymentTokenAddress,
   );
+  const { hasReceivedPayout } = useStarknetAjoMembers(membersAddress);
 
   const {
     getCurrentCycle,
@@ -74,6 +90,7 @@ const AjoPaymentHistory = ({
   const [payoutAmount, setPayoutAmount] = useState<bigint>(0n);
   const [payoutRecipient, setPayoutRecipient] = useState('0x0');
   const [hasPaidCurrentCycle, setHasPaidCurrentCycle] = useState(false);
+  const [hasReceivedCurrentPayout, setHasReceivedCurrentPayout] = useState(false);
   const [totalPaid, setTotalPaid] = useState<bigint>(0n);
 
   const isZeroAddress = (value?: string | null) =>
@@ -138,12 +155,16 @@ const AjoPaymentHistory = ({
       setPayoutRecipient(recipient);
 
       if (address) {
-        const [paidThisCycle, total] = await Promise.all([
+        const [paidThisCycle, total, payoutReceived] = await Promise.all([
           hasPaidForCycle(address, cycle || 1).catch(() => false),
           getTotalPaid(address).catch(() => 0n),
+          hasReceivedPayout(address).catch(() => false),
         ]);
         setHasPaidCurrentCycle(paidThisCycle);
         setTotalPaid(total);
+        setHasReceivedCurrentPayout(Boolean(payoutReceived));
+      } else {
+        setHasReceivedCurrentPayout(false);
       }
     } catch (error) {
       console.error('Failed to refresh payments:', error);
@@ -162,6 +183,7 @@ const AjoPaymentHistory = ({
     address,
     hasPaidForCycle,
     getTotalPaid,
+    hasReceivedPayout,
   ]);
 
   useEffect(() => {
@@ -204,6 +226,29 @@ const AjoPaymentHistory = ({
       console.error('Payment failed:', error);
       toast.error(error?.message || 'Payment failed');
     }
+  };
+
+  const isCurrentRecipient =
+    !!address &&
+    normalizeAddress(address) === normalizeAddress(payoutRecipient) &&
+    !isZeroAddress(payoutRecipient);
+  const isPayoutPoolComplete =
+    expectedCycleAmount > 0n && cycleContributions >= expectedCycleAmount;
+
+  const handleReceivePayoutClick = async () => {
+    if (!isCurrentRecipient) return;
+    if (hasReceivedCurrentPayout) {
+      toast.info('You have already received your payout.');
+      return;
+    }
+    if (!isPayoutPoolComplete) {
+      toast.info('Payout unlocks after all members complete this cycle payment.');
+      return;
+    }
+
+    // Payout is distributed automatically by the protocol when funding is complete.
+    toast.success('Payout is ready. Refreshing latest status...');
+    await refreshPayments();
   };
 
   const successRate = useMemo(() => {
@@ -281,6 +326,32 @@ const AjoPaymentHistory = ({
                 ? 'Paid This Cycle'
                 : `Pay ${formatTokenAmount(monthlyContributionRaw, tokenDecimals)} ${tokenSymbol}`}
             </button>
+            {isCurrentRecipient && (
+              <button
+                onClick={handleReceivePayoutClick}
+                disabled={
+                  loadingData ||
+                  coreLoading ||
+                  paymentsLoading ||
+                  hasReceivedCurrentPayout ||
+                  !isPayoutPoolComplete
+                }
+                className='px-3 py-2 rounded-md text-xs border border-accent text-accent hover:bg-accent/10 disabled:opacity-40 disabled:cursor-not-allowed'
+                title={
+                  hasReceivedCurrentPayout
+                    ? 'Payout already received'
+                    : !isPayoutPoolComplete
+                      ? 'Waiting for full cycle funding'
+                      : 'Receive payout'
+                }
+              >
+                {hasReceivedCurrentPayout
+                  ? 'Payout Received'
+                  : !isPayoutPoolComplete
+                    ? 'Receive Payout (Awaiting Full Funding)'
+                    : 'Receive Payout'}
+              </button>
+            )}
           </div>
         </div>
       </div>

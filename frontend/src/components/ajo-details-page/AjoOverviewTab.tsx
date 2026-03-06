@@ -31,11 +31,8 @@ const AjoOverviewTab = ({
   const totalParticipants = ajo?.config.totalParticipants ?? 10;
   const progressPercent =
     totalParticipants > 0 ? ((currentCycle - 1) / totalParticipants) * 100 : 0;
-  const cycleLengthDays = Math.max(
-    1,
-    Math.floor(
-      (ajo?.config.cycleDuration ?? (30 * 24 * 60 * 60)) / (24 * 60 * 60),
-    ),
+  const cycleLengthLabel = formatCycleDuration(
+    Number(ajo?.config.cycleDuration ?? 30 * 24 * 60 * 60),
   );
 
   return (
@@ -140,7 +137,7 @@ const AjoOverviewTab = ({
             <div className="flex justify-between">
               <span className="text-muted-foreground">Cycle Length:</span>
               <span className="font-semibold text-card-foreground">
-                {cycleLengthDays} days
+                {cycleLengthLabel}
               </span>
             </div>
             <div className="flex justify-between">
@@ -193,3 +190,17 @@ const AjoOverviewTab = ({
 };
 
 export default AjoOverviewTab;
+
+const formatCycleDuration = (seconds: number) => {
+  const safeSeconds = Math.max(0, Number(seconds || 0));
+  const days = Math.floor(safeSeconds / 86400);
+  const hours = Math.floor((safeSeconds % 86400) / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+
+  const parts: string[] = [];
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0) parts.push(`${minutes}m`);
+  if (parts.length === 0) return `${safeSeconds}s`;
+  return parts.join(" ");
+};

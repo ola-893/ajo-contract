@@ -29,7 +29,9 @@ const CreateAjo = () => {
   // Form state - Updated for Starknet
   const [formData, setFormData] = useState({
     name: "",
-    cycleDuration: "30", // days (1-62 allowed)
+    cycleDays: "30",
+    cycleHours: "0",
+    cycleMinutes: "0",
     monthlyContribution: "",
     totalParticipants: "3", // minimum 3 participants required
     paymentToken: "USDC" as "USDC" | "BTC",
@@ -72,13 +74,12 @@ const CreateAjo = () => {
         [name]: checked,
       }));
     } else {
-      if (name === "totalParticipants") {
-        const sanitized = normalizeIntegerInput(value);
-        setFormData((prev) => ({
-          ...prev,
-          [name]: sanitized,
-        }));
-      } else if (name === "cycleDuration") {
+      if (
+        name === "totalParticipants" ||
+        name === "cycleDays" ||
+        name === "cycleHours" ||
+        name === "cycleMinutes"
+      ) {
         const sanitized = normalizeIntegerInput(value);
         setFormData((prev) => ({
           ...prev,
@@ -112,16 +113,40 @@ const CreateAjo = () => {
       errors.name = "Name must be 31 characters or less (Cairo felt252 limit)";
     }
 
-    const cycleDays = Number(formData.cycleDuration);
+    const cycleDays = Number(formData.cycleDays || "0");
+    const cycleHours = Number(formData.cycleHours || "0");
+    const cycleMinutes = Number(formData.cycleMinutes || "0");
+
     if (
       !Number.isFinite(cycleDays) ||
       !Number.isInteger(cycleDays) ||
-      cycleDays < 1
+      cycleDays < 0
     ) {
-      errors.cycleDuration = "Cycle duration must be at least 1 day";
+      errors.cycleDuration = "Days must be a whole number from 0 to 62";
     } else if (cycleDays > 62) {
-      errors.cycleDuration =
-        "Cycle duration cannot exceed 62 days (Cairo contract limit)";
+      errors.cycleDuration = "Days cannot exceed 62";
+    } else if (
+      !Number.isFinite(cycleHours) ||
+      !Number.isInteger(cycleHours) ||
+      cycleHours < 0 ||
+      cycleHours > 23
+    ) {
+      errors.cycleDuration = "Hours must be between 0 and 23";
+    } else if (
+      !Number.isFinite(cycleMinutes) ||
+      !Number.isInteger(cycleMinutes) ||
+      cycleMinutes < 0 ||
+      cycleMinutes > 59
+    ) {
+      errors.cycleDuration = "Minutes must be between 0 and 59";
+    } else {
+      const cycleDurationSeconds =
+        cycleDays * 24 * 60 * 60 + cycleHours * 60 * 60 + cycleMinutes * 60;
+      if (cycleDurationSeconds < 60) {
+        errors.cycleDuration = "Cycle duration must be at least 1 minute";
+      } else if (cycleDurationSeconds > 5356800) {
+        errors.cycleDuration = "Cycle duration cannot exceed 62 days";
+      }
     }
 
     const contribution = parseFloat(formData.monthlyContribution);
@@ -164,12 +189,19 @@ const CreateAjo = () => {
 
     try {
       toast.info("Creating Ajo on Starknet...");
-      const parsedCycleDuration = Number(formData.cycleDuration);
+      const cycleDays = Number(formData.cycleDays || "0");
+      const cycleHours = Number(formData.cycleHours || "0");
+      const cycleMinutes = Number(formData.cycleMinutes || "0");
+      const cycleDurationSeconds =
+        cycleDays * 24 * 60 * 60 + cycleHours * 60 * 60 + cycleMinutes * 60;
       const parsedTotalParticipants = Number(formData.totalParticipants);
       console.log("Create Ajo payload:", {
         name: formData.name,
         monthlyContribution: formData.monthlyContribution,
-        cycleDuration: parsedCycleDuration,
+        cycleDays,
+        cycleHours,
+        cycleMinutes,
+        cycleDurationSeconds,
         totalParticipantsInput: formData.totalParticipants,
         totalParticipantsParsed: parsedTotalParticipants,
         paymentToken: formData.paymentToken,
@@ -179,7 +211,7 @@ const CreateAjo = () => {
         name: formData.name,
         monthlyContribution: formData.monthlyContribution,
         totalParticipants: parsedTotalParticipants,
-        cycleDuration: parsedCycleDuration,
+        cycleDurationSeconds,
         paymentToken: formData.paymentToken,
       });
 
@@ -196,7 +228,9 @@ const CreateAjo = () => {
         setShowSuccess(false);
         setFormData({
           name: "",
-          cycleDuration: "30",
+          cycleDays: "30",
+          cycleHours: "0",
+          cycleMinutes: "0",
           monthlyContribution: "",
           totalParticipants: "3",
           paymentToken: "USDC",
@@ -348,35 +382,100 @@ const CreateAjo = () => {
 
                     <div>
                       <label className="block text-sm font-medium text-card-foreground mb-2">
-                        Cycle Duration (days) *
+                        Cycle Duration *
                       </label>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        autoComplete="off"
-                        name="cycleDuration"
-                        value={formData.cycleDuration}
-                        onChange={handleInputChange}
-                        onBlur={(e) => {
-                          const nextValue = clampIntegerField(
-                            e.target.value,
-                            1,
-                            62,
-                            "30",
-                          );
-                          setFormData((prev) => ({
-                            ...prev,
-                            cycleDuration: nextValue,
-                          }));
-                        }}
-                        placeholder="30"
-                        className={`w-full px-4 py-3 bg-background border rounded-lg focus:ring-0 outline-none focus:ring-primary focus:border-primary transition-colors text-foreground ${
-                          formErrors.cycleDuration
-                            ? "border-destructive"
-                            : "border-border"
-                        }`}
-                        disabled={loading}
-                      />
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            autoComplete="off"
+                            name="cycleDays"
+                            value={formData.cycleDays}
+                            onChange={handleInputChange}
+                            onBlur={(e) => {
+                              const nextValue = clampIntegerField(
+                                e.target.value,
+                                0,
+                                62,
+                                "30",
+                              );
+                              setFormData((prev) => ({
+                                ...prev,
+                                cycleDays: nextValue,
+                              }));
+                            }}
+                            placeholder="30"
+                            className={`w-full px-4 py-3 bg-background border rounded-lg focus:ring-0 outline-none focus:ring-primary focus:border-primary transition-colors text-foreground ${
+                              formErrors.cycleDuration
+                                ? "border-destructive"
+                                : "border-border"
+                            }`}
+                            disabled={loading}
+                          />
+                          <p className="mt-1 text-xs text-muted-foreground">Days</p>
+                        </div>
+                        <div>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            autoComplete="off"
+                            name="cycleHours"
+                            value={formData.cycleHours}
+                            onChange={handleInputChange}
+                            onBlur={(e) => {
+                              const nextValue = clampIntegerField(
+                                e.target.value,
+                                0,
+                                23,
+                                "0",
+                              );
+                              setFormData((prev) => ({
+                                ...prev,
+                                cycleHours: nextValue,
+                              }));
+                            }}
+                            placeholder="0"
+                            className={`w-full px-4 py-3 bg-background border rounded-lg focus:ring-0 outline-none focus:ring-primary focus:border-primary transition-colors text-foreground ${
+                              formErrors.cycleDuration
+                                ? "border-destructive"
+                                : "border-border"
+                            }`}
+                            disabled={loading}
+                          />
+                          <p className="mt-1 text-xs text-muted-foreground">Hours</p>
+                        </div>
+                        <div>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            autoComplete="off"
+                            name="cycleMinutes"
+                            value={formData.cycleMinutes}
+                            onChange={handleInputChange}
+                            onBlur={(e) => {
+                              const nextValue = clampIntegerField(
+                                e.target.value,
+                                0,
+                                59,
+                                "0",
+                              );
+                              setFormData((prev) => ({
+                                ...prev,
+                                cycleMinutes: nextValue,
+                              }));
+                            }}
+                            placeholder="0"
+                            className={`w-full px-4 py-3 bg-background border rounded-lg focus:ring-0 outline-none focus:ring-primary focus:border-primary transition-colors text-foreground ${
+                              formErrors.cycleDuration
+                                ? "border-destructive"
+                                : "border-border"
+                            }`}
+                            disabled={loading}
+                          />
+                          <p className="mt-1 text-xs text-muted-foreground">Minutes</p>
+                        </div>
+                      </div>
                       {formErrors.cycleDuration && (
                         <p className="mt-1 text-sm text-destructive flex items-center space-x-1">
                           <AlertCircle className="w-4 h-4" />
@@ -384,7 +483,7 @@ const CreateAjo = () => {
                         </p>
                       )}
                       <p className="mt-1 text-xs text-muted-foreground">
-                        How often members contribute and receive payouts
+                        Minimum 1 minute, maximum 62 days
                       </p>
                     </div>
                   </div>

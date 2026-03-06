@@ -452,7 +452,7 @@ const useStarknetAjoFactory = () => {
       name: string;
       monthlyContribution: string;
       totalParticipants: number;
-      cycleDuration: number;
+      cycleDurationSeconds: number;
       paymentToken: "USDC" | "BTC";
     }) => {
       if (!account || !isConnected || !address) {
@@ -487,13 +487,13 @@ const useStarknetAjoFactory = () => {
           throw new Error("Total participants must be between 3 and 100");
         }
 
-        if (!Number.isInteger(params.cycleDuration)) {
-          throw new Error("Cycle duration must be a whole number of days");
+        if (!Number.isInteger(params.cycleDurationSeconds)) {
+          throw new Error("Cycle duration must be a whole number of seconds");
         }
 
-        const cycleDurationSeconds = params.cycleDuration * 24 * 60 * 60;
-        if (cycleDurationSeconds < 86400 || cycleDurationSeconds > 5356800) {
-          throw new Error("Cycle duration must be between 1 and 62 days");
+        const cycleDurationSeconds = params.cycleDurationSeconds;
+        if (cycleDurationSeconds < 60 || cycleDurationSeconds > 5356800) {
+          throw new Error("Cycle duration must be between 1 minute and 62 days");
         }
 
         const decimals = params.paymentToken === "BTC" ? 8 : 6;
