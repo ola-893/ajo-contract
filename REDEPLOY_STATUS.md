@@ -1,6 +1,6 @@
 # Starknet Redeploy Status (Current)
 
-Last updated: 2026-03-03
+Last updated: 2026-03-06
 Network: Starknet Sepolia
 RPC: https://starknet-sepolia.g.alchemy.com/v2/HL-XmuitXQ7NgjyxPCJtU
 Deployer account: `0x0281e16a3f71b9c0cede19cee4375c24cbc328c08f8cc4d4757d04ffeb956ce8`
@@ -10,10 +10,10 @@ Updated Cairo contracts were rebuilt, redeclared (with network-expected CASM has
 ABIs were regenerated from latest `target/dev` artifacts and synced to frontend.
 
 ## Deployed Contracts (Fresh)
-- Factory: `0x03b4150c50f006ff24d459c61b6d7a3105b529d4cbc1d31230dcb381fe498de0`
-- BridgeAdapter: `0x07b3140baa939d72d40b89a3647b2e7ac08f719dde54311490cf8bf0a8c44fac`
-- SwapRouter: `0x0613d8d56a9f7b9a1abeeb27119bb4bd3b9881c1720d367b7cd87029ffb1a157`
-- BTCCollateralAdapter: `0x01ecd36cf56d31533ea46c30e3c28983dd341a667549efadd9fbeff55fb7a2af`
+- Factory: `0x0295f1221b20905844cb4977866f097e2af880b8b08c59b2f27e32b6a4011601`
+- BridgeAdapter: `0x072a35eee202f9f711e92c9731c1c9d452e3463b93c44f20e9cb406a80c3406d`
+- SwapRouter: `0x00690ab409afb13a81ef10df3c6dc5880b0bb99a5141d24cc5db9b320111fc1d`
+- BTCCollateralAdapter: `0x03444836110556606b35ccda6e9c1a51094f444ae0e415102595097b53341ccc`
 
 ## Frontend Wiring
 - `frontend/.env` updated:
@@ -24,16 +24,16 @@ ABIs were regenerated from latest `target/dev` artifacts and synced to frontend.
 - `frontend/src/config/constants.ts` fallback adapter addresses updated to new deployments.
 
 ## Class Hashes (Current)
-- AjoCore: `0x01831ddace9afff0a50534fce03c52dff11aedbe8b49debd3b933a89da88d058`
-- AjoMembers: `0x044f93453b204b575944722037b9d51ebe5062ebae88e3ca43d6979ac9a8a118`
-- AjoCollateral: `0x007de0379791d5affce82c82a84fb639b0487b8f149a6ab26895128d260c79bf`
-- AjoPayments: `0x031a0741d826c579bd66ae52605c42e78e86304b1928d1e8beffbc53dab0c0b6`
-- AjoGovernance: `0x067ce461390cabffdc105b38499d2bb0511d60cd59d46fd15563a0f9e979ba5d`
-- AjoSchedule: `0x06dc39cf61ceae671925aac808897fa365495140d4359c5f32b584ef3310be4a`
-- BridgeAdapter: `0x04ca93e065c74f7e0317296a804e7b4caaee5156345dfc0eda64cf7b30d9c040`
-- SwapRouter: `0x003e4c7c26e7e9697855561d02d2e3d2022645cf5bc90d5a77d8104c98ad6e60`
-- BTCCollateralAdapter: `0x0538467f924a1490747123bb32531f90136561b3d92836104f54f122376f572f`
-- AjoFactory: `0x0023985f9ebabbe1468dd37623ce1e8dbf4dd0c19b636099acfd16e7585c6edd`
+- AjoCore: `0x055e8968f0be4e2e89a454ab61c469ac82cb3f5ecfecaf2135437e842ecb8905`
+- AjoMembers: `0x07f58b65262907ade7ed422eb138ce221b9791f0d991f7a468560fb309ced133`
+- AjoCollateral: `0x07d2ffdc1b58f4d17b70d5288e02a4bc93481ac9835f2087bc1a971ddbf8182d`
+- AjoPayments: `0x066a426deb875e97adc09090d1e2f5d5fb96a1f9b9dbe62fd785dd631b095648`
+- AjoGovernance: `0x07c4543c733cefaa7c0fa3ca1152952185af730e1f091553737f5e99653d204e`
+- AjoSchedule: `0x03ed10be83a83737c2e9ba5cdf4248e0dd7ee96fa5953ca1af3a6312f158b813`
+- BridgeAdapter: `0x073e30fe39b83b4de334ca62f304a413ff50e01c893a5c38a2717fdac457b09b`
+- SwapRouter: `0x03b1f3a6a19038bd408dd10afe4b8f713b3983c792d140cf7d55beb34a8cb5e6`
+- BTCCollateralAdapter: `0x0509945ac93dd432b7d877fa6272c1728867e4962fc30506ed3414caea11208d`
+- AjoFactory: `0x0569764f5aad4d041b5e64d0c66b49313d30155344d9700724c6d626c37bf697`
 
 ## ABI Regeneration
 Synced from latest Cairo artifacts:

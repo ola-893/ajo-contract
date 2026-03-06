@@ -1,7 +1,7 @@
 {
   "network": "sepolia",
   "rpcUrl": "https://starknet-sepolia.g.alchemy.com/v2/HL-XmuitXQ7NgjyxPCJtU",
-  "timestamp": "2026-03-06T09:15:00Z",
+  "timestamp": "2026-03-06T14:40:00Z",
   "deployer": "0x0281e16a3f71b9c0cede19cee4375c24cbc328c08f8cc4d4757d04ffeb956ce8",
   "owner": "0x0281e16a3f71b9c0cede19cee4375c24cbc328c08f8cc4d4757d04ffeb956ce8",
   "bridgeRelayer": "0x0281e16a3f71b9c0cede19cee4375c24cbc328c08f8cc4d4757d04ffeb956ce8",
@@ -9,20 +9,20 @@
   "classHashes": {
     "AjoCore": "0x055e8968f0be4e2e89a454ab61c469ac82cb3f5ecfecaf2135437e842ecb8905",
     "AjoMembers": "0x07f58b65262907ade7ed422eb138ce221b9791f0d991f7a468560fb309ced133",
-    "AjoCollateral": "0x007de0379791d5affce82c82a84fb639b0487b8f149a6ab26895128d260c79bf",
-    "AjoPayments": "0x031a0741d826c579bd66ae52605c42e78e86304b1928d1e8beffbc53dab0c0b6",
-    "AjoGovernance": "0x067ce461390cabffdc105b38499d2bb0511d60cd59d46fd15563a0f9e979ba5d",
-    "AjoSchedule": "0x06dc39cf61ceae671925aac808897fa365495140d4359c5f32b584ef3310be4a",
-    "BridgeAdapter": "0x04ca93e065c74f7e0317296a804e7b4caaee5156345dfc0eda64cf7b30d9c040",
-    "SwapRouter": "0x003e4c7c26e7e9697855561d02d2e3d2022645cf5bc90d5a77d8104c98ad6e60",
-    "BTCCollateralAdapter": "0x0538467f924a1490747123bb32531f90136561b3d92836104f54f122376f572f",
-    "AjoFactory": "0x07416d7a7b698c898010d881a0fd014514e4a2e26c9eb2db2a5227e331cbaa23"
+    "AjoCollateral": "0x07d2ffdc1b58f4d17b70d5288e02a4bc93481ac9835f2087bc1a971ddbf8182d",
+    "AjoPayments": "0x066a426deb875e97adc09090d1e2f5d5fb96a1f9b9dbe62fd785dd631b095648",
+    "AjoGovernance": "0x07c4543c733cefaa7c0fa3ca1152952185af730e1f091553737f5e99653d204e",
+    "AjoSchedule": "0x03ed10be83a83737c2e9ba5cdf4248e0dd7ee96fa5953ca1af3a6312f158b813",
+    "BridgeAdapter": "0x073e30fe39b83b4de334ca62f304a413ff50e01c893a5c38a2717fdac457b09b",
+    "SwapRouter": "0x03b1f3a6a19038bd408dd10afe4b8f713b3983c792d140cf7d55beb34a8cb5e6",
+    "BTCCollateralAdapter": "0x0509945ac93dd432b7d877fa6272c1728867e4962fc30506ed3414caea11208d",
+    "AjoFactory": "0x0569764f5aad4d041b5e64d0c66b49313d30155344d9700724c6d626c37bf697"
   },
   "contracts": {
-    "factory": "0x058f0d1a69b43cbf678299c948fc36c5041170cd982ad7288efacdd3545042e6",
-    "bridgeAdapter": "0x07b3140baa939d72d40b89a3647b2e7ac08f719dde54311490cf8bf0a8c44fac",
-    "swapRouter": "0x0613d8d56a9f7b9a1abeeb27119bb4bd3b9881c1720d367b7cd87029ffb1a157",
-    "btcCollateralAdapter": "0x01ecd36cf56d31533ea46c30e3c28983dd341a667549efadd9fbeff55fb7a2af"
+    "factory": "0x0295f1221b20905844cb4977866f097e2af880b8b08c59b2f27e32b6a4011601",
+    "bridgeAdapter": "0x072a35eee202f9f711e92c9731c1c9d452e3463b93c44f20e9cb406a80c3406d",
+    "swapRouter": "0x00690ab409afb13a81ef10df3c6dc5880b0bb99a5141d24cc5db9b320111fc1d",
+    "btcCollateralAdapter": "0x03444836110556606b35ccda6e9c1a51094f444ae0e415102595097b53341ccc"
   },
   "transactions": {
     "declareAjoCore": "0x019b9cbdb3b8179880b61906f792cdb1e091fd0b6da6135737ac1f510e7242ad",
@@ -51,10 +51,10 @@
     "declareAjoCoreCycleDurationEnforcement": "0x01a8293af3813173034c4734c16f0b6529f5ad618b351bb6c91bb4877cb1e461"
   },
   "explorer": {
-    "factory": "https://sepolia.voyager.online/contract/0x058f0d1a69b43cbf678299c948fc36c5041170cd982ad7288efacdd3545042e6",
-    "bridgeAdapter": "https://sepolia.voyager.online/contract/0x07b3140baa939d72d40b89a3647b2e7ac08f719dde54311490cf8bf0a8c44fac",
-    "swapRouter": "https://sepolia.voyager.online/contract/0x0613d8d56a9f7b9a1abeeb27119bb4bd3b9881c1720d367b7cd87029ffb1a157",
-    "btcCollateralAdapter": "https://sepolia.voyager.online/contract/0x01ecd36cf56d31533ea46c30e3c28983dd341a667549efadd9fbeff55fb7a2af"
+    "factory": "https://sepolia.voyager.online/contract/0x0295f1221b20905844cb4977866f097e2af880b8b08c59b2f27e32b6a4011601",
+    "bridgeAdapter": "https://sepolia.voyager.online/contract/0x072a35eee202f9f711e92c9731c1c9d452e3463b93c44f20e9cb406a80c3406d",
+    "swapRouter": "https://sepolia.voyager.online/contract/0x00690ab409afb13a81ef10df3c6dc5880b0bb99a5141d24cc5db9b320111fc1d",
+    "btcCollateralAdapter": "https://sepolia.voyager.online/contract/0x03444836110556606b35ccda6e9c1a51094f444ae0e415102595097b53341ccc"
   },
   "artifacts": {
     "declaredClassHashesPath": "./declared_class_hashes.json",
@@ -63,6 +63,6 @@
   },
   "status": {
     "phase": "complete",
-    "message": "Factory core class hash updated to enforce cycle_duration before advancing to the next cycle."
+    "message": "Fresh deployment completed and config moved to creator-atomic factory at 0x0295... for manual QA."
   }
 }
