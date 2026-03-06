@@ -5,10 +5,12 @@ import {
   RefreshCw,
   TrendingUp,
   Wallet,
-  Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import useStarknetAjoPayments from '@/hooks/useStarknetAjoPayments';
+import useStarknetAjoCore from '@/hooks/useStarknetAjoCore';
+import useStarknetErc20 from '@/hooks/useStarknetErc20';
+import { TOKEN_ADDRESSES } from '@/config/constants';
 import { useStarknetWallet } from '@/contexts/StarknetWalletContext';
 import { formatAddress } from '@/utils/utils';
 
@@ -32,9 +34,25 @@ const AjoPaymentHistory = ({
 }) => {
   const { address, isConnected } = useStarknetWallet();
   const paymentsAddress = ajo?.paymentsAddress || '';
+  const coreAddress = ajo?.coreAddress || '';
   const tokenSymbol = ajo?.config?.paymentToken || 'USDC';
   const tokenDecimals = tokenSymbol === 'BTC' ? 8 : 6;
   const monthlyContributionRaw = BigInt(ajo?.config?.monthlyContribution ?? 0);
+  const defaultPaymentTokenAddress =
+    tokenSymbol === 'BTC'
+      ? (TOKEN_ADDRESSES.sepolia.BTC || '').toLowerCase()
+      : TOKEN_ADDRESSES.sepolia.USDC.toLowerCase();
+  const [paymentTokenAddress, setPaymentTokenAddress] = useState(
+    defaultPaymentTokenAddress,
+  );
+  const {
+    processPayment,
+    getPaymentTokenConfig,
+    loading: coreLoading,
+  } = useStarknetAjoCore(coreAddress);
+  const { getAllowance, approve, loading: approvalLoading } = useStarknetErc20(
+    paymentTokenAddress,
+  );
 
   const {
     getCurrentCycle,
@@ -45,10 +63,7 @@ const AjoPaymentHistory = ({
     getCycleContributions,
     getPayoutRecipient,
     calculatePayoutAmount,
-    makePayment,
-    distributePayout,
-    advanceCycle,
-    loading,
+    loading: paymentsLoading,
   } = useStarknetAjoPayments(paymentsAddress);
 
   const [loadingData, setLoadingData] = useState(false);
@@ -60,6 +75,44 @@ const AjoPaymentHistory = ({
   const [payoutRecipient, setPayoutRecipient] = useState('0x0');
   const [hasPaidCurrentCycle, setHasPaidCurrentCycle] = useState(false);
   const [totalPaid, setTotalPaid] = useState<bigint>(0n);
+
+  const isZeroAddress = (value?: string | null) =>
+    !value || /^0x0+$/i.test(value);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPaymentTokenAddress = async () => {
+      if (!coreAddress || isZeroAddress(coreAddress)) {
+        if (!cancelled) {
+          setPaymentTokenAddress(defaultPaymentTokenAddress);
+        }
+        return;
+      }
+
+      try {
+        const tokenConfig = await getPaymentTokenConfig();
+        const onchainTokenAddress =
+          tokenConfig?.tokenAddress && !isZeroAddress(tokenConfig.tokenAddress)
+            ? String(tokenConfig.tokenAddress).toLowerCase()
+            : '';
+
+        if (!cancelled) {
+          setPaymentTokenAddress(onchainTokenAddress || defaultPaymentTokenAddress);
+        }
+      } catch {
+        if (!cancelled) {
+          setPaymentTokenAddress(defaultPaymentTokenAddress);
+        }
+      }
+    };
+
+    loadPaymentTokenAddress();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [coreAddress, defaultPaymentTokenAddress, getPaymentTokenConfig]);
 
   const refreshPayments = useCallback(async () => {
     if (!paymentsAddress || /^0x0+$/i.test(paymentsAddress)) return;
@@ -120,51 +173,36 @@ const AjoPaymentHistory = ({
       toast.error('Connect wallet to make payment');
       return;
     }
+    if (!coreAddress || /^0x0+$/i.test(coreAddress)) {
+      toast.error('Ajo core contract not available');
+      return;
+    }
+    if (!paymentsAddress || isZeroAddress(paymentsAddress)) {
+      toast.error('Ajo payments contract not available');
+      return;
+    }
+    if (!paymentTokenAddress || isZeroAddress(paymentTokenAddress)) {
+      toast.error('Payment token not configured for this Ajo');
+      return;
+    }
 
     try {
-      await makePayment(currentCycle, monthlyContributionRaw.toString());
+      const currentAllowance = await getAllowance(address, paymentsAddress);
+      if (currentAllowance < monthlyContributionRaw) {
+        const totalParticipants = BigInt(
+          Math.max(1, Number(ajo?.config?.totalParticipants ?? 1)),
+        );
+        const approvalAmount = monthlyContributionRaw * totalParticipants;
+        toast.info('Approving payment token...');
+        await approve(paymentsAddress, approvalAmount);
+      }
+
+      await processPayment();
       toast.success('Payment submitted');
       await refreshPayments();
     } catch (error: any) {
       console.error('Payment failed:', error);
       toast.error(error?.message || 'Payment failed');
-    }
-  };
-
-  const handleDistributePayout = async () => {
-    if (!isConnected || !address) {
-      toast.error('Connect wallet to distribute payout');
-      return;
-    }
-
-    if (!payoutRecipient || /^0x0+$/i.test(payoutRecipient)) {
-      toast.error('Payout recipient not available');
-      return;
-    }
-
-    try {
-      await distributePayout(currentCycle, payoutRecipient);
-      toast.success('Payout distributed');
-      await refreshPayments();
-    } catch (error: any) {
-      console.error('Distribute payout failed:', error);
-      toast.error(error?.message || 'Failed to distribute payout');
-    }
-  };
-
-  const handleAdvanceCycle = async () => {
-    if (!isConnected || !address) {
-      toast.error('Connect wallet to advance cycle');
-      return;
-    }
-
-    try {
-      await advanceCycle();
-      toast.success('Cycle advanced');
-      await refreshPayments();
-    } catch (error: any) {
-      console.error('Advance cycle failed:', error);
-      toast.error(error?.message || 'Failed to advance cycle');
     }
   };
 
@@ -230,26 +268,18 @@ const AjoPaymentHistory = ({
           <div className='flex flex-wrap gap-2'>
             <button
               onClick={handlePayCurrentCycle}
-              disabled={loading || loadingData || hasPaidCurrentCycle}
+              disabled={
+                coreLoading ||
+                paymentsLoading ||
+                approvalLoading ||
+                loadingData ||
+                hasPaidCurrentCycle
+              }
               className='px-3 py-2 rounded-md text-xs border border-primary text-primary hover:bg-primary/10 disabled:opacity-40'
             >
               {hasPaidCurrentCycle
                 ? 'Paid This Cycle'
                 : `Pay ${formatTokenAmount(monthlyContributionRaw, tokenDecimals)} ${tokenSymbol}`}
-            </button>
-            <button
-              onClick={handleDistributePayout}
-              disabled={loading || loadingData}
-              className='px-3 py-2 rounded-md text-xs border border-green-600 text-green-500 hover:bg-green-600/10 disabled:opacity-40'
-            >
-              Distribute Payout
-            </button>
-            <button
-              onClick={handleAdvanceCycle}
-              disabled={loading || loadingData}
-              className='px-3 py-2 rounded-md text-xs border border-border text-muted-foreground hover:bg-background disabled:opacity-40'
-            >
-              Advance Cycle
             </button>
           </div>
         </div>
@@ -270,7 +300,7 @@ const AjoPaymentHistory = ({
         <div className='bg-card rounded-xl shadow-lg p-6 border border-border'>
           <div className='flex items-center justify-between mb-4'>
             <h4 className='font-semibold text-card-foreground'>Payout Amount</h4>
-            <Zap className='w-5 h-5 text-accent' />
+            <TrendingUp className='w-5 h-5 text-accent' />
           </div>
           <div className='text-2xl font-bold text-card-foreground'>
             {formatTokenAmount(payoutAmount, tokenDecimals)} {tokenSymbol}

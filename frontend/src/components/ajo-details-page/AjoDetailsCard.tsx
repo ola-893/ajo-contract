@@ -21,6 +21,7 @@ import { TOKEN_ADDRESSES } from "@/config/constants";
 
 interface AjoDetailsCardProps {
   ajo: StarknetAjoInfo | null | undefined;
+  isAjoActive?: boolean;
   member?: any;
   memberLoading?: boolean;
   monthlyPayment?: number | null;
@@ -31,6 +32,7 @@ interface AjoDetailsCardProps {
 
 const AjoDetailsCard = ({
   ajo,
+  isAjoActive = false,
   memberLoading = false,
   monthlyPayment = null,
   isVisible,
@@ -254,7 +256,12 @@ const AjoDetailsCard = ({
     }
   };
 
-  const ajoStatus = isAjoFull ? "active" : "forming";
+  const ajoStatus = isAjoActive ? "active" : "forming";
+  const statusLabel = isAjoActive
+    ? "Active"
+    : isAjoFull
+      ? "Full - Pending Start"
+      : "Forming";
   const monthlyContributionDisplay =
     monthlyPayment !== null && monthlyPayment !== undefined
       ? `$${monthlyPayment} ${ajo?.config.paymentToken || "USDC"}`
@@ -300,9 +307,7 @@ const AjoDetailsCard = ({
                       )}`}
                     >
                       {getStatusIcon(ajoStatus)}
-                      <span className="capitalize">
-                        {isAjoFull ? "Active" : "Forming"}
-                      </span>
+                      <span>{statusLabel}</span>
                     </div>
                     <div className="text-xs mx-2">
                       by {formatAddress(ajo?.config?.creator || "")}
