@@ -29,6 +29,12 @@ const formatTokenAmount = (value: bigint, decimals: number) => {
 };
 
 const AjoPaymentHistory = ({ ajo }: { ajo: any }) => {
+  const coreAddress = ajo?.coreAddress || "";
+  const membersAddress = ajo?.membersAddress || "";
+  const creatorAddress = ajo?.config?.creator || "";
+  const { processPayment, startAjo, getAjoStatus } =
+    useStarknetAjoCore(coreAddress);
+  const { getMemberCount } = useStarknetAjoMembers(membersAddress);
   const { address, isConnected } = useStarknetWallet();
   const paymentsAddress = ajo?.paymentsAddress || "";
   const coreAddress = ajo?.coreAddress || "";
@@ -66,6 +72,7 @@ const AjoPaymentHistory = ({ ajo }: { ajo: any }) => {
   } = useStarknetAjoPayments(paymentsAddress);
 
   const [loadingData, setLoadingData] = useState(false);
+  const [isActive, setIsActive] = useState(false);
   const [currentCycle, setCurrentCycle] = useState(1);
   const [cycleStartTime, setCycleStartTime] = useState(0);
   const [nextPayoutPosition, setNextPayoutPosition] = useState(1);
@@ -120,6 +127,8 @@ const AjoPaymentHistory = ({ ajo }: { ajo: any }) => {
 
     setLoadingData(true);
     try {
+      const statusObj = await getAjoStatus();
+      setIsActive(statusObj?.is_active || false);
       const cycle = await getCurrentCycle();
       setCurrentCycle(cycle || 1);
 
@@ -163,11 +172,28 @@ const AjoPaymentHistory = ({ ajo }: { ajo: any }) => {
     address,
     hasPaidForCycle,
     getTotalPaid,
+    getAjoStatus,
   ]);
 
   useEffect(() => {
     refreshPayments();
   }, [refreshPayments]);
+
+  const handleStartAjo = async () => {
+    if (!isConnected || !address) {
+      toast.error("Connect wallet to start Ajo");
+      return;
+    }
+
+    try {
+      await startAjo();
+      toast.success("Ajo started successfully");
+      await refreshPayments();
+    } catch (error: any) {
+      console.error("Start Ajo failed:", error);
+      toast.error(error?.message || "Failed to start Ajo");
+    }
+  };
 
   const handlePayCurrentCycle = async () => {
     if (!isConnected || !address) {
@@ -274,6 +300,15 @@ const AjoPaymentHistory = ({ ajo }: { ajo: any }) => {
         <div className="mt-5 border border-border rounded-lg p-4 bg-background/20">
           <h4 className="font-semibold text-card-foreground mb-3">Actions</h4>
           <div className="flex flex-wrap gap-2">
+            {!isActive && isOwner && (
+              <button
+                onClick={handleStartAjo}
+                disabled={loading || loadingData}
+                className="px-3 py-2 rounded-md text-xs border border-accent text-accent hover:bg-accent/10 disabled:opacity-40"
+              >
+                Start Ajo
+              </button>
+            )}
             <button
               onClick={handlePayCurrentCycle}
               disabled={

@@ -63,6 +63,7 @@ const AjoDetails = () => {
   const [ajoInfo, setAjoInfo] = useState<StarknetAjoInfo | null>(null);
   const [memberCount, setMemberCount] = useState(0);
   const [currentCycle, setCurrentCycle] = useState(1);
+  const [isAjoActive, setIsAjoActive] = useState(false);
   const [guarantorAddress, setGuarantorAddress] = useState("N/A");
   const [advancedFeatures, setAdvancedFeatures] = useState<{
     bridgeEnabled?: boolean;
@@ -80,7 +81,11 @@ const AjoDetails = () => {
   const { getTotalMembers, getGuarantor } = useStarknetAjoMembers(
     ajoInfo?.membersAddress || "",
   );
-  const { getCurrentCycle: getCurrentCycleFromCore, getAdvancedFeatures } =
+  const {
+    getCurrentCycle: getCurrentCycleFromCore,
+    getAdvancedFeatures,
+    isActive: isActiveFromCore,
+  } =
     useStarknetAjoCore(ajoInfo?.coreAddress || "");
   const { getTotalCollateral, getMemberCollateral, isCollateralSufficient } =
     useStarknetAjoCollateral(ajoInfo?.collateralAddress || "");
@@ -119,15 +124,17 @@ const AjoDetails = () => {
     if (!ajoInfo) return;
 
     try {
-      const [membersTotal, cycle, features] = await Promise.all([
+      const [membersTotal, cycle, features, active] = await Promise.all([
         getTotalMembers().catch(() => 0),
         getCurrentCycleFromCore().catch(() => 1),
         getAdvancedFeatures().catch(() => null),
+        isActiveFromCore().catch(() => false),
       ]);
 
       setMemberCount(membersTotal || 0);
       setCurrentCycle(Number(cycle || 1));
       setAdvancedFeatures(features);
+      setIsAjoActive(toBool(active));
 
       if (address) {
         try {
@@ -168,6 +175,7 @@ const AjoDetails = () => {
     getTotalMembers,
     getCurrentCycleFromCore,
     getAdvancedFeatures,
+    isActiveFromCore,
     address,
     getGuarantor,
     getTotalCollateral,
@@ -230,9 +238,11 @@ const AjoDetails = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <AjoDetailsCard
           ajo={ajoInfo}
+          isAjoActive={isAjoActive}
           member={null}
           memberLoading={false}
           monthlyPayment={monthlyPayment}
+          currentCycle={currentCycle}
           isVisible={isVisible}
           lastUpdated={lastUpdated}
           onRefresh={fetchAjoDetails}

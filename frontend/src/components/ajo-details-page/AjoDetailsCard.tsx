@@ -17,13 +17,16 @@ import useStarknetAjoCore from "@/hooks/useStarknetAjoCore";
 import useStarknetAjoMembers from "@/hooks/useStarknetAjoMembers";
 import useStarknetAjoCollateral from "@/hooks/useStarknetAjoCollateral";
 import useStarknetErc20 from "@/hooks/useStarknetErc20";
+import useStarknetAjoPayments from "@/hooks/useStarknetAjoPayments";
 import { TOKEN_ADDRESSES } from "@/config/constants";
 
 interface AjoDetailsCardProps {
   ajo: StarknetAjoInfo | null | undefined;
+  isAjoActive?: boolean;
   member?: any;
   memberLoading?: boolean;
   monthlyPayment?: number | null;
+  currentCycle?: number;
   isVisible: boolean;
   lastUpdated: Date;
   onRefresh?: () => Promise<void> | void;
@@ -31,8 +34,10 @@ interface AjoDetailsCardProps {
 
 const AjoDetailsCard = ({
   ajo,
+  isAjoActive = false,
   memberLoading = false,
   monthlyPayment = null,
+  currentCycle = 0,
   isVisible,
   lastUpdated,
   onRefresh,
@@ -45,6 +50,9 @@ const AjoDetailsCard = ({
   );
   const { calculateRequiredCollateral } = useStarknetAjoCollateral(
     ajo?.collateralAddress || "",
+  );
+  const { hasPaidForCycle } = useStarknetAjoPayments(
+    ajo?.paymentsAddress || "",
   );
   const paymentToken = ajo?.config.paymentToken === "BTC" ? "BTC" : "USDC";
   const defaultPaymentTokenAddress =
@@ -64,7 +72,7 @@ const AjoDetailsCard = ({
   const [requiredCollateral, setRequiredCollateral] = useState<bigint | null>(
     null,
   );
-  const userHasPaid = false;
+  const [userHasPaid, setUserHasPaid] = useState(false);
   const isZeroAddress = (value?: string | null) =>
     !value || /^0x0+$/i.test(value);
 
@@ -181,6 +189,37 @@ const AjoDetailsCard = ({
     calculateRequiredCollateral,
   ]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPaymentStatus = async () => {
+      if (!address || !currentCycle || currentCycle === 0 || !isActiveMember) {
+        if (!cancelled) {
+          setUserHasPaid(false);
+        }
+        return;
+      }
+
+      try {
+        const hasPaid = await hasPaidForCycle(address, currentCycle);
+        if (!cancelled) {
+          setUserHasPaid(hasPaid);
+        }
+      } catch (error) {
+        console.error("Failed to check payment status:", error);
+        if (!cancelled) {
+          setUserHasPaid(false);
+        }
+      }
+    };
+
+    loadPaymentStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [address, currentCycle, isActiveMember, hasPaidForCycle]);
+
   const handleJoinAjo = async () => {
     if (!isConnected || !address) {
       toast.error("Connect wallet to join this Ajo");
@@ -254,7 +293,12 @@ const AjoDetailsCard = ({
     }
   };
 
-  const ajoStatus = isAjoFull ? "active" : "forming";
+  const ajoStatus = isAjoActive ? "active" : "forming";
+  const statusLabel = isAjoActive
+    ? "Active"
+    : isAjoFull
+      ? "Full - Pending Start"
+      : "Forming";
   const monthlyContributionDisplay =
     monthlyPayment !== null && monthlyPayment !== undefined
       ? `$${monthlyPayment} ${ajo?.config.paymentToken || "USDC"}`
@@ -300,9 +344,7 @@ const AjoDetailsCard = ({
                       )}`}
                     >
                       {getStatusIcon(ajoStatus)}
-                      <span className="capitalize">
-                        {isAjoFull ? "Active" : "Forming"}
-                      </span>
+                      <span>{statusLabel}</span>
                     </div>
                     <div className="text-xs mx-2">
                       by {formatAddress(ajo?.config?.creator || "")}

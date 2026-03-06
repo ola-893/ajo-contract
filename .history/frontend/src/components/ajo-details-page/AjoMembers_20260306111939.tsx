@@ -256,11 +256,7 @@ const AjoMembers = ({
                       Payout:{" "}
                       {member.hasReceivedPayout ? "Received" : "Pending"}
                     </span>
-                    <span className={`text-xs px-2 py-1 rounded border ${
-                      member.hasPaidCurrentCycle 
-                        ? "bg-green-500/15 text-green-400 border-green-500/30" 
-                        : "bg-red-500/15 text-red-400 border-red-500/30"
-                    }`}>
+                    <span className="text-xs px-2 py-1 rounded border border-border text-muted-foreground">
                       Cycle {currentCycle}:{" "}
                       {member.hasPaidCurrentCycle ? "Paid" : "Not Paid"}
                     </span>
