@@ -10,10 +10,13 @@ import {
 import { toast } from "sonner";
 import useStarknetAjoPayments from "@/hooks/useStarknetAjoPayments";
 import useStarknetAjoCore from "@/hooks/useStarknetAjoCore";
+import useStarknetAjoMembers from "@/hooks/useStarknetAjoMembers";
 import useStarknetErc20 from "@/hooks/useStarknetErc20";
 import { TOKEN_ADDRESSES } from "@/config/constants";
 import { useStarknetWallet } from "@/contexts/StarknetWalletContext";
 import { formatAddress } from "@/utils/utils";
+
+const normalizeAddress = (addr: string) => addr.toLowerCase().trim();
 
 const formatTokenAmount = (value: bigint, decimals: number) => {
   if (value === 0n) return "0";
@@ -32,6 +35,7 @@ const AjoPaymentHistory = ({ ajo }: { ajo: any }) => {
   const { address, isConnected } = useStarknetWallet();
   const paymentsAddress = ajo?.paymentsAddress || "";
   const coreAddress = ajo?.coreAddress || "";
+  const membersAddress = ajo?.membersAddress || "";
   const tokenSymbol = ajo?.config?.paymentToken || "USDC";
   const tokenDecimals = tokenSymbol === "BTC" ? 8 : 6;
   const monthlyContributionRaw = BigInt(ajo?.config?.monthlyContribution ?? 0);
@@ -56,6 +60,7 @@ const AjoPaymentHistory = ({ ajo }: { ajo: any }) => {
     approve,
     loading: approvalLoading,
   } = useStarknetErc20(paymentTokenAddress);
+  const { hasReceivedPayout } = useStarknetAjoMembers(membersAddress);
 
   const {
     getCurrentCycle,
