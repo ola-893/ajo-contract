@@ -25,16 +25,16 @@ export const CONTRACT_ADDRESSES = {
   sepolia: {
     ajoFactory:
       import.meta.env.VITE_AJO_FACTORY_ADDRESS ||
-      "0x058f0d1a69b43cbf678299c948fc36c5041170cd982ad7288efacdd3545042e6",
+      "0x0295f1221b20905844cb4977866f097e2af880b8b08c59b2f27e32b6a4011601",
     bridgeAdapter:
       import.meta.env.VITE_BRIDGE_ADAPTER_ADDRESS ||
-      "0x07b3140baa939d72d40b89a3647b2e7ac08f719dde54311490cf8bf0a8c44fac",
+      "0x072a35eee202f9f711e92c9731c1c9d452e3463b93c44f20e9cb406a80c3406d",
     swapRouter:
       import.meta.env.VITE_SWAP_ROUTER_ADDRESS ||
-      "0x0613d8d56a9f7b9a1abeeb27119bb4bd3b9881c1720d367b7cd87029ffb1a157",
+      "0x00690ab409afb13a81ef10df3c6dc5880b0bb99a5141d24cc5db9b320111fc1d",
     btcCollateralAdapter:
       import.meta.env.VITE_BTC_COLLATERAL_ADAPTER_ADDRESS ||
-      "0x01ecd36cf56d31533ea46c30e3c28983dd341a667549efadd9fbeff55fb7a2af",
+      "0x03444836110556606b35ccda6e9c1a51094f444ae0e415102595097b53341ccc",
     // Individual Ajo contracts created via factory will be stored in state
   },
   mainnet: {

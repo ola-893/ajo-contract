@@ -15,6 +15,8 @@ import { TOKEN_ADDRESSES } from "@/config/constants";
 import { useStarknetWallet } from "@/contexts/StarknetWalletContext";
 import { formatAddress } from "@/utils/utils";
 
+const normalizeAddress = (addr: string) => addr.toLowerCase().trim();
+
 const formatTokenAmount = (value: bigint, decimals: number) => {
   if (value === 0n) return "0";
   const divisor = 10n ** BigInt(decimals);
@@ -144,14 +146,17 @@ const AjoPaymentHistory = ({ ajo }: { ajo: any }) => {
       setPayoutRecipient(recipient);
 
       if (address) {
-        const [paidThisCycle, total, payoutReceived] = await Promise.all([
+        const [paidThisCycle, total] = await Promise.all([
           hasPaidForCycle(address, cycle || 1).catch(() => false),
           getTotalPaid(address).catch(() => 0n),
-          hasReceivedPayout(address).catch(() => false),
         ]);
         setHasPaidCurrentCycle(paidThisCycle);
         setTotalPaid(total);
-        setHasReceivedCurrentPayout(Boolean(payoutReceived));
+        // Check if current user is the payout recipient and payout is complete
+        setHasReceivedCurrentPayout(
+          normalizeAddress(address) === normalizeAddress(recipient) &&
+          isPayoutPoolComplete
+        );
       } else {
         setHasReceivedCurrentPayout(false);
       }
@@ -172,7 +177,6 @@ const AjoPaymentHistory = ({ ajo }: { ajo: any }) => {
     address,
     hasPaidForCycle,
     getTotalPaid,
-    hasReceivedPayout,
   ]);
 
   useEffect(() => {
@@ -349,6 +353,11 @@ const AjoPaymentHistory = ({ ajo }: { ajo: any }) => {
               </button>
             )}
           </div>
+          {address && !isCurrentRecipient && !isZeroAddress(payoutRecipient) && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Not your turn yet. Current payout recipient: {formatAddress(payoutRecipient)}.
+            </p>
+          )}
         </div>
       </div>
 

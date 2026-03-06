@@ -5,7 +5,7 @@
 export const CONTRACTS = {
   sepolia: {
     // Factory contract address
-    factory: "0x058f0d1a69b43cbf678299c948fc36c5041170cd982ad7288efacdd3545042e6",
+    factory: "0x0295f1221b20905844cb4977866f097e2af880b8b08c59b2f27e32b6a4011601",
     
     // USDC token address (Circle USDC on Sepolia)
     usdc: "0x0512feAc6339Ff7889822cb5aA2a86C848e9D392bB0E3E237C008674feeD8343",
@@ -14,10 +14,10 @@ export const CONTRACTS = {
     classHashes: {
       core: "0x055e8968f0be4e2e89a454ab61c469ac82cb3f5ecfecaf2135437e842ecb8905",
       members: "0x07f58b65262907ade7ed422eb138ce221b9791f0d991f7a468560fb309ced133",
-      collateral: "0x007de0379791d5affce82c82a84fb639b0487b8f149a6ab26895128d260c79bf",
-      payments: "0x031a0741d826c579bd66ae52605c42e78e86304b1928d1e8beffbc53dab0c0b6",
-      governance: "0x067ce461390cabffdc105b38499d2bb0511d60cd59d46fd15563a0f9e979ba5d",
-      schedule: "0x06dc39cf61ceae671925aac808897fa365495140d4359c5f32b584ef3310be4a"
+      collateral: "0x07d2ffdc1b58f4d17b70d5288e02a4bc93481ac9835f2087bc1a971ddbf8182d",
+      payments: "0x066a426deb875e97adc09090d1e2f5d5fb96a1f9b9dbe62fd785dd631b095648",
+      governance: "0x07c4543c733cefaa7c0fa3ca1152952185af730e1f091553737f5e99653d204e",
+      schedule: "0x03ed10be83a83737c2e9ba5cdf4248e0dd7ee96fa5953ca1af3a6312f158b813"
     }
   },
   
