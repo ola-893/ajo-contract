@@ -1,13 +1,13 @@
 {
   "network": "sepolia",
   "rpcUrl": "https://starknet-sepolia.g.alchemy.com/v2/HL-XmuitXQ7NgjyxPCJtU",
-  "timestamp": "2026-03-05T15:17:42Z",
+  "timestamp": "2026-03-05T20:45:00Z",
   "deployer": "0x0281e16a3f71b9c0cede19cee4375c24cbc328c08f8cc4d4757d04ffeb956ce8",
   "owner": "0x0281e16a3f71b9c0cede19cee4375c24cbc328c08f8cc4d4757d04ffeb956ce8",
   "bridgeRelayer": "0x0281e16a3f71b9c0cede19cee4375c24cbc328c08f8cc4d4757d04ffeb956ce8",
   "opCatVerifier": "0x0281e16a3f71b9c0cede19cee4375c24cbc328c08f8cc4d4757d04ffeb956ce8",
   "classHashes": {
-    "AjoCore": "0x0461b555a08497df8c6d8408278c1a03d55062d3d288e405bb0e4fa3eb644fcf",
+    "AjoCore": "0x072e49ee6f54172a00b67a61c25b3cd31e67cf0507d3f93179491390135c385e",
     "AjoMembers": "0x07f58b65262907ade7ed422eb138ce221b9791f0d991f7a468560fb309ced133",
     "AjoCollateral": "0x007de0379791d5affce82c82a84fb639b0487b8f149a6ab26895128d260c79bf",
     "AjoPayments": "0x031a0741d826c579bd66ae52605c42e78e86304b1928d1e8beffbc53dab0c0b6",
@@ -36,7 +36,7 @@
     "bridgeAdapterDeploy": "0x00598e29d3e6ce3d69621cc06302dd2e8d43150bc545a8b5bb50440a50a5e5d4",
     "swapRouterDeploy": "0x03ec0ad04ff494e4bfa3b653278720bd166efbdf914f6ebe5581196a50c10320",
     "btcCollateralAdapterDeploy": "0x024288c2fa09f2636e4cd6ca8ce096843e32c8ce50637d123cda765c7245ffaf",
-    "setCoreClassHash": "0x008fefad38ad6b2fd239716b2b7d9e1cf18fd804b4509ce706747c0572106799",
+    "setCoreClassHash": "0x04142605671e18ea2a767927a8447930cc3e20b51ba77de01e3a6ac0be7c0aef",
     "setMembersClassHash": "0x0042387013e8233657119a381f6abbde2ea99d38e3d4ee7af5c7ee1b31e193d4",
     "declareAjoMembersHotfix": "0x0113e13fbf6161994df493bde576678d554c0208982243658a4d3ba9d43e78f6",
     "setCollateralClassHash": "0x004a104cd92fb59fdda323f941363b07bde18ede0578e66faf77c5c6502ddd98",
@@ -46,7 +46,8 @@
     "setUsdcTokenAddress": "0x0786e5362ceb0c20209cd09e3dfdc4c47670981b264857503536fa5fe7037a51",
     "smokeCreateAjoAtomic": "0x0003f8cff5903909cb65a1df68de6e60890a9179ab1d2e149e52651374692803",
     "smokeCreateAjoLegacyDraft": "0x06b0dc1b9a40373f63b5bf3ca0007b0ea14fb19819c96f97865abf877c455725",
-    "smokeDeployMembersLegacy": "0x002bd456d357ec38e069c64a2de83ee5510420f7b1cbeac0a03296364a913c80"
+    "smokeDeployMembersLegacy": "0x002bd456d357ec38e069c64a2de83ee5510420f7b1cbeac0a03296364a913c80",
+    "declareAjoCorePaymentAutoStartFallback": "0x048c1f6d8cae0edf7439d6621f61f7153e544c753a2cd1f844980fd9278461f4"
   },
   "explorer": {
     "factory": "https://sepolia.voyager.online/contract/0x058f0d1a69b43cbf678299c948fc36c5041170cd982ad7288efacdd3545042e6",
@@ -61,6 +62,6 @@
   },
   "status": {
     "phase": "complete",
-    "message": "Factory configured to auto-start Ajos on full membership with updated core class hash."
+    "message": "Factory core class hash updated to include process_payment auto-start fallback for full inactive Ajos."
   }
 }

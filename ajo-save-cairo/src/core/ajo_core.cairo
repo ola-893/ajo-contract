@@ -379,15 +379,35 @@ pub mod AjoCore {
         fn process_payment(ref self: ContractState) {
             // Apply reentrancy protection
             self.reentrancy_guard.start();
-            
-            // Verify Ajo is active
-            assert(self.is_active.read(), 'Ajo is not active');
-            
-            // Verify caller is a member
-            let caller = starknet::get_caller_address();
+
             let members_dispatcher = IAjoMembersDispatcher {
                 contract_address: self.members_contract.read()
             };
+
+            // Compatibility fallback:
+            // if an Ajo is full but not active yet, auto-start on first payment attempt.
+            if !self.is_active.read() {
+                let total_participants = self.total_participants.read();
+                let member_count = members_dispatcher.get_total_members();
+                assert(member_count == total_participants, 'Ajo is not active');
+
+                let payments_dispatcher = IAjoPaymentsDispatcher {
+                    contract_address: self.payments_contract.read()
+                };
+                payments_dispatcher.start_cycle(1);
+
+                self.is_active.write(true);
+                self.current_cycle.write(1);
+
+                self.emit(AjoStarted {
+                    ajo_id: self.ajo_id.read(),
+                    cycle: 1,
+                    member_count,
+                });
+            }
+
+            // Verify caller is a member
+            let caller = starknet::get_caller_address();
             assert(members_dispatcher.is_member(caller), 'Caller is not a member');
             
             // Get current cycle from payments contract
