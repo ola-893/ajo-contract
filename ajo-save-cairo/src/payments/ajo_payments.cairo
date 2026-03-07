@@ -55,6 +55,8 @@ pub mod AjoPayments {
         payments: Map<(u256, ContractAddress), bool>, // (cycle, member) → paid
         cycle_payments_count: Map<u256, u256>,
         member_past_payments: Map<ContractAddress, u256>,
+        member_defaulted: Map<ContractAddress, bool>,
+        default_reserve: u256,
         
         // Configuration
         monthly_contribution: u256,
@@ -80,6 +82,7 @@ pub mod AjoPayments {
         PayoutDistributed: PayoutDistributed,
         CycleAdvanced: CycleAdvanced,
         PastPaymentsSeized: PastPaymentsSeized,
+        DefaultReserveCredited: DefaultReserveCredited,
         #[flat]
         OwnableEvent: OwnableComponent::Event,
         #[flat]
@@ -118,6 +121,12 @@ pub mod AjoPayments {
         pub amount: u256,
     }
 
+    #[derive(Drop, starknet::Event)]
+    pub struct DefaultReserveCredited {
+        pub amount: u256,
+        pub new_total: u256,
+    }
+
     #[constructor]
     fn constructor(
         ref self: ContractState,
@@ -141,6 +150,7 @@ pub mod AjoPayments {
         self.current_cycle.write(0);
         self.cycle_start_time.write(0);
         self.next_payout_position.write(1);
+        self.default_reserve.write(0);
     }
 
     #[generate_trait]
@@ -240,6 +250,33 @@ pub mod AjoPayments {
             payments_count == total
         }
 
+        fn calculate_cycle_shortfall(self: @ContractState, cycle: u256) -> u256 {
+            let monthly = self.monthly_contribution.read();
+            let total = self.total_participants.read();
+            let expected_payout = monthly * total;
+            let contributions = self.cycle_payments_count.read(cycle) * monthly;
+
+            if contributions >= expected_payout {
+                0
+            } else {
+                expected_payout - contributions
+            }
+        }
+
+        fn consume_shortfall_reserve(ref self: ContractState, cycle: u256, payout_amount: u256) {
+            let monthly = self.monthly_contribution.read();
+            let total = self.total_participants.read();
+            let expected_payout = monthly * total;
+            assert(payout_amount == expected_payout, 'Invalid payout amount');
+
+            let shortfall = Self::calculate_cycle_shortfall(@self, cycle);
+            if shortfall > 0 {
+                let reserve = self.default_reserve.read();
+                assert(reserve >= shortfall, 'Insufficient reserve');
+                self.default_reserve.write(reserve - shortfall);
+            }
+        }
+
         /// Distribute payout to the recipient for a specific cycle
         /// 
         /// # Arguments
@@ -247,8 +284,8 @@ pub mod AjoPayments {
         /// * `amount` - Amount to be paid out
         ///
         /// # Requirements
-        /// * All members must have paid for the current cycle
         /// * Payout amount must equal monthly_contribution × total_participants
+        /// * Any cycle shortfall must be covered by default reserve
         /// * ERC20 transfer must succeed
         /// * Only callable by owner (AjoCore)
         fn distribute_payout(
@@ -262,15 +299,9 @@ pub mod AjoPayments {
             // Get current cycle
             let cycle = self.current_cycle.read();
 
-            // Verify all members have paid for this cycle
-            assert(self.all_members_paid(cycle), 'Not all members paid');
-
-            // Calculate expected payout amount
             let monthly = self.monthly_contribution.read();
             let total = self.total_participants.read();
             let expected_payout = monthly * total;
-
-            // Verify amount matches expected payout
             assert(amount == expected_payout, 'Invalid payout amount');
 
             // Transfer ERC20 tokens to recipient
@@ -432,7 +463,7 @@ pub mod AjoPayments {
             let payout_amount = monthly * total;
             let current_cycle = self.current_cycle.read();
             assert(cycle == current_cycle, 'Invalid cycle number');
-            assert(InternalImpl::all_members_paid(@self, cycle), 'Not all members paid');
+            InternalImpl::consume_shortfall_reserve(ref self, cycle, payout_amount);
 
             let pool_token = self.payment_token.read();
             let preferred_token = self.recipient_token_preferences.read(recipient);
@@ -531,18 +562,37 @@ pub mod AjoPayments {
 
         fn mark_default(ref self: ContractState, member: ContractAddress, cycle: u256) {
             InternalImpl::assert_only_core(@self);
-            // Mark member as defaulted - implementation depends on requirements
-            // For now, we just verify the member exists
+            let _ = cycle;
+            self.member_defaulted.write(member, true);
         }
 
         fn is_defaulted(self: @ContractState, member: ContractAddress) -> bool {
-            // Check if member has defaulted - implementation depends on requirements
-            false
+            self.member_defaulted.read(member)
         }
 
         fn seize_past_payments(ref self: ContractState, member: ContractAddress) -> u256 {
             InternalImpl::assert_only_core(@self);
             InternalImpl::seize_past_payments(ref self, member)
+        }
+
+        fn credit_default_reserve(ref self: ContractState, amount: u256) {
+            InternalImpl::assert_only_core(@self);
+            if amount == 0 {
+                return ();
+            }
+
+            let reserve = self.default_reserve.read();
+            let new_total = reserve + amount;
+            self.default_reserve.write(new_total);
+            self.emit(DefaultReserveCredited { amount, new_total });
+        }
+
+        fn get_default_reserve(self: @ContractState) -> u256 {
+            self.default_reserve.read()
+        }
+
+        fn get_cycle_shortfall(self: @ContractState, cycle: u256) -> u256 {
+            InternalImpl::calculate_cycle_shortfall(self, cycle)
         }
 
         fn set_swap_router(ref self: ContractState, router: ContractAddress) {

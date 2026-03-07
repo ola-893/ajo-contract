@@ -30,12 +30,27 @@ const formatTokenAmount = (value: bigint, decimals: number) => {
   return `${whole.toString()}.${fractionStr}`;
 };
 
+const formatSecondsCompact = (seconds: number) => {
+  const safeSeconds = Math.max(0, Math.floor(seconds));
+  const days = Math.floor(safeSeconds / 86400);
+  const hours = Math.floor((safeSeconds % 86400) / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const secs = safeSeconds % 60;
+  const parts: string[] = [];
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0) parts.push(`${minutes}m`);
+  if (parts.length === 0 || secs > 0) parts.push(`${secs}s`);
+  return parts.join(" ");
+};
+
 const AjoPaymentHistory = ({ ajo }: { ajo: any }) => {
   const { address, isConnected } = useStarknetWallet();
   const paymentsAddress = ajo?.paymentsAddress || "";
   const coreAddress = ajo?.coreAddress || "";
   const tokenSymbol = ajo?.config?.paymentToken || "USDC";
   const tokenDecimals = tokenSymbol === "BTC" ? 8 : 6;
+  const cycleDurationSeconds = Number(ajo?.config?.cycleDuration ?? 0);
   const monthlyContributionRaw = BigInt(ajo?.config?.monthlyContribution ?? 0);
   const totalParticipants = BigInt(
     Math.max(1, Number(ajo?.config?.totalParticipants ?? 1)),
@@ -50,6 +65,7 @@ const AjoPaymentHistory = ({ ajo }: { ajo: any }) => {
   );
   const {
     processPayment,
+    processCycle,
     getPaymentTokenConfig,
     loading: coreLoading,
   } = useStarknetAjoCore(coreAddress);
@@ -81,6 +97,9 @@ const AjoPaymentHistory = ({ ajo }: { ajo: any }) => {
   const [hasPaidCurrentCycle, setHasPaidCurrentCycle] = useState(false);
   const [hasReceivedCurrentPayout, setHasReceivedCurrentPayout] = useState(false);
   const [totalPaid, setTotalPaid] = useState<bigint>(0n);
+  const [nowTimestamp, setNowTimestamp] = useState(
+    Math.floor(Date.now() / 1000),
+  );
 
   const isZeroAddress = (value?: string | null) =>
     !value || /^0x0+$/i.test(value);
@@ -122,6 +141,13 @@ const AjoPaymentHistory = ({ ajo }: { ajo: any }) => {
     };
   }, [coreAddress, defaultPaymentTokenAddress, getPaymentTokenConfig]);
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNowTimestamp(Math.floor(Date.now() / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   const refreshPayments = useCallback(async () => {
     if (!paymentsAddress || /^0x0+$/i.test(paymentsAddress)) return;
 
@@ -150,12 +176,14 @@ const AjoPaymentHistory = ({ ajo }: { ajo: any }) => {
           hasPaidForCycle(address, cycle || 1).catch(() => false),
           getTotalPaid(address).catch(() => 0n),
         ]);
+        const payoutPoolComplete =
+          expectedCycleAmount > 0n && contributions >= expectedCycleAmount;
         setHasPaidCurrentCycle(paidThisCycle);
         setTotalPaid(total);
         // Check if current user is the payout recipient and payout is complete
         setHasReceivedCurrentPayout(
           normalizeAddress(address) === normalizeAddress(recipient) &&
-          isPayoutPoolComplete
+          payoutPoolComplete
         );
       } else {
         setHasReceivedCurrentPayout(false);
@@ -177,6 +205,7 @@ const AjoPaymentHistory = ({ ajo }: { ajo: any }) => {
     address,
     hasPaidForCycle,
     getTotalPaid,
+    expectedCycleAmount,
   ]);
 
   useEffect(() => {
@@ -227,6 +256,10 @@ const AjoPaymentHistory = ({ ajo }: { ajo: any }) => {
     !isZeroAddress(payoutRecipient);
   const isPayoutPoolComplete =
     expectedCycleAmount > 0n && cycleContributions >= expectedCycleAmount;
+  const cycleEndTimestamp = cycleStartTime + cycleDurationSeconds;
+  const secondsUntilCycleEnd = Math.max(0, cycleEndTimestamp - nowTimestamp);
+  const isCycleDue =
+    cycleDurationSeconds > 0 && cycleStartTime > 0 && nowTimestamp >= cycleEndTimestamp;
 
   const handleReceivePayoutClick = async () => {
     if (!isCurrentRecipient) return;
@@ -242,6 +275,32 @@ const AjoPaymentHistory = ({ ajo }: { ajo: any }) => {
     // Payout is distributed automatically by the protocol when funding is complete.
     toast.success('Payout is ready. Refreshing latest status...');
     await refreshPayments();
+  };
+
+  const handleAdvanceCycle = async () => {
+    if (!isConnected || !address) {
+      toast.error("Connect wallet to advance cycle");
+      return;
+    }
+    if (!coreAddress || isZeroAddress(coreAddress)) {
+      toast.error("Ajo core contract not available");
+      return;
+    }
+    if (!isCycleDue) {
+      toast.info(
+        `Cycle can be advanced in ${formatSecondsCompact(secondsUntilCycleEnd)}`,
+      );
+      return;
+    }
+
+    try {
+      await processCycle(currentCycle);
+      toast.success("Cycle advanced successfully");
+      await refreshPayments();
+    } catch (error: any) {
+      console.error("Cycle advance failed:", error);
+      toast.error(error?.message || "Failed to advance cycle");
+    }
   };
 
   const successRate = useMemo(() => {
@@ -352,6 +411,25 @@ const AjoPaymentHistory = ({ ajo }: { ajo: any }) => {
                     : 'Receive Payout'}
               </button>
             )}
+            <button
+              onClick={handleAdvanceCycle}
+              disabled={
+                loadingData ||
+                coreLoading ||
+                paymentsLoading ||
+                !isCycleDue
+              }
+              className="px-3 py-2 rounded-md text-xs border border-border text-card-foreground hover:bg-primary/10 disabled:opacity-40 disabled:cursor-not-allowed"
+              title={
+                isCycleDue
+                  ? `Advance cycle ${currentCycle} to ${currentCycle + 1}`
+                  : `Cycle can advance in ${formatSecondsCompact(secondsUntilCycleEnd)}`
+              }
+            >
+              {isCycleDue
+                ? `Advance To Cycle ${currentCycle + 1}`
+                : `Advance In ${formatSecondsCompact(secondsUntilCycleEnd)}`}
+            </button>
           </div>
           {address && !isCurrentRecipient && !isZeroAddress(payoutRecipient) && (
             <p className="mt-3 text-xs text-muted-foreground">

@@ -320,6 +320,45 @@
       },
       {
         "type": "function",
+        "name": "credit_default_reserve",
+        "inputs": [
+          {
+            "name": "amount",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "get_default_reserve",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_cycle_shortfall",
+        "inputs": [
+          {
+            "name": "cycle",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
         "name": "set_swap_router",
         "inputs": [
           {
@@ -552,6 +591,23 @@
   },
   {
     "type": "event",
+    "name": "ajo_save::payments::ajo_payments::AjoPayments::DefaultReserveCredited",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "amount",
+        "type": "core::integer::u256",
+        "kind": "data"
+      },
+      {
+        "name": "new_total",
+        "type": "core::integer::u256",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
     "name": "ajo_save::components::ownable::OwnableComponent::OwnershipTransferred",
     "kind": "struct",
     "members": [
@@ -608,6 +664,11 @@
       {
         "name": "PastPaymentsSeized",
         "type": "ajo_save::payments::ajo_payments::AjoPayments::PastPaymentsSeized",
+        "kind": "nested"
+      },
+      {
+        "name": "DefaultReserveCredited",
+        "type": "ajo_save::payments::ajo_payments::AjoPayments::DefaultReserveCredited",
         "kind": "nested"
       },
       {

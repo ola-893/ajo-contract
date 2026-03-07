@@ -89,6 +89,7 @@ pub mod AjoCore {
         MemberJoined: MemberJoined,
         PaymentProcessed: PaymentProcessed,
         PayoutDistributed: PayoutDistributed,
+        PayoutSkipped: PayoutSkipped,
         DefaultHandled: DefaultHandled,
         MemberExited: MemberExited,
         AjoFinalized: AjoFinalized,
@@ -150,6 +151,16 @@ pub mod AjoCore {
         pub recipient: ContractAddress,
         pub cycle: u256,
         pub amount: u256,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    pub struct PayoutSkipped {
+        #[key]
+        pub ajo_id: u256,
+        #[key]
+        pub recipient: ContractAddress,
+        pub cycle: u256,
+        pub reason: felt252,
     }
 
     #[derive(Drop, starknet::Event)]
@@ -412,6 +423,8 @@ pub mod AjoCore {
             // Verify caller is a member
             let caller = starknet::get_caller_address();
             assert(members_dispatcher.is_member(caller), 'Caller is not a member');
+            let caller_member = members_dispatcher.get_member(caller);
+            assert(caller_member.status == MemberStatus::Active, 'Member not active');
             
             // Get current cycle from payments contract
             let payments_dispatcher = IAjoPaymentsDispatcher {
@@ -438,22 +451,22 @@ pub mod AjoCore {
                 all_paid,
             });
             
-            // If all members have paid and payout has not been distributed yet,
-            // distribute payout but keep cycle number unchanged until duration elapses.
-            if all_paid && self.last_payout_cycle.read() != current_cycle {
-                self._distribute_payout();
-            }
-            
             // End reentrancy protection
             self.reentrancy_guard.end();
         }
 
         fn process_cycle(ref self: ContractState, cycle_number: u256) {
-            // Only owner (operator) or schedule module can process cycles.
+            self.reentrancy_guard.start();
+
+            // Allow owner/schedule and active members to process due cycles.
+            let members_dispatcher = IAjoMembersDispatcher {
+                contract_address: self.members_contract.read()
+            };
             let caller = starknet::get_caller_address();
             let owner = self.ownable.owner();
             let schedule = self.schedule_contract.read();
-            assert(caller == owner || caller == schedule, 'Unauthorized cycle processor');
+            let is_member = members_dispatcher.is_member(caller);
+            assert(caller == owner || caller == schedule || is_member, 'Unauthorized cycle processor');
 
             assert(self.is_active.read(), 'Ajo is not active');
 
@@ -463,22 +476,53 @@ pub mod AjoCore {
             let current_cycle = payments_dispatcher.get_current_cycle();
             assert(cycle_number == current_cycle, 'Cycle mismatch');
 
-            let expected_total = self.monthly_contribution.read() * self.total_participants.read();
-            let total_paid = payments_dispatcher.get_cycle_contributions(cycle_number);
-            assert(total_paid == expected_total, 'Cycle not fully funded');
-
             let cycle_start_time = payments_dispatcher.get_cycle_start_time();
             let cycle_duration = self.cycle_duration.read();
             let now = starknet::get_block_timestamp();
             assert(now >= cycle_start_time + cycle_duration, 'Cycle duration not elapsed');
 
-            // Ensure payout exists before advancing. Usually already distributed by process_payment.
             if self.last_payout_cycle.read() != current_cycle {
-                self._distribute_payout();
+                let total_participants = self.total_participants.read();
+                let recipient = payments_dispatcher.get_payout_recipient(current_cycle);
+                let mut recipient_defaulted = payments_dispatcher.is_defaulted(recipient);
+
+                let mut position: u256 = 1;
+                loop {
+                    if position > total_participants {
+                        break;
+                    }
+
+                    let member = members_dispatcher.get_member_by_position(position).address;
+                    let has_paid = payments_dispatcher.has_paid_for_cycle(member, current_cycle);
+                    if !has_paid {
+                        if member == recipient {
+                            recipient_defaulted = true;
+                        }
+
+                        if !payments_dispatcher.is_defaulted(member) {
+                            InternalImpl::process_member_default(ref self, member);
+                        }
+                    }
+
+                    position = position + 1;
+                };
+
+                if recipient_defaulted {
+                    self.last_payout_cycle.write(current_cycle);
+                    self.emit(PayoutSkipped {
+                        ajo_id: self.ajo_id.read(),
+                        recipient,
+                        cycle: current_cycle,
+                        reason: 'Recipient defaulted',
+                    });
+                } else {
+                    self._distribute_payout();
+                }
             }
 
             payments_dispatcher.advance_cycle();
             self.current_cycle.write(current_cycle + 1);
+            self.reentrancy_guard.end();
         }
 
         fn handle_default(ref self: ContractState, defaulter: ContractAddress) {
@@ -487,66 +531,7 @@ pub mod AjoCore {
 
             // Default handling can be triggered by owner, governance, or schedule automation.
             InternalImpl::assert_owner_governance_or_schedule(@self);
-            
-            // Verify defaulter is a member
-            let members_dispatcher = IAjoMembersDispatcher {
-                contract_address: self.members_contract.read()
-            };
-            assert(members_dispatcher.is_member(defaulter), 'Defaulter is not a member');
-            
-            // Get guarantor via AjoMembers.get_guarantor()
-            let guarantor = members_dispatcher.get_guarantor(defaulter);
-            
-            // Get collateral dispatcher
-            let collateral_dispatcher = IAjoCollateralDispatcher {
-                contract_address: self.collateral_contract.read()
-            };
-            
-            // Seize defaulter's collateral via AjoCollateral.seize_collateral()
-            let defaulter_collateral_seized = collateral_dispatcher.seize_collateral(defaulter);
-            
-            // Seize guarantor's collateral
-            let guarantor_collateral_seized = collateral_dispatcher.seize_collateral(guarantor);
-            
-            // Get payments dispatcher
-            let payments_dispatcher = IAjoPaymentsDispatcher {
-                contract_address: self.payments_contract.read()
-            };
-            
-            // Seize defaulter's past payments via AjoPayments.seize_past_payments()
-            let defaulter_past_payments_seized = payments_dispatcher.seize_past_payments(defaulter);
-            
-            // Seize guarantor's past payments
-            let guarantor_past_payments_seized = payments_dispatcher.seize_past_payments(guarantor);
-            
-            // Calculate total seized assets
-            let total_seized = defaulter_collateral_seized 
-                + guarantor_collateral_seized 
-                + defaulter_past_payments_seized 
-                + guarantor_past_payments_seized;
-            
-            // Note: All seized assets are already in the appropriate contracts:
-            // - Collateral is in the collateral contract
-            // - Past payments are in the payments contract
-            // These funds are now available for redistribution to cover the default
-            
-            // Update defaulter status to Defaulted
-            members_dispatcher.update_member_status(defaulter, MemberStatus::Defaulted);
-            
-            // Update guarantor status to Defaulted (as they are also penalized)
-            members_dispatcher.update_member_status(guarantor, MemberStatus::Defaulted);
-            
-            // Emit DefaultHandled event
-            self.emit(DefaultHandled {
-                ajo_id: self.ajo_id.read(),
-                defaulter,
-                guarantor,
-                defaulter_collateral_seized,
-                guarantor_collateral_seized,
-                defaulter_past_payments_seized,
-                guarantor_past_payments_seized,
-                total_seized,
-            });
+            InternalImpl::process_member_default(ref self, defaulter);
             
             // End reentrancy protection
             self.reentrancy_guard.end();
@@ -1057,8 +1042,60 @@ pub mod AjoCore {
             assert(proposal.status == ProposalStatus::Executed, 'Governance approval required');
         }
 
-        /// Internal function to distribute payout to the next recipient
-        /// Called automatically when all members have paid for the current cycle
+        fn process_member_default(ref self: ContractState, defaulter: ContractAddress) -> u256 {
+            let members_dispatcher = IAjoMembersDispatcher {
+                contract_address: self.members_contract.read()
+            };
+            assert(members_dispatcher.is_member(defaulter), 'Defaulter is not a member');
+
+            let payments_dispatcher = IAjoPaymentsDispatcher {
+                contract_address: self.payments_contract.read()
+            };
+            if payments_dispatcher.is_defaulted(defaulter) {
+                return 0;
+            }
+
+            let collateral_dispatcher = IAjoCollateralDispatcher {
+                contract_address: self.collateral_contract.read()
+            };
+            let guarantor = members_dispatcher.get_guarantor(defaulter);
+
+            // In BTC commitment mode this call triggers OP_CAT enforcement on the adapter.
+            let defaulter_collateral_seized = collateral_dispatcher.seize_collateral(defaulter);
+            let defaulter_past_payments_seized = payments_dispatcher.seize_past_payments(defaulter);
+
+            let current_cycle = payments_dispatcher.get_current_cycle();
+            payments_dispatcher.mark_default(defaulter, current_cycle);
+            members_dispatcher.update_member_status(defaulter, MemberStatus::Defaulted);
+
+            // Only L2 escrow collateral is immediately liquid on Starknet.
+            let liquid_collateral = if self.collateral_mode.read() == CollateralMode::L2Escrow {
+                defaulter_collateral_seized
+            } else {
+                0
+            };
+            let liquid_seized = liquid_collateral + defaulter_past_payments_seized;
+            if liquid_seized > 0 {
+                payments_dispatcher.credit_default_reserve(liquid_seized);
+            }
+
+            let total_seized = defaulter_collateral_seized + defaulter_past_payments_seized;
+            self.emit(DefaultHandled {
+                ajo_id: self.ajo_id.read(),
+                defaulter,
+                guarantor,
+                defaulter_collateral_seized,
+                guarantor_collateral_seized: 0,
+                defaulter_past_payments_seized,
+                guarantor_past_payments_seized: 0,
+                total_seized,
+            });
+
+            total_seized
+        }
+
+        /// Internal function to distribute payout to the next recipient.
+        /// Settlement is executed at cycle end and may consume default reserve.
         /// 
         /// # Requirements (2.1.2, 2.1.5, 2.3.2)
         /// * Gets next recipient from AjoPayments.get_next_recipient()

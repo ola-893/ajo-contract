@@ -1049,6 +1049,33 @@
   },
   {
     "type": "event",
+    "name": "ajo_save::core::ajo_core::AjoCore::PayoutSkipped",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "ajo_id",
+        "type": "core::integer::u256",
+        "kind": "key"
+      },
+      {
+        "name": "recipient",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      },
+      {
+        "name": "cycle",
+        "type": "core::integer::u256",
+        "kind": "data"
+      },
+      {
+        "name": "reason",
+        "type": "core::felt252",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
     "name": "ajo_save::core::ajo_core::AjoCore::DefaultHandled",
     "kind": "struct",
     "members": [
@@ -1237,6 +1264,11 @@
       {
         "name": "PayoutDistributed",
         "type": "ajo_save::core::ajo_core::AjoCore::PayoutDistributed",
+        "kind": "nested"
+      },
+      {
+        "name": "PayoutSkipped",
+        "type": "ajo_save::core::ajo_core::AjoCore::PayoutSkipped",
         "kind": "nested"
       },
       {

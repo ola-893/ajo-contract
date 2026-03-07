@@ -37,6 +37,9 @@ pub trait IAjoPayments<TContractState> {
     fn mark_default(ref self: TContractState, member: ContractAddress, cycle: u256);
     fn is_defaulted(self: @TContractState, member: ContractAddress) -> bool;
     fn seize_past_payments(ref self: TContractState, member: ContractAddress) -> u256;
+    fn credit_default_reserve(ref self: TContractState, amount: u256);
+    fn get_default_reserve(self: @TContractState) -> u256;
+    fn get_cycle_shortfall(self: @TContractState, cycle: u256) -> u256;
 
     // Swap routing
     fn set_swap_router(ref self: TContractState, router: ContractAddress);
