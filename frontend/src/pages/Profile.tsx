@@ -28,11 +28,11 @@ const Profile = () => {
   const { setStrk, setEth, setUsdc, setAddress, setLoading } = useTokenStore();
   const [copied, setCopied] = useState(false);
   const [strkPrice, setStrkPrice] = useState<number | null>(null);
-  const [btcPrice, setBtcPrice] = useState<number | null>(null);
+  const [wbtcPrice, setWbtcPrice] = useState<number | null>(null);
 
   // Fetch token balances using the hook
   const strkBalance = useTokenBalance("STRK");
-  const btcBalance = useTokenBalance("BTC");
+  const wbtcBalance = useTokenBalance("WBTC");
   const usdcBalance = useTokenBalance("USDC");
 
   // Update token store when balances change
@@ -44,19 +44,19 @@ const Profile = () => {
 
   useEffect(() => {
     setStrk(strkBalance.balance.formatted);
-    setEth(btcBalance.balance.formatted);
+    setEth(wbtcBalance.balance.formatted);
     setUsdc(usdcBalance.balance.formatted);
-    setLoading(strkBalance.loading || btcBalance.loading || usdcBalance.loading);
+    setLoading(strkBalance.loading || wbtcBalance.loading || usdcBalance.loading);
     
     console.log("STRK balance:", strkBalance.balance.formatted);
-    console.log("BTC balance:", btcBalance.balance.formatted);
+    console.log("WBTC balance:", wbtcBalance.balance.formatted);
     console.log("USDC balance:", usdcBalance.balance.formatted);
   }, [
     strkBalance.balance.formatted,
-    btcBalance.balance.formatted,
+    wbtcBalance.balance.formatted,
     usdcBalance.balance.formatted,
     strkBalance.loading,
-    btcBalance.loading,
+    wbtcBalance.loading,
     usdcBalance.loading,
     setStrk,
     setEth,
@@ -77,28 +77,28 @@ const Profile = () => {
   useEffect(() => {
     const fetchPrices = async () => {
       try {
-        const [strkRes, btcRes] = await Promise.all([
+        const [strkRes, wbtcRes] = await Promise.all([
           fetch(
             "https://api.coingecko.com/api/v3/simple/price?ids=starknet&vs_currencies=usd",
           ),
           fetch(
-            "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd",
+            "https://api.coingecko.com/api/v3/simple/price?ids=wrapped-bitcoin&vs_currencies=usd",
           ),
         ]);
 
-        const [strkData, btcData] = await Promise.all([
+        const [strkData, wbtcData] = await Promise.all([
           strkRes.json(),
-          btcRes.json(),
+          wbtcRes.json(),
         ]);
 
         const strkUsdPrice = strkData?.["starknet"]?.usd ?? 0;
-        const btcUsdPrice = btcData?.["bitcoin"]?.usd ?? 0;
+        const wbtcUsdPrice = wbtcData?.["wrapped-bitcoin"]?.usd ?? 0;
 
         console.log("STRK Price USD:", strkUsdPrice);
-        console.log("BTC Price USD:", btcUsdPrice);
+        console.log("WBTC Price USD:", wbtcUsdPrice);
 
         setStrkPrice(parseFloat(strkUsdPrice));
-        setBtcPrice(parseFloat(btcUsdPrice));
+        setWbtcPrice(parseFloat(wbtcUsdPrice));
       } catch (error) {
         console.error("Failed to fetch prices:", error);
       }
@@ -128,11 +128,11 @@ const Profile = () => {
           address={walletAddress}
           isVisible={isVisible}
           strk={strkBalance.balance.formatted}
-          eth={btcBalance.balance.formatted}
+          wbtc={wbtcBalance.balance.formatted}
           usdc={usdcBalance.balance.formatted}
           strkPrice={strkPrice}
-          ethPrice={btcPrice}
-          loading={strkBalance.loading || btcBalance.loading || usdcBalance.loading}
+          wbtcPrice={wbtcPrice}
+          loading={strkBalance.loading || wbtcBalance.loading || usdcBalance.loading}
           copied={copied}
           handleCopy={handleCopy}
         />

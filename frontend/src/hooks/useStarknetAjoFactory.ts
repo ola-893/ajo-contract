@@ -23,7 +23,7 @@ const PHASE_METHODS = [
   "deploy_core",
 ] as const;
 
-export type AjoPaymentToken = "USDC" | "BTC";
+export type AjoPaymentToken = "USDC" | "WBTC";
 
 export interface StarknetAjoConfig {
   name: string;
@@ -71,8 +71,8 @@ const AJO_CREATED_SELECTOR = normalizeAddressForCompare(
   hash.getSelectorFromName("AjoCreated"),
 );
 
-const buildPaymentTokenEnum = (token: "USDC" | "BTC") =>
-  token === "BTC"
+const buildPaymentTokenEnum = (token: "USDC" | "WBTC") =>
+  token === "WBTC"
     ? new CairoCustomEnum({ BTC: {} })
     : new CairoCustomEnum({ USDC: {} });
 
@@ -142,16 +142,16 @@ const decodeFeltToString = (value: any): string => {
 
 const parsePaymentToken = (value: any): AjoPaymentToken => {
   if (typeof value === "string") {
-    return value.toUpperCase() === "BTC" ? "BTC" : "USDC";
+    return value.toUpperCase() === "BTC" || value.toUpperCase() === "WBTC" ? "WBTC" : "USDC";
   }
   if (typeof value === "number") {
-    return value === 1 ? "BTC" : "USDC";
+    return value === 1 ? "WBTC" : "USDC";
   }
   if (typeof value === "object" && value !== null) {
-    if ("BTC" in value) return "BTC";
+    if ("BTC" in value || "WBTC" in value) return "WBTC";
     if ("USDC" in value) return "USDC";
     const keys = Object.keys(value);
-    if (keys.includes("BTC")) return "BTC";
+    if (keys.includes("BTC") || keys.includes("WBTC")) return "WBTC";
     if (keys.includes("USDC")) return "USDC";
   }
   return "USDC";
@@ -453,7 +453,7 @@ const useStarknetAjoFactory = () => {
       monthlyContribution: string;
       totalParticipants: number;
       cycleDurationSeconds: number;
-      paymentToken: "USDC" | "BTC";
+      paymentToken: "USDC" | "WBTC";
     }) => {
       if (!account || !isConnected || !address) {
         throw new Error("Wallet not connected");
@@ -496,7 +496,7 @@ const useStarknetAjoFactory = () => {
           throw new Error("Cycle duration must be between 1 minute and 62 days");
         }
 
-        const decimals = params.paymentToken === "BTC" ? 8 : 6;
+        const decimals = params.paymentToken === "WBTC" ? 8 : 6;
         const contributionUnits = parseTokenAmountToUnits(
           params.monthlyContribution,
           decimals,

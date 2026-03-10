@@ -97,7 +97,7 @@ const AjoDetails = () => {
 
   const monthlyPayment = useMemo(() => {
     if (!ajoInfo) return null;
-    const decimals = ajoInfo.config.paymentToken === "BTC" ? 8 : 6;
+    const decimals = ajoInfo.config.paymentToken === "WBTC" ? 8 : 6;
     const divisor = 10 ** decimals;
     return Number(ajoInfo.config.monthlyContribution) / divisor;
   }, [ajoInfo]);

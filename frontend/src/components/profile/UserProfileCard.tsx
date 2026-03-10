@@ -14,9 +14,9 @@ interface UserProfileCardProps {
   address?: string | null;
   network?: string | null;
   strk?: string | null;
-  eth?: string | null;
+  wbtc?: string | null;
   strkPrice?: number | null;
-  ethPrice?: number | null;
+  wbtcPrice?: number | null;
   usdc?: string | null;
   loading?: boolean;
   copied?: boolean;
@@ -29,12 +29,12 @@ const UserProfileCard = ({
   address,
   network,
   strk,
-  eth,
+  wbtc,
   usdc,
   loading,
   copied,
   strkPrice,
-  ethPrice,
+  wbtcPrice,
   handleCopy,
   onRefresh,
 }: UserProfileCardProps) => {
@@ -49,9 +49,9 @@ const UserProfileCard = ({
     }
   };
   const strkInUsd = Number(strk) * (strkPrice ?? 0);
-  const ethInUsd = Number(eth) * (ethPrice ?? 0);
+  const wbtcInUsd = Number(wbtc) * (wbtcPrice ?? 0);
   // Calculate total balance in USD (if available)
-  const totalBalanceUSD = (Number(usdc) || 0) + (strkInUsd || 0) + (ethInUsd || 0);
+  const totalBalanceUSD = (Number(usdc) || 0) + (strkInUsd || 0) + (wbtcInUsd || 0);
 
   return (
     <div
@@ -173,15 +173,15 @@ const UserProfileCard = ({
                 )}
               </div>
 
-              {/* BTC Card */}
+              {/* WBTC Card */}
               <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-4 hover:bg-white/15 transition-all duration-300">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-10 h-10 bg-gradient-to-br from-orange-400 to-orange-600 rounded-xl flex items-center justify-center shadow-lg">
                     <Wallet className="w-6 h-6 text-white" />
                   </div>
                   <div>
-                    <p className="text-white/60 text-xs font-medium">BTC</p>
-                    <p className="text-white/40 text-[10px]">Bitcoin</p>
+                    <p className="text-white/60 text-xs font-medium">WBTC</p>
+                    <p className="text-white/40 text-[10px]">Wrapped Bitcoin</p>
                   </div>
                 </div>
                 <div className="flex items-baseline gap-2">
@@ -190,17 +190,17 @@ const UserProfileCard = ({
                   ) : (
                     <>
                       <span className="text-white text-2xl sm:text-3xl font-bold">
-                        {eth || "0.00"}
+                        {wbtc || "0.00"}
                       </span>
                       <span className="text-white/60 text-sm font-medium">
-                        BTC
+                        WBTC
                       </span>
                     </>
                   )}
                 </div>
-                {eth !== null && (
+                {wbtc !== null && (
                   <p className="text-white/50 text-xs mt-2">
-                    ≈ {formatCurrencyUSD(eth ? ethInUsd : 0)}
+                    ≈ {formatCurrencyUSD(wbtc ? wbtcInUsd : 0)}
                   </p>
                 )}
               </div>

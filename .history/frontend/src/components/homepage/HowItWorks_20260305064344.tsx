@@ -41,7 +41,7 @@ const HowItWorks = () => {
               Backed by Real Value
             </h3>
             <p className="text-muted-foreground leading-relaxed text-sm lg:text-lg">
-              Savings are secured on Starknet and tied to tokenized assets like
+              Savings are secured on Hedera and tied to tokenized assets like
               gold and silver. No ponzi, no hype—just wealth that lasts.
             </p>
           </div>

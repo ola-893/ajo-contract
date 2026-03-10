@@ -46,12 +46,14 @@ const Header = () => {
   // Fetch token balances
   const { balance: strkBalance, loading: strkLoading, refetch: refetchStrk } = useTokenBalance("STRK");
   const { balance: usdcBalance, loading: usdcLoading, refetch: refetchUsdc } = useTokenBalance("USDC");
+  const { balance: wbtcBalance, loading: wbtcLoading, refetch: refetchWbtc } = useTokenBalance("WBTC");
   
-  const loadingBalances = strkLoading || usdcLoading;
+  const loadingBalances = strkLoading || usdcLoading || wbtcLoading;
   
   const loadBalances = () => {
     refetchStrk();
     refetchUsdc();
+    refetchWbtc();
   };
 
   const handleCopy = async () => {
@@ -173,6 +175,12 @@ const Header = () => {
                           <span className="text-sm font-bold text-foreground">
                             {loadingBalances ? '...' : usdcBalance.formatted} USDC
                           </span>
+                          <span className="text-xs text-muted-foreground">
+                            |
+                          </span>
+                          <span className="text-sm font-bold text-foreground">
+                            {loadingBalances ? '...' : wbtcBalance.formatted} WBTC
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -246,6 +254,14 @@ const Header = () => {
                           </span>
                           <span className="text-lg font-bold text-foreground">
                             {loadingBalances ? '...' : strkBalance.formatted}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
+                          <span className="text-sm text-muted-foreground">
+                            WBTC Balance
+                          </span>
+                          <span className="text-lg font-bold text-foreground">
+                            {loadingBalances ? '...' : wbtcBalance.formatted}
                           </span>
                         </div>
                       </div>
@@ -403,6 +419,14 @@ const Header = () => {
                       </span>
                       <span className="text-sm font-bold text-foreground">
                         {loadingBalances ? '...' : strkBalance.formatted}
+                      </span>
+                    </div>
+                    <div className="bg-background/50 p-3 rounded-lg col-span-2">
+                      <span className="text-xs text-muted-foreground block mb-1">
+                        WBTC
+                      </span>
+                      <span className="text-sm font-bold text-foreground">
+                        {loadingBalances ? '...' : wbtcBalance.formatted}
                       </span>
                     </div>
                   </div>

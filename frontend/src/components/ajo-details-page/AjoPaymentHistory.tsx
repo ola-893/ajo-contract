@@ -51,7 +51,7 @@ const AjoPaymentHistory = ({ ajo }: { ajo: any }) => {
   const coreAddress = ajo?.coreAddress || "";
   const membersAddress = ajo?.membersAddress || "";
   const tokenSymbol = ajo?.config?.paymentToken || "USDC";
-  const tokenDecimals = tokenSymbol === "BTC" ? 8 : 6;
+  const tokenDecimals = tokenSymbol === "WBTC" ? 8 : 6;
   const cycleDurationSeconds = Number(ajo?.config?.cycleDuration ?? 0);
   const monthlyContributionRaw = BigInt(ajo?.config?.monthlyContribution ?? 0);
   const totalParticipants = BigInt(
@@ -59,8 +59,8 @@ const AjoPaymentHistory = ({ ajo }: { ajo: any }) => {
   );
   const expectedCycleAmount = monthlyContributionRaw * totalParticipants;
   const defaultPaymentTokenAddress =
-    tokenSymbol === "BTC"
-      ? (TOKEN_ADDRESSES.sepolia.BTC || "").toLowerCase()
+    tokenSymbol === "WBTC"
+      ? (TOKEN_ADDRESSES.sepolia.WBTC || "").toLowerCase()
       : TOKEN_ADDRESSES.sepolia.USDC.toLowerCase();
   const [paymentTokenAddress, setPaymentTokenAddress] = useState(
     defaultPaymentTokenAddress,

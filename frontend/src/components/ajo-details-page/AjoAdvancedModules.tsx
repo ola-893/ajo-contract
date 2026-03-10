@@ -43,7 +43,7 @@ const AjoAdvancedModules = ({ ajo }: { ajo: any }) => {
   const [relayerInput, setRelayerInput] = useState("");
   const [status, setStatus] = useState<Record<string, string>>({});
 
-  const tokenDecimals = ajo?.config?.paymentToken === "BTC" ? 8 : 6;
+  const tokenDecimals = ajo?.config?.paymentToken === "WBTC" ? 8 : 6;
   const coreAddress = ajo?.coreAddress || "";
   const membersAddress = ajo?.membersAddress || "";
   const collateralAddress = ajo?.collateralAddress || "";
@@ -54,7 +54,7 @@ const AjoAdvancedModules = ({ ajo }: { ajo: any }) => {
   const swapRouterAddress = CONTRACT_ADDRESSES.sepolia.swapRouter;
   const btcAdapterAddress = CONTRACT_ADDRESSES.sepolia.btcCollateralAdapter;
   const sourceTokenAddress =
-    ajo?.config?.paymentToken === "BTC"
+    ajo?.config?.paymentToken === "WBTC"
       ? TOKEN_ADDRESSES.sepolia.STRK
       : TOKEN_ADDRESSES.sepolia.USDC;
 

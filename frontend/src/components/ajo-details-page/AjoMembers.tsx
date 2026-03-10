@@ -47,7 +47,7 @@ const AjoMembers = ({
   const { address } = useStarknetWallet();
   const membersAddress = ajo?.membersAddress || "";
   const paymentsAddress = ajo?.paymentsAddress || "";
-  const tokenDecimals = ajo?.config?.paymentToken === "BTC" ? 8 : 6;
+  const tokenDecimals = ajo?.config?.paymentToken === "WBTC" ? 8 : 6;
 
   const {
     getAllMembers,

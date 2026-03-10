@@ -42,7 +42,7 @@ interface TokenBalance {
   decimals: number;
 }
 
-export const useTokenBalance = (tokenSymbol: "STRK" | "USDC" | "ETH" | "BTC") => {
+export const useTokenBalance = (tokenSymbol: "STRK" | "USDC" | "ETH" | "WBTC") => {
   const { account, address } = useStarknetWallet();
 
   const [balance, setBalance] = useState<TokenBalance>({
@@ -129,10 +129,11 @@ export const useTokenBalance = (tokenSymbol: "STRK" | "USDC" | "ETH" | "BTC") =>
       console.log(`${tokenSymbol} - Raw balance:`, rawBalance.toString());
       console.log(`${tokenSymbol} - Decimals:`, decimals);
 
-      // Format balance
+      // Format balance - use 5 decimals for WBTC, 2 for others
       const divisor = BigInt(10 ** decimals);
+      const decimalPlaces = tokenSymbol === "WBTC" ? 5 : 2;
       const formattedBalance = (Number(rawBalance) / Number(divisor)).toFixed(
-        2,
+        decimalPlaces,
       );
 
       console.log(`${tokenSymbol} - Formatted balance:`, formattedBalance);

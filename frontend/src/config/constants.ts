@@ -9,13 +9,13 @@ export const TOKEN_ADDRESSES = {
   sepolia: {
     STRK: "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
     USDC: "0x0512feAc6339Ff7889822cb5aA2a86C848e9D392bB0E3E237C008674feeD8343",
-    BTC: import.meta.env.VITE_BTC_TOKEN_ADDRESS || "",
+    WBTC: "0x0496bef3ed20371382fBe0CA6A5a64252c5c848F9f1F0ccCF8110Fc4def912d5",
     ETH: "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
   },
   mainnet: {
     STRK: "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
     USDC: "", // Update with mainnet address when available
-    BTC: "",
+    WBTC: "",
     ETH: "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
   },
 };

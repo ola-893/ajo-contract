@@ -34,7 +34,7 @@ const CreateAjo = () => {
     cycleMinutes: "0",
     monthlyContribution: "",
     totalParticipants: "3", // minimum 3 participants required
-    paymentToken: "USDC" as "USDC" | "BTC",
+    paymentToken: "USDC" as "USDC" | "WBTC",
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
@@ -548,7 +548,7 @@ const CreateAjo = () => {
                           disabled={loading}
                         >
                           <option value="USDC">USDC</option>
-                          <option value="BTC">BTC</option>
+                          <option value="WBTC">WBTC</option>
                         </select>
                         <p className="mt-1 text-xs text-muted-foreground">
                           Token used for contributions

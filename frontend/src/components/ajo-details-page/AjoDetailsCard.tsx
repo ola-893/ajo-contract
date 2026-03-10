@@ -55,12 +55,12 @@ const AjoDetailsCard = ({
   const { hasPaidForCycle } = useStarknetAjoPayments(
     ajo?.paymentsAddress || "",
   );
-  const paymentToken = ajo?.config.paymentToken === "BTC" ? "BTC" : "USDC";
+  const paymentToken = ajo?.config.paymentToken === "WBTC" ? "WBTC" : "USDC";
   const defaultPaymentTokenAddress =
-    paymentToken === "BTC"
-      ? (TOKEN_ADDRESSES.sepolia.BTC || "").toLowerCase()
+    paymentToken === "WBTC"
+      ? (TOKEN_ADDRESSES.sepolia.WBTC || "").toLowerCase()
       : TOKEN_ADDRESSES.sepolia.USDC.toLowerCase();
-  const paymentTokenIndex = paymentToken === "BTC" ? 1 : 0;
+  const paymentTokenIndex = paymentToken === "WBTC" ? 1 : 0;
   const [requiresTokenApproval, setRequiresTokenApproval] = useState(true);
   const [paymentTokenAddress, setPaymentTokenAddress] = useState(
     defaultPaymentTokenAddress,
@@ -314,7 +314,7 @@ const AjoDetailsCard = ({
             ajo.config.totalParticipants,
           );
     if (amount <= 0n) return `0 ${ajo?.config.paymentToken || "USDC"}`;
-    const decimals = ajo?.config.paymentToken === "BTC" ? 8 : 6;
+    const decimals = ajo?.config.paymentToken === "WBTC" ? 8 : 6;
     return `${formatTokenAmount(amount, decimals)} ${
       ajo?.config.paymentToken || "USDC"
     }`;

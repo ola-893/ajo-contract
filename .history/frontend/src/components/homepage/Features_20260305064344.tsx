@@ -15,7 +15,7 @@ const Features = () => {
             Ajo for the Digital Age
           </h2>
           <p className="text-sm sm:text-lg text-muted-foreground max-w-3xl mx-auto">
-            Powered by Starknet, we’re reinventing Africa's traditional savings
+            Powered by Hedera, we’re reinventing Africa's traditional savings
             culture with on-chain accountability, cultural pride, and real
             wealth opportunities.
           </p>
@@ -76,7 +76,7 @@ const Features = () => {
               <div className="space-y-4">
                 <div className="flex items-center text-sm lg:text-lg space-x-3">
                   <CheckCircle className="w-5 h-5" />
-                  <span>Every transaction tracked immutably on Starknet</span>
+                  <span>Every transaction tracked immutably on Hedera</span>
                 </div>
                 <div className="flex items-center text-sm lg:text-lg space-x-3">
                   <CheckCircle className="w-5 h-5" />
@@ -107,7 +107,7 @@ const features = [
     icon: Shield,
     title: "Blockchain Transparency",
     description:
-      "No excuses, no lies. Contributions and payouts are publicly verifiable on Starknet.",
+      "No excuses, no lies. Contributions and payouts are publicly verifiable on Hedera.",
     color: "bg-primary",
   },
   {
